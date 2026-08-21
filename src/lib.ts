@@ -42,6 +42,50 @@ export function turnAnnouncement(turn:{index:number; instruction:string; distanc
   return { key:`${turn.index}:${band}`, text:band==='now'?turn.instruction:lead(band,unit)+joinCase(turn.instruction) }
 }
 
+// ---- Compass -----------------------------------------------------------
+// Which way the walker is facing, so the map can turn with them. iOS hands us
+// a true compass heading and demands permission from a gesture; elsewhere the
+// earth-framed alpha counts the other way round, and both need the screen's
+// own rotation added back on.
+export const compassAvailable = () => typeof window !== 'undefined' && 'DeviceOrientationEvent' in window
+export const screenAngle = () => (typeof screen !== 'undefined' && screen.orientation?.angle) || 0
+export function headingFrom(event:{alpha?:number|null; absolute?:boolean; webkitCompassHeading?:number}, angle=0):number|undefined {
+  const compass = event.webkitCompassHeading
+  if (typeof compass === 'number' && Number.isFinite(compass)) return (compass + angle) % 360
+  if (typeof event.alpha !== 'number' || !Number.isFinite(event.alpha)) return undefined
+  return (360 - event.alpha + angle) % 360
+}
+// A compass twitches, so each reading is eased toward rather than taken whole,
+// the short way round the circle.
+export function smoothHeading(previous:number|undefined, next:number, weight=.3):number {
+  if (previous === undefined) return next
+  return (previous + (((next - previous + 540) % 360) - 180) * weight + 360) % 360
+}
+export const headingGap = (a:number, b:number) => Math.abs(((a - b + 540) % 360) - 180)
+
+export async function requestCompass():Promise<boolean> {
+  if (!compassAvailable()) return false
+  const ask = (DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }).requestPermission
+  if (typeof ask !== 'function') return true
+  try { return await ask.call(DeviceOrientationEvent) === 'granted' } catch { return false }
+}
+// Only meaningful turns are reported on, so the map is not re-rendered for a
+// degree of noise.
+export function watchHeading(onHeading:(degrees:number)=>void) {
+  const type = 'ondeviceorientationabsolute' in window ? 'deviceorientationabsolute' : 'deviceorientation'
+  let smoothed:number|undefined, reported:number|undefined
+  const handler = (event:Event) => {
+    const heading = headingFrom(event as DeviceOrientationEvent, screenAngle())
+    if (heading === undefined) return
+    smoothed = smoothHeading(smoothed, heading)
+    if (reported !== undefined && headingGap(smoothed, reported) < 2) return
+    reported = smoothed
+    onHeading(smoothed)
+  }
+  window.addEventListener(type, handler)
+  return () => window.removeEventListener(type, handler)
+}
+
 export const speechAvailable = () => typeof window!=='undefined' && 'speechSynthesis' in window
 // iOS only lets the synth start from inside a user gesture, so the walk button
 // primes it with a silent utterance; later prompts then fire from the GPS watch.

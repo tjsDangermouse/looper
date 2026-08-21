@@ -46,6 +46,12 @@ export const SoundOffIcon = ({ size = 20 }: { size?: number }) => (
   </svg>
 )
 
+export const CompassIcon = ({ size = 19 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...base}>
+    <circle cx="12" cy="12" r="9" /><path d="M15.6 8.4 13.7 13.7 8.4 15.6 10.3 10.3z" fill="currentColor" />
+  </svg>
+)
+
 export const CheckIcon = ({ size = 18 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...base} strokeWidth={2.6}>
     <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />

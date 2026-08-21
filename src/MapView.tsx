@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { routeColours, type Point, type Route } from './lib'
+import { headingGap, routeColours, type Point, type Route } from './lib'
 
-type Props = { start: Point; routes: Route[]; selected?: string; position?: Point; follow?: boolean; onFollowChange?: (following: boolean) => void; onPoint: (point: Point) => void; padding?: { bottom: number; right: number } }
+type Props = { start: Point; routes: Route[]; selected?: string; position?: Point; follow?: boolean; heading?: number; courseUp?: boolean; onFollowChange?: (following: boolean) => void; onPoint: (point: Point) => void; padding?: { bottom: number; right: number } }
 type Arrow = { x: number; y: number; angle: number }
 type Path = { id: string; points: string; colour: string; selected: boolean; arrows: Arrow[] }
 // Chevrons dropped at an even spacing along the drawn line, pointing the way
@@ -31,7 +31,7 @@ function arrowsAlong(pixels: { x: number; y: number }[]) {
 
 const style: maplibregl.StyleSpecification = { version: 8, sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors' } }, layers: [{ id: 'osm', type: 'raster', source: 'osm' }] }
 
-export function MapView({ start, routes, selected, position, follow, onFollowChange, onPoint, padding }: Props) {
+export function MapView({ start, routes, selected, position, follow, heading, courseUp, onFollowChange, onPoint, padding }: Props) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | undefined>(undefined)
   const marker = useRef<maplibregl.Marker | undefined>(undefined)
@@ -100,6 +100,17 @@ export function MapView({ start, routes, selected, position, follow, onFollowCha
     if (!map || !follow) return
     map.easeTo({ center: positionRef.current || startRef.current, zoom: Math.max(map.getZoom(), WALK_ZOOM), padding: pad(), duration: 800 })
   }, [follow])
+
+  // Course-up: the map turns so the way the walker faces is up the screen.
+  // Rotation is a camera move like any other, so the drawn line and its arrows
+  // re-project with it; north-up winds the bearing back to zero.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (!courseUp) { if (map.getBearing()) map.easeTo({ bearing: 0, padding: pad(), duration: 400 }); return }
+    if (heading === undefined || headingGap(heading, map.getBearing()) < 2) return
+    map.easeTo({ bearing: heading, padding: pad(), duration: 300 })
+  }, [courseUp, heading])
 
   useEffect(() => { routesRef.current = routes; selectedRef.current = selected; redraw() }, [routes, selected])
   useEffect(() => { startRef.current = start; marker.current?.setLngLat(start); if (!followRef.current) mapRef.current?.flyTo({ center: start, padding: pad(), duration: 450 }) }, [start])
