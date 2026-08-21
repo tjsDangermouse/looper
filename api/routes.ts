@@ -1,5 +1,5 @@
 // Vercel serverless endpoint. Replace the fetch inside requestLoop if ORS limits are reached.
-import { describeDirection, measure, nameLoops, selectLoops, type Point } from './_lib/loopQuality'
+import { describeDirection, measure, nameLoops, selectLoops, type Point } from './_lib/loopQuality.js'
 const hits = new Map<string, { count: number; at: number }>()
 
 type ApiRequest = { method?: string; headers?: Record<string, string | string[] | undefined>; body?: { start?: { lng?: number; lat?: number }; inputMode?: string; distanceKm?: number; minutes?: number } }

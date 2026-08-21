@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeDirection, measure, nameLoops, overlapFraction, retraceFraction, roundness, scoreLoop, selectLoops, sharpTurnsPerKm, type Point } from './loopQuality'
+import { describeDirection, measure, nameLoops, overlapFraction, retraceFraction, roundness, scoreLoop, selectLoops, sharpTurnsPerKm, type Point } from './loopQuality.js'
 
 // Roughly 111 m per 0.001° of latitude, so these shapes are a few hundred metres across.
 const square: Point[] = [[0, 0], [.004, 0], [.004, .004], [0, .004], [0, 0]]
