@@ -1,4 +1,4 @@
-# LoopWalk
+# Looper
 
 Mobile-first PWA for choosing circular walks. It uses MapLibre with the OpenFreeMap Bright style and routes through a Vercel serverless endpoint so the ORS key never reaches the browser.
 
@@ -18,4 +18,4 @@ Import the repository into Vercel and add `ORS_API_KEY` in project environment v
 
 ## Navigation limits and attribution
 
-Keep LoopWalk open while walking for live guidance. Browser PWAs cannot guarantee guidance while backgrounded or locked. Map attribution is displayed in-app; retain OpenStreetMap and OpenFreeMap attribution when deploying. Routes are powered by openrouteservice.
+Keep Looper open while walking for live guidance. Browser PWAs cannot guarantee guidance while backgrounded or locked. Map attribution is displayed in-app; retain OpenStreetMap and OpenFreeMap attribution when deploying. Routes are powered by openrouteservice.

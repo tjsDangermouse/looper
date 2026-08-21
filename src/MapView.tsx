@@ -35,7 +35,7 @@ export function MapView({ start, routes, selected, onPoint }: Props) {
     map.on('click', event => onPoint([event.lngLat.lng, event.lngLat.lat]))
     map.on('load', redraw)
     map.on('move', redraw)
-    map.on('error', event => console.error('[LoopWalk map]', event.error))
+    map.on('error', event => console.error('[Looper map]', event.error))
     return () => { marker.current?.remove(); map.remove(); mapRef.current = undefined }
   }, [])
 
