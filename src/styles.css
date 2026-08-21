@@ -7,8 +7,8 @@
   --line: #1d3448;         /* hairlines and control borders */
   --text: #ffffff;
   --muted: #8fa3b4;
-  --accent: #b4e82f;       /* lime: primary actions, active states */
-  --on-accent: #071c0b;    /* text on lime */
+  --accent: #9cc36b;       /* moss green: primary actions, active states */
+  --on-accent: #06180a;    /* text on the accent */
   --warn: #ffd166;
 
   --chrome-btn: 38px;   /* top-row icon buttons */
