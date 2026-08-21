@@ -8,5 +8,26 @@ export const formatDistance = (meters:number, unit:'km'|'mi'='km') => unit === '
 export const formatTime = (seconds:number) => `${Math.round(seconds / 60)} min`
 export const haversine = (a:Point,b:Point) => { const r=6371000, rad=Math.PI/180, dLat=(b[1]-a[1])*rad,dLng=(b[0]-a[0])*rad; const x=Math.sin(dLat/2)**2+Math.cos(a[1]*rad)*Math.cos(b[1]*rad)*Math.sin(dLng/2)**2; return 2*r*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)) }
 export function nearestProgress(point:Point, coords:Point[]) { let best=Infinity, index=0, before=0; for(let i=0;i<coords.length;i++){ const d=haversine(point,coords[i]); if(d<best){best=d;index=i} if(i<index) before+=haversine(coords[i],coords[i+1]||coords[i]) } return { distanceToRoute:best, index, distanceAlong:before } }
-export function nextTurn(route:Route, progressMeters:number) { let total=0; for(const step of route.steps){ total+=step.distanceMeters; if(total>progressMeters) return {...step, distanceAway:total-progressMeters} } return undefined }
+export function nextTurn(route:Route, progressMeters:number) { let total=0; for(let i=0;i<route.steps.length;i++){ const step=route.steps[i]; total+=step.distanceMeters; if(total>progressMeters) return {...step, index:i, distanceAway:total-progressMeters} } return undefined }
 export function dedupeRoutes(routes:Route[]) { return routes.filter((route,i)=>!routes.slice(0,i).some(other=>{const a=route.geometry.coordinates,b=other.geometry.coordinates; const samples=8; let matches=0; for(let s=0;s<samples;s++){const p=a[Math.floor(s*(a.length-1)/(samples-1))],q=b[Math.floor(s*(b.length-1)/(samples-1))]; if(p&&q&&haversine(p,q)<160) matches++} return matches/samples>.7 })) }
+
+// Voice guidance. A turn is announced at most once per band, so walking through
+// 400 m → 100 m → the corner itself gives three prompts and no repetition.
+export type Band='soon'|'near'|'now'
+export const turnBand = (metresAway:number):Band|undefined => metresAway<30?'now':metresAway<120?'near':metresAway<450?'soon':undefined
+const lead = (band:Band, unit:'km'|'mi') => band==='near'?(unit==='mi'?'In one hundred yards, ':'In one hundred metres, '):(unit==='mi'?'In a quarter of a mile, ':'In four hundred metres, ')
+// Instructions arrive sentence-cased ("Turn left onto…"); lower the first word
+// when it follows a lead-in so the sentence reads as one phrase.
+const joinCase = (instruction:string) => instruction.replace(/^[A-Z](?![A-Z])/, c=>c.toLowerCase())
+export function turnAnnouncement(turn:{index:number; instruction:string; distanceAway:number}|undefined, unit:'km'|'mi') {
+  if(!turn) return undefined
+  const band=turnBand(turn.distanceAway); if(!band) return undefined
+  return { key:`${turn.index}:${band}`, text:band==='now'?turn.instruction:lead(band,unit)+joinCase(turn.instruction) }
+}
+
+export const speechAvailable = () => typeof window!=='undefined' && 'speechSynthesis' in window
+// iOS only lets the synth start from inside a user gesture, so the walk button
+// primes it with a silent utterance; later prompts then fire from the GPS watch.
+export function primeSpeech(){ if(!speechAvailable()) return; const u=new SpeechSynthesisUtterance(' '); u.volume=0; window.speechSynthesis.speak(u) }
+export function speak(text:string){ if(!speechAvailable()) return; const u=new SpeechSynthesisUtterance(text); u.rate=1; u.lang='en-GB'; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u) }
+export const stopSpeaking = () => { if(speechAvailable()) window.speechSynthesis.cancel() }
