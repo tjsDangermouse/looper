@@ -1,27 +1,126 @@
-/* Outdoor/mobile comfort pass: body text stays readable at arm's length and every action meets a 48px touch target. */
-@media (max-width: 600px) {
+/* Sizing pass. Every row in the sheet is a clamped fraction of viewport
+   height, so the rows shrink together on short phones and the sheet never
+   needs to scroll. Budget is verified against the max-height below. */
+
+/* ---- Bottom sheet shell ---------------------------------------------- */
+.sheet {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  max-height: 48dvh;
+  overflow: hidden;
+  padding: 0 18px;
+}
+.sheet .handle {
+  flex: none;
+  display: block;
+  padding: 0;
+  margin: clamp(8px, 1.3dvh, 14px) auto clamp(8px, 1.4dvh, 16px);
+}
+.sheet-head { flex: none; padding-bottom: clamp(10px, 1.8dvh, 20px); }
+.sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;              /* rows are sized to fit; nothing to scroll */
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 1.4dvh, 16px);
+}
+.sheet-foot {
+  flex: none;
+  padding: clamp(10px, 1.8dvh, 20px) 0 max(10px, env(safe-area-inset-bottom));
+}
+/* Tapping the handle peeks the map: title and action only. */
+.sheet.collapsed .sheet-body { display: none; }
+
+/* ---- Planner ---------------------------------------------------------- */
+.planner .eyebrow { font-size: clamp(9px, 1.2dvh, 11px); }
+.planner h2 { font-size: clamp(20px, 3dvh, 30px); line-height: 1.08; }
+.planner .link { flex: none; padding-top: 2px; font-size: clamp(12px, 1.7dvh, 15px); }
+.planner .field-label { flex: none; font-size: clamp(11px, 1.6dvh, 14px); }
+.planner .hint, .planner .notice { flex: none; font-size: clamp(11px, 1.5dvh, 13.5px); line-height: 1.3; }
+
+.planner .seg { flex: none; }
+.planner .seg button { height: clamp(38px, 5.4dvh, 52px); font-size: clamp(13px, 1.9dvh, 17px); }
+.planner .seg button svg { width: clamp(15px, 2dvh, 19px); height: clamp(15px, 2dvh, 19px); }
+
+.planner .value-row { flex: none; height: clamp(52px, 7.6dvh, 78px); padding: 5px 5px 5px 0; }
+.planner .value-row input { height: 100%; padding: 0 6px 0 16px; font-size: clamp(28px, 4.2dvh, 46px); }
+.planner .value-row span { padding-right: 16px; font-size: clamp(12px, 1.7dvh, 15px); }
+.planner .unit { flex: none; height: 100%; padding: 4px; border: 0; background: transparent; }
+.planner .unit button { min-width: clamp(48px, 8vw, 62px); height: 100%; font-size: clamp(12px, 1.7dvh, 15px); }
+
+.planner .find { width: 100%; height: clamp(48px, 6.8dvh, 66px); font-size: clamp(14px, 2dvh, 18px); border-radius: 16px; }
+.planner .find svg { width: clamp(18px, 2.4dvh, 23px); height: clamp(18px, 2.4dvh, 23px); }
+
+/* ---- Choices ---------------------------------------------------------- */
+.choices .eyebrow { font-size: clamp(9px, 1.2dvh, 11px); }
+.choices h2 { font-size: clamp(20px, 3dvh, 30px); line-height: 1.08; }
+.choices .text { flex: none; padding-top: 2px; font-size: clamp(12px, 1.7dvh, 15px); }
+.choices .sheet-body { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+.choices .route-card { flex: none; height: clamp(56px, 8.4dvh, 84px); padding: 0 10px 0 0; }
+.choices .route-card > div { min-width: 0; }
+.choices .route-card i { width: 4px; align-self: stretch; margin: 10px 0 10px 10px; }
+.choices .route-card strong { display: block; font-size: clamp(13px, 1.9dvh, 16px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.choices .route-card p { margin-top: 3px; font-size: clamp(10px, 1.4dvh, 12.5px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.choices .choose { flex: none; height: clamp(34px, 5dvh, 46px); min-width: 68px; padding: 0 12px; font-size: clamp(11px, 1.6dvh, 14px); }
+
+/* ---- Short viewports: the px floors above are taller than 48dvh of a small
+   screen, so lower them in two tiers rather than let anything scroll. ---- */
+@media (max-height: 660px) {
+  .sheet .handle { margin: 6px auto; }
+  .sheet-head { padding-bottom: 8px; }
+  .sheet-body { gap: 6px; }
+  .sheet-foot { padding-top: 8px; }
+  .planner h2, .choices h2 { font-size: clamp(18px, 3dvh, 30px); }
+  .planner .seg button { height: clamp(34px, 5.4dvh, 52px); }
+  .planner .value-row { height: clamp(44px, 7.6dvh, 78px); }
+  .planner .value-row input { font-size: clamp(24px, 4.2dvh, 46px); }
+  .planner .find { height: clamp(42px, 6.8dvh, 66px); }
+  .choices .route-card { height: clamp(48px, 8.4dvh, 84px); }
+}
+/* Below ~470px the six rows can't fit 48% at legible sizes; give the sheet a
+   few more percent rather than clip or scroll. */
+@media (max-height: 480px) { .sheet { max-height: 54dvh; } }
+@media (max-height: 560px) {
+  .sheet .handle { margin: 4px auto; }
+  .sheet-head { padding-bottom: 6px; }
+  .sheet-body { gap: 4px; }
+  .sheet-foot { padding-top: 6px; }
+  .planner .eyebrow, .choices .eyebrow { font-size: 8px; }
+  .planner h2, .choices h2 { font-size: 16px; }
+  .planner .seg button { height: 30px; font-size: 12.5px; }
+  .planner .field-label { font-size: 11px; }
+  .planner .value-row { height: 38px; }
+  .planner .value-row input { font-size: 22px; }
+  .planner .hint, .planner .notice { font-size: 10.5px; }
+  .planner .find { height: 38px; font-size: 13px; }
+  .choices .route-card { height: 42px; }
+}
+
+/* ---- Landscape phones: the sheet becomes a side panel ----------------- */
+@media (orientation: landscape) and (max-height: 520px) {
+  .sheet {
+    top: 0; left: auto; right: 0;
+    width: min(48vw, 400px);
+    height: 100dvh; max-height: 100dvh;
+    padding: max(10px, env(safe-area-inset-top)) 18px max(10px, env(safe-area-inset-bottom));
+    border-radius: 24px 0 0 24px;
+    box-shadow: -10px 0 34px #0006;
+  }
+  .sheet .handle { display: none; }
+  .sheet-body { justify-content: center; }
+  .planner h2, .choices h2 { font-size: 20px; }
+  .planner .seg button { height: 40px; font-size: 14px; }
+  .planner .value-row { height: 52px; }
+  .planner .value-row input { font-size: 28px; }
+  .planner .find { height: 46px; font-size: 15px; }
+  .choices .route-card { height: 56px; }
+}
+
+/* ---- Welcome: readable at arm's length -------------------------------- */
+@media (max-width: 900px) {
   .welcome { padding-inline: 22px; }
   .lede { font-size: 21px; }
-  .primary, .secondary { min-height: 64px; font-size: 18px; border-radius: 16px; }
   .privacy, .help { font-size: 14px; }
-  .sheet { padding: 12px 18px max(22px, env(safe-area-inset-bottom)); }
-  .sheet h2 { font-size: 32px; }
-  .quiet, .notice { font-size: 15px; line-height: 1.45; }
-  .seg button, .prefs button, .unit button { min-height: 48px; font-size: 15px; }
-  .value-row { gap: 12px; margin: 14px 0; }
-  .value-row input { min-height: 62px; font-size: 42px; }
-  .value-row span { font-size: 16px; font-weight: 700; }
-  .centre { min-height: 44px; font-size: 15px; }
-  .route-card { min-height: 96px; padding: 14px; gap: 14px; }
-  .route-card strong { font-size: 20px; }
-  .route-card p { font-size: 14px; line-height: 1.4; }
-  .route-card i { width: 7px; }
-  .choose { min-height: 54px; min-width: 94px; font-size: 16px; border-radius: 12px; }
-  .text { min-height: 44px; font-size: 15px; }
-  .walk-ui header button { min-height: 48px; font-size: 14px; }
-  .guidance { padding: 20px; gap: 16px; }
-  .guidance h2 { font-size: 23px; line-height: 1.18; }
-  .guidance p { font-size: 15px; line-height: 1.45; }
-  .maplibregl-ctrl-group { border-radius: 12px; }
-  .maplibregl-ctrl-group button { width: 48px; height: 48px; }
 }

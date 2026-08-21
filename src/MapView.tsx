@@ -3,18 +3,22 @@ import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { Point, Route } from './lib'
 
-type Props = { start: Point; routes: Route[]; selected?: string; position?: Point; onPoint: (point: Point) => void }
+type Props = { start: Point; routes: Route[]; selected?: string; position?: Point; onPoint: (point: Point) => void; padding?: { bottom: number; right: number } }
 type Path = { id: string; points: string; colour: string; selected: boolean }
 const colours = ['#ef6b55', '#206a77', '#80679d']
 const style: maplibregl.StyleSpecification = { version: 8, sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors' } }, layers: [{ id: 'osm', type: 'raster', source: 'osm' }] }
 
-export function MapView({ start, routes, selected, onPoint }: Props) {
+export function MapView({ start, routes, selected, onPoint, padding }: Props) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | undefined>(undefined)
   const marker = useRef<maplibregl.Marker | undefined>(undefined)
   const routesRef = useRef(routes)
+  const paddingRef = useRef(padding)
+  const startRef = useRef(start)
   const selectedRef = useRef(selected)
   const [paths, setPaths] = useState<Path[]>([])
+
+  const pad = (): maplibregl.PaddingOptions => ({ top: 0, left: 0, bottom: paddingRef.current?.bottom ?? 0, right: paddingRef.current?.right ?? 0 })
 
   const redraw = () => {
     const map = mapRef.current
@@ -30,6 +34,7 @@ export function MapView({ start, routes, selected, onPoint }: Props) {
   useEffect(() => {
     if (!container.current) return
     const map = mapRef.current = new maplibregl.Map({ container: container.current, style, center: start, zoom: 13 })
+    map.setPadding(pad())
     map.addControl(new maplibregl.NavigationControl())
     marker.current = new maplibregl.Marker({ color: '#ef6b55' }).setLngLat(start).addTo(map)
     map.on('click', event => onPoint([event.lngLat.lng, event.lngLat.lat]))
@@ -40,7 +45,14 @@ export function MapView({ start, routes, selected, onPoint }: Props) {
   }, [])
 
   useEffect(() => { routesRef.current = routes; selectedRef.current = selected; redraw() }, [routes, selected])
-  useEffect(() => { marker.current?.setLngLat(start); mapRef.current?.flyTo({ center: start, duration: 450 }) }, [start])
+  useEffect(() => { startRef.current = start; marker.current?.setLngLat(start); mapRef.current?.flyTo({ center: start, padding: pad(), duration: 450 }) }, [start])
+  // Re-centre whenever the sheet's height changes so the marker stays in the
+  // middle of the map area left uncovered by it.
+  useEffect(() => {
+    paddingRef.current = padding
+    if (!padding) return
+    mapRef.current?.easeTo({ center: startRef.current, padding: pad(), duration: 300 })
+  }, [padding?.bottom, padding?.right])
 
   return <><div ref={container} style={{ position: 'fixed', inset: 0 }} aria-label="Douglas, Isle of Man map" /><svg aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 1, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>{paths.map(path => <polyline key={path.id} points={path.points} fill="none" stroke={path.colour} strokeWidth={path.selected ? 9 : 6} strokeLinecap="round" strokeLinejoin="round" opacity={selected ? (path.selected ? 1 : .28) : .9} />)}</svg></>
 }
