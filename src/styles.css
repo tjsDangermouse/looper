@@ -118,16 +118,26 @@ h1 { font-size: clamp(46px, 15vw, 68px); line-height: .95; letter-spacing: -.05e
 
 /* ---- Choices ---------------------------------------------------------- */
 .route-card {
+  width: 100%; text-align: left; justify-content: flex-start;
   background: var(--raised); border: 1px solid var(--line); border-radius: 14px;
   display: flex; align-items: center; gap: 10px;
 }
+/* The pick is the card itself, so the chosen one carries a ring and a tick
+   and the walk starts from the button floating over the map edge. */
+.route-card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.route-card .tick { margin-left: auto; color: var(--accent); display: inline-flex; }
 .route-card i { display: block; border-radius: 9px; }
 .route-card strong { font-weight: 600; }
 .route-card p { color: var(--muted); margin: 0; }
 .head-actions { display: flex; align-items: center; gap: 10px; flex: none; }
 .sheet-head .icon-btn { width: 38px; height: 38px; background: var(--raised); border: 1px solid var(--line); box-shadow: none; }
 .sheet-head .icon-btn.on { color: var(--accent); border-color: var(--accent); }
-.choose { margin-left: auto; background: var(--accent); color: var(--on-accent); border-radius: 10px; font-weight: 700; }
+.start-fab {
+  position: fixed; z-index: 2; transform: translateX(-50%);
+  min-height: 0; height: 50px; padding: 0 22px; border-radius: 999px;
+  font-size: 15px; white-space: nowrap; box-shadow: 0 8px 22px #0007;
+}
+.start-fab:active { transform: translateX(-50%) translateY(1px); }
 
 /* ---- Walking ---------------------------------------------------------- */
 .walk-ui { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
