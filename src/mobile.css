@@ -1,0 +1,27 @@
+/* Outdoor/mobile comfort pass: body text stays readable at arm's length and every action meets a 48px touch target. */
+@media (max-width: 600px) {
+  .welcome { padding-inline: 22px; }
+  .lede { font-size: 21px; }
+  .primary, .secondary { min-height: 64px; font-size: 18px; border-radius: 16px; }
+  .privacy, .help { font-size: 14px; }
+  .sheet { padding: 12px 18px max(22px, env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size: 32px; }
+  .quiet, .notice { font-size: 15px; line-height: 1.45; }
+  .seg button, .prefs button, .unit button { min-height: 48px; font-size: 15px; }
+  .value-row { gap: 12px; margin: 14px 0; }
+  .value-row input { min-height: 62px; font-size: 42px; }
+  .value-row span { font-size: 16px; font-weight: 700; }
+  .centre { min-height: 44px; font-size: 15px; }
+  .route-card { min-height: 96px; padding: 14px; gap: 14px; }
+  .route-card strong { font-size: 20px; }
+  .route-card p { font-size: 14px; line-height: 1.4; }
+  .route-card i { width: 7px; }
+  .choose { min-height: 54px; min-width: 94px; font-size: 16px; border-radius: 12px; }
+  .text { min-height: 44px; font-size: 15px; }
+  .walk-ui header button { min-height: 48px; font-size: 14px; }
+  .guidance { padding: 20px; gap: 16px; }
+  .guidance h2 { font-size: 23px; line-height: 1.18; }
+  .guidance p { font-size: 15px; line-height: 1.45; }
+  .maplibregl-ctrl-group { border-radius: 12px; }
+  .maplibregl-ctrl-group button { width: 48px; height: 48px; }
+}
