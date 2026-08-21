@@ -166,7 +166,8 @@ h1 { font-size: clamp(46px, 15vw, 68px); line-height: .95; letter-spacing: -.05e
 .maplibregl-map .maplibregl-ctrl-top-left { top: calc(var(--chrome-top) + var(--chrome-btn) + 10px); }
 
 /* MapLibre chrome recoloured to sit on the dark UI */
-.maplibregl-map .maplibregl-ctrl-attrib { background: #0a1d2eaa; color: var(--muted); }
-.maplibregl-map .maplibregl-ctrl-attrib a { color: var(--muted); }
+/* The on-map attribution pill is off (see attributionControl in MapView);
+   the OSM credit it carried now lives on the welcome screen instead. */
+.credit { font-size: 11px; color: #5d7183; margin: 6px 0 0; }
 
 @media (prefers-reduced-motion: reduce) { *, *:before, *:after { animation: none !important; transition: none !important; } }

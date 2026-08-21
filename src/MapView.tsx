@@ -33,7 +33,7 @@ export function MapView({ start, routes, selected, onPoint, padding }: Props) {
 
   useEffect(() => {
     if (!container.current) return
-    const map = mapRef.current = new maplibregl.Map({ container: container.current, style, center: start, zoom: 13 })
+    const map = mapRef.current = new maplibregl.Map({ container: container.current, style, center: start, zoom: 13, attributionControl: false })
     map.setPadding(pad())
     map.addControl(new maplibregl.NavigationControl())
     marker.current = new maplibregl.Marker({ color: '#ef6b55' }).setLngLat(start).addTo(map)
