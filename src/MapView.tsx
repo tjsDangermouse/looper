@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import type { Point, Route } from './lib'
+import { routeColours, type Point, type Route } from './lib'
 
 type Props = { start: Point; routes: Route[]; selected?: string; position?: Point; onPoint: (point: Point) => void; padding?: { bottom: number; right: number } }
 type Arrow = { x: number; y: number; angle: number }
 type Path = { id: string; points: string; colour: string; selected: boolean; arrows: Arrow[] }
-const colours = ['#ef6b55', '#206a77', '#80679d']
 // Chevrons dropped at an even spacing along the drawn line, pointing the way
 // the walk goes. Screen space, so they stay the same size at every zoom, and
 // off-screen ones are dropped rather than drawn into the void.
@@ -48,7 +47,7 @@ export function MapView({ start, routes, selected, onPoint, padding }: Props) {
       const pixels = route.geometry.coordinates.map(point => map.project(point))
       return {
         id: route.id,
-        colour: colours[index % colours.length],
+        colour: routeColours[index % routeColours.length],
         selected: route.id === selectedRef.current,
         points: pixels.map(pixel => `${pixel.x},${pixel.y}`).join(' '),
         arrows: arrowsAlong(pixels),
@@ -61,7 +60,7 @@ export function MapView({ start, routes, selected, onPoint, padding }: Props) {
     const map = mapRef.current = new maplibregl.Map({ container: container.current, style, center: start, zoom: 13, attributionControl: false })
     map.setPadding(pad())
     map.addControl(new maplibregl.NavigationControl())
-    marker.current = new maplibregl.Marker({ color: '#ef6b55' }).setLngLat(start).addTo(map)
+    marker.current = new maplibregl.Marker({ color: routeColours[0] }).setLngLat(start).addTo(map)
     map.on('click', event => onPoint([event.lngLat.lng, event.lngLat.lat]))
     map.on('load', redraw)
     map.on('move', redraw)

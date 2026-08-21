@@ -1,6 +1,9 @@
 export type Point = [number, number]
 export type Step = { instruction: string; distanceMeters: number; durationSeconds: number; startIndex?: number; endIndex?: number; maneuver?: string; road?: string }
 export type Route = { id: string; name: string; distanceMeters: number; durationSeconds: number; targetDifferencePercent: number; geometry: {type:'LineString'; coordinates: Point[]}; steps: Step[]; reversed?: boolean }
+// One palette for both the drawn lines and the swatch on each route card, so
+// a colour on the map names the same loop in the list.
+export const routeColours = ['#9cc36b', '#5fa8d3', '#e0a35c']
 export const kmToMiles = (km:number) => km * 0.621371
 export const milesToKm = (mi:number) => mi / 0.621371
 export const estimateKmFromMinutes = (minutes:number) => minutes / 12
