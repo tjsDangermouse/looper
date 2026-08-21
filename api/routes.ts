@@ -37,7 +37,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (!response.ok) { throttled ||= response.status === 429; return undefined }
     const data: any = await response.json(), feature = data.features?.[0], summary = feature?.properties?.summary
     if (!feature?.geometry?.coordinates?.length || !summary) return undefined
-    const steps = (feature.properties.segments || []).flatMap((segment: any) => segment.steps || []).map((step: any) => ({ instruction: step.instruction, distanceMeters: step.distance, durationSeconds: step.duration, startIndex: step.way_points?.[0], endIndex: step.way_points?.[1], maneuver: step.type }))
+    const steps = (feature.properties.segments || []).flatMap((segment: any) => segment.steps || []).map((step: any) => ({ instruction: step.instruction, distanceMeters: step.distance, durationSeconds: step.duration, startIndex: step.way_points?.[0], endIndex: step.way_points?.[1], maneuver: step.type, road: step.name && step.name !== '-' ? step.name : undefined }))
     const coordinates: Point[] = feature.geometry.coordinates
     return { coordinates, geometry: feature.geometry, summary, steps, metrics: measure(coordinates, summary.distance, targetMeters, steps.map((s: any) => s.maneuver)) }
   }

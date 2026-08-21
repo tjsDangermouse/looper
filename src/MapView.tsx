@@ -4,8 +4,29 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import type { Point, Route } from './lib'
 
 type Props = { start: Point; routes: Route[]; selected?: string; position?: Point; onPoint: (point: Point) => void; padding?: { bottom: number; right: number } }
-type Path = { id: string; points: string; colour: string; selected: boolean }
+type Arrow = { x: number; y: number; angle: number }
+type Path = { id: string; points: string; colour: string; selected: boolean; arrows: Arrow[] }
 const colours = ['#ef6b55', '#206a77', '#80679d']
+// Chevrons dropped at an even spacing along the drawn line, pointing the way
+// the walk goes. Screen space, so they stay the same size at every zoom, and
+// off-screen ones are dropped rather than drawn into the void.
+const SPACING = 110
+function arrowsAlong(pixels: { x: number; y: number }[]) {
+  const arrows: Arrow[] = []
+  let until = SPACING / 2
+  for (let i = 1; i < pixels.length; i++) {
+    const a = pixels[i - 1], b = pixels[i], dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy)
+    if (!length) continue
+    let at = until
+    for (; at <= length; at += SPACING) {
+      const x = a.x + dx * at / length, y = a.y + dy * at / length
+      if (x > -20 && y > -20 && x < window.innerWidth + 20 && y < window.innerHeight + 20) arrows.push({ x, y, angle: Math.atan2(dy, dx) * 180 / Math.PI })
+    }
+    until = at - length
+  }
+  return arrows
+}
+
 const style: maplibregl.StyleSpecification = { version: 8, sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors' } }, layers: [{ id: 'osm', type: 'raster', source: 'osm' }] }
 
 export function MapView({ start, routes, selected, onPoint, padding }: Props) {
@@ -23,12 +44,16 @@ export function MapView({ start, routes, selected, onPoint, padding }: Props) {
   const redraw = () => {
     const map = mapRef.current
     if (!map) return
-    setPaths(routesRef.current.map((route, index) => ({
-      id: route.id,
-      colour: colours[index % colours.length],
-      selected: route.id === selectedRef.current,
-      points: route.geometry.coordinates.map(point => { const pixel = map.project(point); return `${pixel.x},${pixel.y}` }).join(' '),
-    })))
+    setPaths(routesRef.current.map((route, index) => {
+      const pixels = route.geometry.coordinates.map(point => map.project(point))
+      return {
+        id: route.id,
+        colour: colours[index % colours.length],
+        selected: route.id === selectedRef.current,
+        points: pixels.map(pixel => `${pixel.x},${pixel.y}`).join(' '),
+        arrows: arrowsAlong(pixels),
+      }
+    }))
   }
 
   useEffect(() => {
@@ -54,5 +79,8 @@ export function MapView({ start, routes, selected, onPoint, padding }: Props) {
     mapRef.current?.easeTo({ center: startRef.current, padding: pad(), duration: 300 })
   }, [padding?.bottom, padding?.right])
 
-  return <><div ref={container} style={{ position: 'fixed', inset: 0 }} aria-label="Douglas, Isle of Man map" /><svg aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 1, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>{paths.map(path => <polyline key={path.id} points={path.points} fill="none" stroke={path.colour} strokeWidth={path.selected ? 9 : 6} strokeLinecap="round" strokeLinejoin="round" opacity={selected ? (path.selected ? 1 : .28) : .9} />)}</svg></>
+  return <><div ref={container} style={{ position: 'fixed', inset: 0 }} aria-label="Douglas, Isle of Man map" /><svg aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 1, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>{paths.map(path => <g key={path.id} opacity={selected ? (path.selected ? 1 : .28) : .9}>
+    <polyline points={path.points} fill="none" stroke={path.colour} strokeWidth={path.selected ? 9 : 6} strokeLinecap="round" strokeLinejoin="round" />
+    {path.arrows.map((arrow, index) => <path key={index} d="M-4.5,-4 L0,0 L-4.5,4" fill="none" stroke="#fff" strokeWidth={path.selected ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round" transform={`translate(${arrow.x} ${arrow.y}) rotate(${arrow.angle})`} />)}
+  </g>)}</svg></>
 }

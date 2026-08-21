@@ -45,3 +45,10 @@ export const SoundOffIcon = ({ size = 20 }: { size?: number }) => (
     <path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" /><path d="M16.5 9.5l4 5M20.5 9.5l-4 5" />
   </svg>
 )
+
+export const ReverseIcon = ({ size = 20 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...base}>
+    <path d="M3.5 11A7.5 7.5 0 0 1 11 3.5h6.5" /><path d="M14.5 1 17.5 3.5 14.5 6" />
+    <path d="M20.5 13a7.5 7.5 0 0 1-7.5 7.5H6.5" /><path d="M9.5 23 6.5 20.5 9.5 18" />
+  </svg>
+)

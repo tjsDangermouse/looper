@@ -124,6 +124,9 @@ h1 { font-size: clamp(46px, 15vw, 68px); line-height: .95; letter-spacing: -.05e
 .route-card i { display: block; border-radius: 9px; }
 .route-card strong { font-weight: 600; }
 .route-card p { color: var(--muted); margin: 0; }
+.head-actions { display: flex; align-items: center; gap: 10px; flex: none; }
+.sheet-head .icon-btn { width: 38px; height: 38px; background: var(--raised); border: 1px solid var(--line); box-shadow: none; }
+.sheet-head .icon-btn.on { color: var(--accent); border-color: var(--accent); }
 .choose { margin-left: auto; background: var(--accent); color: var(--on-accent); border-radius: 10px; font-weight: 700; }
 
 /* ---- Walking ---------------------------------------------------------- */

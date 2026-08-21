@@ -1,6 +1,6 @@
 export type Point = [number, number]
-export type Step = { instruction: string; distanceMeters: number; durationSeconds: number; startIndex?: number; endIndex?: number; maneuver?: string }
-export type Route = { id: string; name: string; distanceMeters: number; durationSeconds: number; targetDifferencePercent: number; geometry: {type:'LineString'; coordinates: Point[]}; steps: Step[] }
+export type Step = { instruction: string; distanceMeters: number; durationSeconds: number; startIndex?: number; endIndex?: number; maneuver?: string; road?: string }
+export type Route = { id: string; name: string; distanceMeters: number; durationSeconds: number; targetDifferencePercent: number; geometry: {type:'LineString'; coordinates: Point[]}; steps: Step[]; reversed?: boolean }
 export const kmToMiles = (km:number) => km * 0.621371
 export const milesToKm = (mi:number) => mi / 0.621371
 export const estimateKmFromMinutes = (minutes:number) => minutes / 12
@@ -9,6 +9,20 @@ export const formatTime = (seconds:number) => `${Math.round(seconds / 60)} min`
 export const haversine = (a:Point,b:Point) => { const r=6371000, rad=Math.PI/180, dLat=(b[1]-a[1])*rad,dLng=(b[0]-a[0])*rad; const x=Math.sin(dLat/2)**2+Math.cos(a[1]*rad)*Math.cos(b[1]*rad)*Math.sin(dLng/2)**2; return 2*r*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)) }
 export function nearestProgress(point:Point, coords:Point[]) { let best=Infinity, index=0, before=0; for(let i=0;i<coords.length;i++){ const d=haversine(point,coords[i]); if(d<best){best=d;index=i} if(i<index) before+=haversine(coords[i],coords[i+1]||coords[i]) } return { distanceToRoute:best, index, distanceAlong:before } }
 export function nextTurn(route:Route, progressMeters:number) { let total=0; for(let i=0;i<route.steps.length;i++){ const step=route.steps[i]; total+=step.distanceMeters; if(total>progressMeters) return {...step, index:i, distanceAway:total-progressMeters} } return undefined }
+// Walking the loop the other way round. The app reads a step's instruction as
+// the turn taken at the *end* of that step, so reversing keeps the segments in
+// the opposite order and hands each one the turn it now ends on: the same
+// corner, mirrored (a left going one way is a right coming back), naming the
+// road the walk is about to join rather than the one it joined before.
+const mirror = (instruction:string) => instruction.replace(/\bleft\b/gi,'\u0000').replace(/\bright\b/gi,'left').replace(/\u0000/g,'right')
+const onto = (instruction:string, road?:string) => { const bare=instruction.replace(/\s+onto\s+.+$/i,''); return road?`${bare} onto ${road}`:bare }
+export function reverseRoute(route:Route):Route {
+  const walked = route.steps.filter(step=>step.distanceMeters>0)
+  const steps:Step[] = walked.map((_,i)=>{ const index=walked.length-1-i, step=walked[index], joins=walked[index-1]
+    return { ...step, instruction: joins?onto(mirror(step.instruction), joins.road):'Arrive at your starting point' } })
+  return { ...route, reversed:!route.reversed, steps, geometry:{...route.geometry, coordinates:[...route.geometry.coordinates].reverse()} }
+}
+
 export function dedupeRoutes(routes:Route[]) { return routes.filter((route,i)=>!routes.slice(0,i).some(other=>{const a=route.geometry.coordinates,b=other.geometry.coordinates; const samples=8; let matches=0; for(let s=0;s<samples;s++){const p=a[Math.floor(s*(a.length-1)/(samples-1))],q=b[Math.floor(s*(b.length-1)/(samples-1))]; if(p&&q&&haversine(p,q)<160) matches++} return matches/samples>.7 })) }
 
 // Voice guidance. A turn is announced at most once per band, so walking through
