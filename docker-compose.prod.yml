@@ -36,7 +36,8 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-20}
     ports:
-      - "${ROUTE_SERVICE_PORT:-8080}:8080"
+      # Nginx is the public HTTPS entry point; keep the service local to this host.
+      - "127.0.0.1:${ROUTE_SERVICE_PORT:-8988}:8080"
     depends_on:
       graphhopper:
         condition: service_healthy
