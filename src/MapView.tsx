@@ -111,7 +111,7 @@ export function MapView({ start, routes, selected, position, follow, walking, he
     if (!position) { gps.current?.remove(); gps.current = undefined; return }
     if (gps.current) gps.current.setLngLat(position)
     else { const element = document.createElement('div'); element.className = 'gps-dot'; gps.current = new maplibregl.Marker({ element }).setLngLat(position).addTo(map) }
-    if (followRef.current) map.easeTo({ center: position, padding: pad(), duration: 700 })
+    if (followRef.current) map.easeTo({ center: position, zoom: Math.max(map.getZoom(), WALK_ZOOM), padding: pad(), duration: 700 })
   }, [position?.[0], position?.[1]])
 
   // Turning following on — starting a walk, or asking to be re-centred —
