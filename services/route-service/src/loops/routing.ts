@@ -68,6 +68,10 @@ export type SequentialRoutingOptions = {
    * dictated to by the avoidance penalty. See the retry below.
    */
   legBudgetMetres?: number
+  /** See JOIN_TURN_THRESHOLD_DEGREES. Overridable for the tuning panel only. */
+  joinTurnThresholdDegrees?: number
+  /** See WAYPOINT_PULLBACK_SCALE. Overridable for the tuning panel only. */
+  waypointPullbackScale?: number
   signal?: AbortSignal
 }
 
@@ -142,9 +146,10 @@ export async function routeCandidateSequentially(
     if (index > 0) {
       const previous = legs[legs.length - 1]
       const turn = turnAngleDegrees(edgeBearing(previous.coordinates, false), edgeBearing(leg.coordinates, true))
-      if (turn > JOIN_TURN_THRESHOLD_DEGREES) {
+      if (turn > (options.joinTurnThresholdDegrees ?? JOIN_TURN_THRESHOLD_DEGREES)) {
         const original = points[index]
-        const pulledIn = destination(start, haversine(start, original) * WAYPOINT_PULLBACK_SCALE, bearingBetween(start, original))
+        const pullbackScale = options.waypointPullbackScale ?? WAYPOINT_PULLBACK_SCALE
+        const pulledIn = destination(start, haversine(start, original) * pullbackScale, bearingBetween(start, original))
         const areasBeforePrevious = buildAvoidanceAreas(walked.slice(0, -1), start, {
           halfWidthMetres: options.corridorHalfWidthMetres,
           startExclusionMetres: options.startExclusionMetres,

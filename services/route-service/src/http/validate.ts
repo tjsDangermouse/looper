@@ -1,4 +1,5 @@
-import type { LoopRequest } from '../loops/generate.js'
+import type { LoopOverrides, LoopRequest } from '../loops/generate.js'
+import type { QualityThresholds } from '../loops/quality.js'
 
 /**
  * Input validation.
@@ -57,5 +58,63 @@ export function parseLoopRequest(body: unknown): LoopRequest {
     throw new ValidationError('Ask for a different set of loops.', 'variation')
   }
 
-  return { start: { lng, lat }, mode, distanceKm, durationMinutes, units, variation: Math.trunc(rawVariation) }
+  return {
+    start: { lng, lat },
+    mode,
+    distanceKm,
+    durationMinutes,
+    units,
+    variation: Math.trunc(rawVariation),
+    overrides: parseOverrides(input.overrides),
+  }
+}
+
+/**
+ * The tuning panel's knobs. Never sent by the ordinary app — only by
+ * whoever opens `?debug=1` on purpose — so validation here is about not
+ * crashing the service on a stray value while dragging a slider, not about
+ * defending against a hostile caller the way the fields above do.
+ */
+const OVERRIDE_RANGES = {
+  maxDistanceError: [0, 2],
+  maxDurationError: [0, 2],
+  maxRepeatedFraction: [0, 1],
+  maxUTurns: [0, 10],
+  maxLegShare: [0, 1],
+  minLegShare: [0, 1],
+  maxBoundingBoxRatio: [1, 30],
+  minCompactness: [0, 1],
+  maxStartStubMetres: [0, 3000],
+  maxOutAndBackSpurMetres: [0, 3000],
+  maxOutAndBackSpurShare: [0, 1],
+} satisfies Record<keyof QualityThresholds, [number, number]>
+
+function clamp(value: unknown, [low, high]: [number, number]): number | undefined {
+  const n = Number(value)
+  return Number.isFinite(n) ? Math.min(high, Math.max(low, n)) : undefined
+}
+
+function parseOverrides(raw: unknown): LoopOverrides | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const input = raw as Record<string, any>
+
+  const quality: Partial<QualityThresholds> = {}
+  if (input.quality && typeof input.quality === 'object') {
+    for (const key of Object.keys(OVERRIDE_RANGES) as (keyof QualityThresholds)[]) {
+      const value = clamp(input.quality[key], OVERRIDE_RANGES[key])
+      if (value !== undefined) quality[key] = value
+    }
+  }
+
+  const overrides: LoopOverrides = { quality }
+  const maxSharedFraction = clamp(input.maxSharedFraction, [0, 1])
+  if (maxSharedFraction !== undefined) overrides.maxSharedFraction = maxSharedFraction
+  const joinTurnThresholdDegrees = clamp(input.joinTurnThresholdDegrees, [0, 180])
+  if (joinTurnThresholdDegrees !== undefined) overrides.joinTurnThresholdDegrees = joinTurnThresholdDegrees
+  const waypointPullbackScale = clamp(input.waypointPullbackScale, [0.1, 1])
+  if (waypointPullbackScale !== undefined) overrides.waypointPullbackScale = waypointPullbackScale
+  const rawCandidateCount = clamp(input.candidateCount, [2, 96])
+  if (rawCandidateCount !== undefined) overrides.candidateCount = Math.round(rawCandidateCount / 2) * 2
+
+  return overrides
 }

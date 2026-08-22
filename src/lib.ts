@@ -135,8 +135,25 @@ export const apiBase = (import.meta.env?.VITE_LOOPER_API_BASE ?? '').replace(/\/
 
 type LoopRouteResponse = Omit<Route,'name'> & { label:string }
 
+// The route service's tuning knobs — every quality, diversity and routing
+// threshold it was adjusted against this session. Left undefined by the
+// ordinary app; only the debug panel fills any of these in.
+export type QualityOverrides = Partial<{
+  maxDistanceError:number; maxDurationError:number; maxRepeatedFraction:number; maxUTurns:number
+  maxLegShare:number; minLegShare:number; maxBoundingBoxRatio:number; minCompactness:number
+  maxStartStubMetres:number; maxOutAndBackSpurMetres:number; maxOutAndBackSpurShare:number
+}>
+export type LoopOverrides = Partial<{
+  quality:QualityOverrides; maxSharedFraction:number; joinTurnThresholdDegrees:number
+  waypointPullbackScale:number; candidateCount:number
+}>
+export type Diagnostics = {
+  candidates:number; routed:number; passed:number; offered:number
+  rejections:Record<string,number>; retry:string; retracing:boolean; targetMetres:number
+}
+
 /** Ask for loops. Errors carry a sentence a walker can act on, nothing more. */
-export async function requestLoops(input:{ start:Point; mode:LoopMode; distanceKm?:number; durationMinutes?:number; unit:Unit; variation:number }):Promise<{ routes:Route[]; warning?:string }> {
+export async function requestLoops(input:{ start:Point; mode:LoopMode; distanceKm?:number; durationMinutes?:number; unit:Unit; variation:number; overrides?:LoopOverrides }):Promise<{ routes:Route[]; warning?:string; diagnostics?:Diagnostics }> {
   const response = await fetch(`${apiBase}/v1/loops`, {
     method:'POST', headers:{ 'Content-Type':'application/json' },
     body: JSON.stringify({
@@ -146,6 +163,7 @@ export async function requestLoops(input:{ start:Point; mode:LoopMode; distanceK
       durationMinutes: input.mode==='time' ? input.durationMinutes : undefined,
       units: input.unit,
       variation: input.variation,
+      overrides: input.overrides,
     }),
   })
   const data = await response.json().catch(()=>({}))
@@ -153,7 +171,7 @@ export async function requestLoops(input:{ start:Point; mode:LoopMode; distanceK
   // The service names a loop for the way it heads; the app has always called
   // that a route's name.
   const routes = (data.routes ?? []).map((route:LoopRouteResponse)=>({ ...route, name: route.label }))
-  return { routes, warning: typeof data?.warning === 'string' ? data.warning : undefined }
+  return { routes, warning: typeof data?.warning === 'string' ? data.warning : undefined, diagnostics: data.diagnostics }
 }
 
 // Voice guidance. A turn is announced at most once per band, so walking through

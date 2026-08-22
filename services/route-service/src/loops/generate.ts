@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import type { LineString } from 'geojson'
 import { DEFAULT_CANDIDATE_COUNT, generateCandidateShapes } from './candidates.js'
-import { initialBearing, labelRoutes, selectDiverseRoutes } from './diversity.js'
+import { MAX_SHARED_FRACTION, initialBearing, labelRoutes, selectDiverseRoutes } from './diversity.js'
 import type { LngLat } from './geo.js'
-import { analyseRouteQuality, type QualityReport } from './quality.js'
+import { analyseRouteQuality, type QualityReport, type QualityThresholds } from './quality.js'
 import { LEG_BUDGET_SHARE, routeCandidateSequentially, type LegRouter, type RoutedCandidate } from './routing.js'
 import { seedFor } from './random.js'
 import { targetMetresFor, targetSecondsFor, type LoopMode } from './units.js'
@@ -36,6 +36,24 @@ export type LoopRequest = {
   durationMinutes?: number
   units: 'km' | 'mi'
   variation?: number
+  overrides?: LoopOverrides
+}
+
+/**
+ * Every quality, diversity and routing knob this generator tunes with,
+ * gathered so the tuning panel can send whichever ones a walker is
+ * experimenting with. Absent fields keep today's defaults. Never sent by
+ * the ordinary "Find my loops" flow.
+ */
+export type LoopOverrides = {
+  quality?: Partial<QualityThresholds>
+  /** See MAX_SHARED_FRACTION in diversity.ts. */
+  maxSharedFraction?: number
+  /** See JOIN_TURN_THRESHOLD_DEGREES in routing.ts. */
+  joinTurnThresholdDegrees?: number
+  /** See WAYPOINT_PULLBACK_SCALE in routing.ts. */
+  waypointPullbackScale?: number
+  candidateCount?: number
 }
 
 export type LoopStep = {
@@ -66,7 +84,7 @@ export type LoopRoute = {
   }
 }
 
-export type LoopResponse = { routes: LoopRoute[]; warning?: string }
+export type LoopResponse = { routes: LoopRoute[]; warning?: string; diagnostics?: Diagnostics }
 
 export type GenerateOptions = {
   route: LegRouter
@@ -105,6 +123,8 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
   const variation = request.variation ?? 0
   const targetSeconds = targetSecondsFor(request)
   const firstTarget = targetMetresFor(request)
+  const overrides = request.overrides
+  const candidateCount = overrides?.candidateCount ?? options.candidateCount ?? DEFAULT_CANDIDATE_COUNT
 
   const rejections: Record<string, number> = {}
   const first = await attempt(firstTarget, 1)
@@ -153,11 +173,11 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
   const retracing = passing.length === 0
   const offerable = retracing ? analysed.filter(entry => entry.report.passesEssentials) : passing
 
-  const chosen = selectDiverseRoutes(offerable.map(toSelectable), 3)
+  const chosen = selectDiverseRoutes(offerable.map(toSelectable), 3, overrides?.maxSharedFraction ?? MAX_SHARED_FRACTION)
   const labels = labelRoutes(chosen.map(entry => ({ bearing: entry.bearing, distanceMeters: entry.source.candidate.distanceMeters })))
 
-  options.onDiagnostics?.({
-    candidates: options.candidateCount ?? DEFAULT_CANDIDATE_COUNT,
+  const diagnostics: Diagnostics = {
+    candidates: candidateCount,
     routed: first.analysed.length,
     passed: passing.length,
     offered: chosen.length,
@@ -165,12 +185,14 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
     retry,
     targetMetres,
     retracing: retracing && chosen.length > 0,
-  })
+  }
+  options.onDiagnostics?.(diagnostics)
 
-  if (!chosen.length) return { routes: [], warning: NO_CLEAN_LOOP_WARNING }
+  if (!chosen.length) return { routes: [], warning: NO_CLEAN_LOOP_WARNING, diagnostics }
 
   return {
     warning: retracing ? RETRACES_WARNING : undefined,
+    diagnostics,
     routes: chosen.map((entry, position) => {
       const { candidate, quality } = entry.source
       return {
@@ -196,13 +218,15 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
 
   async function attempt(target: number, radiusScale: number): Promise<{ analysed: Analysed[]; passing: Analysed[] }> {
     const seed = seedFor([start[0], start[1]], target, variation)
-    const shapes = generateCandidateShapes(start, target, seed, options.candidateCount ?? DEFAULT_CANDIDATE_COUNT, radiusScale)
+    const shapes = generateCandidateShapes(start, target, seed, candidateCount, radiusScale)
     const routed = await mapWithConcurrency(shapes, options.concurrency ?? 6, async shape => {
       const candidate = await routeCandidateSequentially(start, shape, options.route, {
         // Generous: a candidate that overshoots is still evidence about how much
         // this network stretches a ring, and that evidence steers the retry.
         abandonAboveMetres: target * 2.2,
         legBudgetMetres: target * LEG_BUDGET_SHARE,
+        joinTurnThresholdDegrees: overrides?.joinTurnThresholdDegrees,
+        waypointPullbackScale: overrides?.waypointPullbackScale,
         signal: options.signal,
       })
       if (!candidate) return undefined
@@ -215,6 +239,7 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
         targetSeconds,
         legDistances: candidate.legDistances,
         maneuverSigns: candidate.steps.map(step => step.sign),
+        thresholds: overrides?.quality,
       })
       for (const reason of report.rejections) rejections[reason] = (rejections[reason] ?? 0) + 1
       return {

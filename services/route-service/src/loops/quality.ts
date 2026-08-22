@@ -37,8 +37,8 @@ export const MAX_REPEATED_FRACTION = 0.12
  */
 export const MAX_OUT_AND_BACK_SPUR_METRES = 150
 export const MAX_OUT_AND_BACK_SPUR_SHARE = 0.04
-export const spurLimitMetres = (routeMetres: number) =>
-  Math.max(MAX_OUT_AND_BACK_SPUR_METRES, routeMetres * MAX_OUT_AND_BACK_SPUR_SHARE)
+export const spurLimitMetres = (routeMetres: number, floorMetres = MAX_OUT_AND_BACK_SPUR_METRES, share = MAX_OUT_AND_BACK_SPUR_SHARE) =>
+  Math.max(floorMetres, routeMetres * share)
 export const MAX_U_TURNS = 1
 export const MAX_LEG_SHARE = 0.45
 /**
@@ -319,6 +319,42 @@ export type QualityInput = {
   targetSeconds?: number
   legDistances: number[]
   maneuverSigns?: Array<number | undefined>
+  /**
+   * Every threshold above, individually overridable. Exists for the tuning
+   * panel: a walker experimenting with these live is how we find out which
+   * one is actually the wall at their address, rather than guessing from
+   * server logs. Never sent by the ordinary app flow, which always gets the
+   * defaults above.
+   */
+  thresholds?: Partial<QualityThresholds>
+}
+
+export type QualityThresholds = {
+  maxDistanceError: number
+  maxDurationError: number
+  maxRepeatedFraction: number
+  maxUTurns: number
+  maxLegShare: number
+  minLegShare: number
+  maxBoundingBoxRatio: number
+  minCompactness: number
+  maxStartStubMetres: number
+  maxOutAndBackSpurMetres: number
+  maxOutAndBackSpurShare: number
+}
+
+export const DEFAULT_QUALITY_THRESHOLDS: QualityThresholds = {
+  maxDistanceError: MAX_DISTANCE_ERROR,
+  maxDurationError: MAX_DURATION_ERROR,
+  maxRepeatedFraction: MAX_REPEATED_FRACTION,
+  maxUTurns: MAX_U_TURNS,
+  maxLegShare: MAX_LEG_SHARE,
+  minLegShare: MIN_LEG_SHARE,
+  maxBoundingBoxRatio: MAX_BOUNDING_BOX_RATIO,
+  minCompactness: MIN_COMPACTNESS,
+  maxStartStubMetres: MAX_START_STUB_METRES,
+  maxOutAndBackSpurMetres: MAX_OUT_AND_BACK_SPUR_METRES,
+  maxOutAndBackSpurShare: MAX_OUT_AND_BACK_SPUR_SHARE,
 }
 
 /**
@@ -360,6 +396,7 @@ export type QualityReport = {
 
 export function analyseRouteQuality(input: QualityInput): QualityReport {
   const { coordinates, start, distanceMeters, durationSeconds, targetMetres, targetSeconds, legDistances } = input
+  const t: QualityThresholds = { ...DEFAULT_QUALITY_THRESHOLDS, ...input.thresholds }
   const rejections: string[] = []
 
   const repeats = findRepeatedCorridors(coordinates)
@@ -370,22 +407,23 @@ export function analyseRouteQuality(input: QualityInput): QualityReport {
   const stubMetres = startStubMetres(coordinates)
   const total = legDistances.reduce((sum, leg) => sum + leg, 0) || distanceMeters
   const legShares = legDistances.map(leg => (total > 0 ? leg / total : 0))
+  const spurLimit = spurLimitMetres(distanceMeters, t.maxOutAndBackSpurMetres, t.maxOutAndBackSpurShare)
 
   const distanceErrorFraction = targetMetres > 0 ? Math.abs(distanceMeters - targetMetres) / targetMetres : 0
   const durationErrorFraction = targetSeconds && targetSeconds > 0 ? Math.abs(durationSeconds - targetSeconds) / targetSeconds : undefined
 
-  if (distanceErrorFraction > MAX_DISTANCE_ERROR) rejections.push('distance')
-  if (durationErrorFraction !== undefined && durationErrorFraction > MAX_DURATION_ERROR) rejections.push('duration')
-  if (repeats.repeatedPercent > MAX_REPEATED_FRACTION * 100) rejections.push('repeated-corridor')
-  if (repeats.longestReverseRunMetres > spurLimitMetres(distanceMeters)) rejections.push('out-and-back-spur')
-  if (uTurnCount > MAX_U_TURNS) rejections.push('u-turns')
-  if (legShares.some(share => share > MAX_LEG_SHARE)) rejections.push('leg-too-long')
-  if (legShares.slice(1, -1).some(share => share < MIN_LEG_SHARE)) rejections.push('leg-too-short')
-  if (boundingBoxRatio > MAX_BOUNDING_BOX_RATIO) rejections.push('elongated')
-  if (shape < MIN_COMPACTNESS) rejections.push('shapeless')
+  if (distanceErrorFraction > t.maxDistanceError) rejections.push('distance')
+  if (durationErrorFraction !== undefined && durationErrorFraction > t.maxDurationError) rejections.push('duration')
+  if (repeats.repeatedPercent > t.maxRepeatedFraction * 100) rejections.push('repeated-corridor')
+  if (repeats.longestReverseRunMetres > spurLimit) rejections.push('out-and-back-spur')
+  if (uTurnCount > t.maxUTurns) rejections.push('u-turns')
+  if (legShares.some(share => share > t.maxLegShare)) rejections.push('leg-too-long')
+  if (legShares.slice(1, -1).some(share => share < t.minLegShare)) rejections.push('leg-too-short')
+  if (boundingBoxRatio > t.maxBoundingBoxRatio) rejections.push('elongated')
+  if (shape < t.minCompactness) rejections.push('shapeless')
   // The doorstep stub is a spur like any other, and is judged by the same
   // proportional yardstick: 150 m on a town loop, more on a long day out.
-  if (stubMetres > spurLimitMetres(distanceMeters)) rejections.push('start-spur')
+  if (stubMetres > spurLimit) rejections.push('start-spur')
   if (!returnsToStart(coordinates, start)) rejections.push('open-ended')
 
   return {
