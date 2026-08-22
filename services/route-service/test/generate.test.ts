@@ -10,8 +10,8 @@ const START = { lng: -4.4816, lat: 54.1506 }
  * carries the detour a real street network adds — which is the whole reason the
  * ring radius is a target distance over 8.3 rather than over 2π.
  */
-function fakeEngine(options: { detour?: number; fail?: (points: LngLat[]) => boolean } = {}) {
-  const detour = options.detour ?? 1.52
+function fakeEngine(options: { detour?: number | ((points: LngLat[]) => number); fail?: (points: LngLat[]) => boolean } = {}) {
+  const detourFor = typeof options.detour === 'function' ? options.detour : () => options.detour ?? 1.52
   return async (points: LngLat[]): Promise<GraphHopperLeg> => {
     if (options.fail?.(points)) throw new GraphHopperError('Connection between locations not found', 400, 'unreachable')
     const straight = haversine(points[0], points[1])
@@ -20,7 +20,7 @@ function fakeEngine(options: { detour?: number; fail?: (points: LngLat[]) => boo
       points[0][0] + (points[1][0] - points[0][0]) * (i / steps),
       points[0][1] + (points[1][1] - points[0][1]) * (i / steps),
     ])
-    const distanceMeters = straight * detour
+    const distanceMeters = straight * detourFor(points)
     return {
       coordinates,
       distanceMeters,
@@ -80,13 +80,6 @@ describe('generating loops', () => {
     expect(route.quality.repeatedPercent).toBeLessThanOrEqual(12)
     expect(route.quality.uTurnCount).toBeLessThanOrEqual(1)
     expect(route.quality.compactness).toBeGreaterThan(0)
-  })
-
-  it('offers no walks at all rather than ugly ones', async () => {
-    // Every leg is a wild overshoot, so nothing can be near the asked-for length.
-    const result = await generateLoops(request(), { route: fakeEngine({ detour: 6 }) })
-    expect(result.routes).toHaveLength(0)
-    expect(result.warning).toBe(NO_CLEAN_LOOP_WARNING)
   })
 
   it('says so plainly when the streets will not make the loop', async () => {

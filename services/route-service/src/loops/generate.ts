@@ -1,20 +1,30 @@
 import { randomUUID } from 'node:crypto'
 import type { LineString } from 'geojson'
-import { DEFAULT_CANDIDATE_COUNT, generateCandidateShapes } from './candidates.js'
-import { MAX_SHARED_FRACTION, initialBearing, labelRoutes, selectDiverseRoutes } from './diversity.js'
+import { DEFAULT_ATTEMPT_COUNT, generateLoopAttempts } from './candidates.js'
+import { MAX_SHARED_FRACTION, initialBearing as bearingOf, labelRoutes, selectDiverseRoutes } from './diversity.js'
 import type { LngLat } from './geo.js'
 import { analyseRouteQuality, type QualityReport, type QualityThresholds } from './quality.js'
-import { LEG_BUDGET_SHARE, routeCandidateSequentially, type LegRouter, type RoutedCandidate } from './routing.js'
+import { LEG_BUDGET_SHARE, buildLoopIncrementally, type LegRouter, type RoutedCandidate } from './routing.js'
 import { seedFor } from './random.js'
 import { targetMetresFor, targetSecondsFor, type LoopMode } from './units.js'
 
 /**
  * The loop generator, end to end.
  *
- * Shapes are proposed, routed leg by leg with the ground already walked held
- * against them, measured, and then either offered or thrown away. Nothing is
- * offered to fill a gap: three good loops, or two, or one, or an honest nothing.
+ * Each attempt builds its own loop live — a leg at a time, self-correcting as
+ * it goes against the distance budget — rather than guessing a whole shape
+ * blind and finding out after the fact whether it worked. A finished loop is
+ * still measured and either offered or thrown away. Nothing is offered to
+ * fill a gap: three good loops, or two, or one, or an honest nothing.
+ *
+ * The shape itself is not fixed either. Some ground wants two turns — a
+ * promenade, out one way and back another — and some wants four, threading a
+ * housing estate. An attempt tries the simplest shape first and only reaches
+ * for another corner if that one could not be made to work, rather than every
+ * walk being forced into the same stencil regardless of what is underneath it.
  */
+/** Corner counts tried, simplest first, before an attempt gives up on a bearing. */
+const CORNER_COUNTS_TO_TRY = [1, 2, 3, 4]
 
 export const NO_CLEAN_LOOP_WARNING =
   'We couldn’t find a clean loop of that length from here. Try a different distance or move the start point.'
@@ -124,18 +134,22 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
   const targetSeconds = targetSecondsFor(request)
   const firstTarget = targetMetresFor(request)
   const overrides = request.overrides
-  const candidateCount = overrides?.candidateCount ?? options.candidateCount ?? DEFAULT_CANDIDATE_COUNT
+  const candidateCount = overrides?.candidateCount ?? options.candidateCount ?? DEFAULT_ATTEMPT_COUNT
 
   const rejections: Record<string, number> = {}
-  const first = await attempt(firstTarget, 1)
+  const first = await attempt(firstTarget, firstTarget)
 
   let passing = first.passing
   let extra: Analysed[] = []
   let retry: Retry = 'none'
   let targetMetres = firstTarget
 
-  // One adjusted retry, and one only: a walker waiting for loops is not waiting
-  // for a search. Which adjustment depends on what the first pass got wrong.
+  // Each attempt already self-corrects against the budget as it builds, so
+  // this retry is now a last resort rather than the main way a candidate ever
+  // lands near the right size: only reached when every attempt in the first
+  // batch still missed, in which case the network stretches a crow-flies
+  // target enough that even self-correction inside one loop cannot cover it,
+  // and the whole batch is re-aimed once.
   if (passing.length < 3) {
     const durationMisses = targetSeconds ? first.analysed.filter(entry => entry.report.durationOnly) : []
 
@@ -144,21 +158,21 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
       // wrong for this terrain, so re-aim the distance from what was measured.
       const observed = median(durationMisses.map(entry => entry.candidate.durationSeconds))
       targetMetres = firstTarget * clampScale(targetSeconds / observed)
-      const second = await attempt(targetMetres, 1)
+      const second = await attempt(targetMetres, targetMetres)
       retry = 'duration'
       extra = second.analysed
       passing = merge(passing, second.passing)
     } else if (first.analysed.length) {
-      // The ring was the wrong size for these streets. How much a network
-      // stretches a crow-flies ring varies enormously — a suburb of 80 m blocks
-      // costs far more per metre of radius than an open seafront — so measure
-      // it from what came back and resize once. A ring that is badly sized
+      // The construction target was the wrong size for these streets: measure
+      // what actually came back and resize once. A batch that is badly sized
       // fails in several ways at once, not only on length, so the estimate
       // comes from every candidate that routed rather than the near misses.
+      // The target a walk is judged against never moves — that is what the
+      // walker asked for.
       const observed = median(first.analysed.map(entry => entry.candidate.distanceMeters))
       const scale = clampScale(firstTarget / observed)
       if (Math.abs(scale - 1) > 0.05) {
-        const second = await attempt(firstTarget, scale)
+        const second = await attempt(firstTarget * scale, firstTarget)
         retry = 'radius'
         extra = second.analysed
         passing = merge(passing, second.passing)
@@ -216,39 +230,53 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
     }),
   }
 
-  async function attempt(target: number, radiusScale: number): Promise<{ analysed: Analysed[]; passing: Analysed[] }> {
-    const seed = seedFor([start[0], start[1]], target, variation)
-    const shapes = generateCandidateShapes(start, target, seed, candidateCount, radiusScale)
-    const routed = await mapWithConcurrency(shapes, options.concurrency ?? 6, async shape => {
-      const candidate = await routeCandidateSequentially(start, shape, options.route, {
-        // Generous: a candidate that overshoots is still evidence about how much
-        // this network stretches a ring, and that evidence steers the retry.
-        abandonAboveMetres: target * 2.2,
-        legBudgetMetres: target * LEG_BUDGET_SHARE,
-        joinTurnThresholdDegrees: overrides?.joinTurnThresholdDegrees,
-        waypointPullbackScale: overrides?.waypointPullbackScale,
-        signal: options.signal,
-      })
-      if (!candidate) return undefined
-      const report = analyseRouteQuality({
-        coordinates: candidate.coordinates,
-        start,
-        distanceMeters: candidate.distanceMeters,
-        durationSeconds: candidate.durationSeconds,
-        targetMetres: target,
-        targetSeconds,
-        legDistances: candidate.legDistances,
-        maneuverSigns: candidate.steps.map(step => step.sign),
-        thresholds: overrides?.quality,
-      })
-      for (const reason of report.rejections) rejections[reason] = (rejections[reason] ?? 0) + 1
-      return {
-        candidate,
-        report,
-        coordinates: candidate.coordinates,
-        quality: report.quality,
-        bearing: initialBearing(candidate.coordinates, start),
-      } satisfies Analysed
+  /**
+   * `constructionTarget` is what each attempt builds toward; `qualityTarget`
+   * is what the finished loop is judged against. They differ only on the
+   * rare radius retry below, where the build is re-aimed but the walker's
+   * actual request is not.
+   */
+  async function attempt(constructionTarget: number, qualityTarget: number): Promise<{ analysed: Analysed[]; passing: Analysed[] }> {
+    const seed = seedFor([start[0], start[1]], qualityTarget, variation)
+    const attempts = generateLoopAttempts(seed, candidateCount)
+    const routed = await mapWithConcurrency(attempts, options.concurrency ?? 6, async loopAttempt => {
+      let best: Analysed | undefined
+      for (const cornerCount of CORNER_COUNTS_TO_TRY) {
+        const candidate = await buildLoopIncrementally(start, constructionTarget, loopAttempt.initialBearing, loopAttempt.direction, options.route, {
+          // Generous: a candidate that overshoots is still evidence about how much
+          // this network stretches a ring, and that evidence steers the retry.
+          abandonAboveMetres: qualityTarget * 2.2,
+          legBudgetMetres: qualityTarget * LEG_BUDGET_SHARE,
+          joinTurnThresholdDegrees: overrides?.joinTurnThresholdDegrees,
+          waypointPullbackScale: overrides?.waypointPullbackScale,
+          cornerCount,
+          signal: options.signal,
+        })
+        if (!candidate) continue
+        const report = analyseRouteQuality({
+          coordinates: candidate.coordinates,
+          start,
+          distanceMeters: candidate.distanceMeters,
+          durationSeconds: candidate.durationSeconds,
+          targetMetres: qualityTarget,
+          targetSeconds,
+          legDistances: candidate.legDistances,
+          maneuverSigns: candidate.steps.map(step => step.sign),
+          thresholds: overrides?.quality,
+        })
+        const entry: Analysed = {
+          candidate,
+          report,
+          coordinates: candidate.coordinates,
+          quality: report.quality,
+          bearing: bearingOf(candidate.coordinates, start),
+        }
+        // A clean shape at this corner count: no need to try a fussier one.
+        if (report.pass) { best = entry; break }
+        if (!best || entry.report.quality.score > best.report.quality.score) best = entry
+      }
+      if (best) for (const reason of best.report.rejections) rejections[reason] = (rejections[reason] ?? 0) + 1
+      return best
     })
     const analysed = routed.filter((entry): entry is Analysed => entry !== undefined)
     return { analysed, passing: analysed.filter(entry => entry.report.pass) }

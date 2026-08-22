@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ESSENTIAL_REJECTIONS, MAX_BOUNDING_BOX_RATIO, MAX_START_STUB_METRES, MIN_COMPACTNESS, spurLimitMetres, startStubMetres, MAX_DISTANCE_ERROR, MAX_OUT_AND_BACK_SPUR_METRES, MAX_REPEATED_FRACTION, MAX_U_TURNS, analyseRouteQuality, countUTurns, findRepeatedCorridors, sharedCorridorMetres } from '../src/loops/quality.js'
+import { ESSENTIAL_REJECTIONS, MAX_BOUNDING_BOX_RATIO, MAX_START_STUB_METRES, MIN_BACKTRACK_METRES, MIN_COMPACTNESS, spurLimitMetres, startStubMetres, MAX_DISTANCE_ERROR, MAX_U_TURNS, analyseRouteQuality, countUTurns, findRepeatedCorridors, sharedCorridorMetres } from '../src/loops/quality.js'
 import { pathLength, type LngLat } from '../src/loops/geo.js'
 import { FIXTURE_ORIGIN, cleanLoop, longOutAndBack, narrowElongated, polyline, repeatedBridge, sharedStartLoop, simpleCrossing, twinA, twinB } from './fixtures/routes.js'
 
@@ -34,7 +34,7 @@ describe('repeated corridor detection', () => {
   it('finds a path section walked in both directions', () => {
     const report = findRepeatedCorridors(repeatedBridge)
     expect(report.repeatedMeters).toBeGreaterThan(200)
-    expect(report.longestReverseRunMetres).toBeGreaterThan(MAX_OUT_AND_BACK_SPUR_METRES)
+    expect(report.longestReverseRunMetres).toBeGreaterThan(400)
   })
   it('does not call a crossroads an overlap', () => {
     // The figure of eight touches itself once, at right angles. Walkers cross
@@ -68,25 +68,31 @@ describe('U-turns', () => {
   })
 })
 
-describe('how long a spur may be', () => {
-  it('holds a short town loop to the flat 150 m', () => {
-    expect(spurLimitMetres(2000)).toBe(150)
-    expect(spurLimitMetres(3750)).toBe(150)
+describe('how long a backtrack may be', () => {
+  it('always holds a short backtrack against a walk', () => {
+    // 420 m walked both ways — nearly the length of a real promenade, but
+    // not quite: too short to be a destination, too long to be a shrug.
+    const report = judge(repeatedBridge)
+    expect(report.pass).toBe(false)
+    expect(report.rejections).toContain('out-and-back-spur')
   })
-  it('lets a long walk have a proportionate one', () => {
-    // The lane in from the road, on a 13 km hill walk: 1% of the day.
-    expect(spurLimitMetres(13000)).toBe(520)
+  it('never holds a long one against a walk on length alone', () => {
+    // Walking to the end of a promenade and back is the walk, not a defect.
+    expect(judge(longOutAndBack).rejections).not.toContain('out-and-back-spur')
+    expect(MIN_BACKTRACK_METRES).toBe(500)
   })
-  it('offers a long country loop whose only shared stretch is the way in', () => {
-    // A 10 km circuit reached down a 300 m lane and returned along it.
-    const lane: [number, number][] = [[0, -300], [0, 0]]
-    const circuit = polyline([...lane, [2400, 0], [2400, 2400], [0, 2400], [0, 0], ...[...lane].reverse()])
-    const report = judge(circuit)
-    expect(report.longestReverseRunMetres).toBeGreaterThan(150)
-    expect(report.rejections).not.toContain('out-and-back-spur')
+  it('offers a promenade walked out and back outright, not only as a last resort', () => {
+    const report = judge(longOutAndBack)
+    expect(report.pass).toBe(true)
   })
-  it('still refuses a long walk that doubles back for kilometres', () => {
-    expect(judge(polyline([[0, 0], [6000, 0], [0, 0]])).rejections).toContain('out-and-back-spur')
+  it('still offers a loop with one long, legitimate crossing off to the side', () => {
+    // Two lobes joined by a 700 m bridge with no second crossing.
+    const bigBridge = polyline([
+      [0, 0], [0, 700], [400, 700], [400, 1100], [0, 1100], [0, 700], [0, 0],
+    ])
+    const report = judge(bigBridge)
+    expect(report.longestReverseRunMetres).toBeGreaterThan(MIN_BACKTRACK_METRES)
+    expect(report.pass).toBe(true)
   })
 })
 
@@ -98,17 +104,6 @@ describe('hard rejections', () => {
   })
   it('offers a loop with an honest shared doorstep', () => {
     expect(judge(sharedStartLoop).pass).toBe(true)
-  })
-  it('refuses a long out-and-back', () => {
-    const report = judge(longOutAndBack)
-    expect(report.pass).toBe(false)
-    expect(report.rejections).toContain('out-and-back-spur')
-  })
-  it('refuses a route that repeats too much of itself', () => {
-    const report = judge(repeatedBridge)
-    expect(report.pass).toBe(false)
-    expect(report.quality.repeatedPercent).toBeGreaterThan(MAX_REPEATED_FRACTION * 100)
-    expect(report.rejections).toContain('repeated-corridor')
   })
   it('refuses a route that is far from the distance asked for', () => {
     const long = judge(cleanLoop, { targetMetres: pathLength(cleanLoop) / 1.3 })
@@ -124,7 +119,7 @@ describe('hard rejections', () => {
   })
   it('says when the time is the only thing wrong, so one retry can fix it', () => {
     expect(judge(cleanLoop, { targetSeconds: 600 }).durationOnly).toBe(true)
-    expect(judge(longOutAndBack, { targetSeconds: 600 }).durationOnly).toBe(false)
+    expect(judge(narrowElongated, { targetSeconds: 600 }).durationOnly).toBe(false)
   })
   it('refuses more than one genuine U-turn', () => {
     const report = judge(cleanLoop, { maneuverSigns: [-8, 8, -98] })
@@ -135,6 +130,14 @@ describe('hard rejections', () => {
     const total = pathLength(cleanLoop)
     const report = judge(cleanLoop, { legDistances: [total * .6, total * .2, total * .1, total * .1] })
     expect(report.rejections).toContain('leg-too-long')
+  })
+  it('never holds leg balance against a two-leg shape, which can never satisfy it', () => {
+    // Out one way and home a different way, no third corner: two shares
+    // summing to the whole walk always put one of them past 45% — that is
+    // what a two-leg shape is, not lopsided.
+    const total = pathLength(cleanLoop)
+    const report = judge(cleanLoop, { legDistances: [total * .55, total * .45] })
+    expect(report.rejections).not.toContain('leg-too-long')
   })
   it('refuses a route with a token leg round the outer ring', () => {
     const total = pathLength(cleanLoop)
@@ -163,13 +166,10 @@ describe('what can be set aside when nothing clean exists', () => {
   it('treats the wrong length, the wrong time and an open end as never negotiable', () => {
     expect([...ESSENTIAL_REJECTIONS]).toEqual(['distance', 'duration', 'open-ended'])
   })
-  it('would offer a there-and-back of the right length as a last resort', () => {
-    const report = judge(longOutAndBack)
+  it('would offer a route with a too-short backtrack as a last resort', () => {
+    const report = judge(repeatedBridge)
     expect(report.pass).toBe(false)
     expect(report.passesEssentials).toBe(true)
-  })
-  it('would offer a route that repeats a bridge section', () => {
-    expect(judge(repeatedBridge).passesEssentials).toBe(true)
   })
   it('would offer a long thin valley walk', () => {
     expect(judge(narrowElongated).passesEssentials).toBe(true)
@@ -194,21 +194,36 @@ describe('the stub at the door', () => {
     expect(startStubMetres(sharedStartLoop)).toBeGreaterThan(40)
     expect(startStubMetres(sharedStartLoop)).toBeLessThan(80)
   })
-  it('judges the doorstep stub in proportion, like any other spur', () => {
-    // 187 m at the door of a 5 km walk is the lane in; the same at the door of
-    // a 3 km walk is a there-and-back with a loop stuck on the end.
-    expect(spurLimitMetres(5000)).toBeGreaterThan(187)
-    expect(spurLimitMetres(3000)).toBeLessThan(187)
+  it('judges the doorstep stub in proportion, like any other spur, below the backtrack minimum', () => {
+    // Below about 12.5 km the flat 150 m floor is the more generous of the
+    // two and governs; past it, 4% of a long day out is bigger than 150 m and
+    // takes over — but only up to the 500 m point where a stub this long is
+    // its own destination rather than a lane to the loop.
+    expect(spurLimitMetres(2000, MAX_START_STUB_METRES)).toBe(150)
+    expect(spurLimitMetres(20000, MAX_START_STUB_METRES)).toBeGreaterThan(150)
   })
-  it('forgives a doorstep but not a spur', () => {
+  it('forgives a doorstep but not a middling stub', () => {
     expect(judge(sharedStartLoop).rejections).not.toContain('start-spur')
+    // 300 m: long enough to be "a there-and-back with a loop stuck on the
+    // end," not long enough to be a promenade in its own right.
     const spike = polyline([
       [0, 0], [0, 300],
       ...[[0, 300], [500, 300], [500, 800], [0, 800], [0, 300]] as [number, number][],
       [0, 0],
     ])
     expect(startStubMetres(spike)).toBeGreaterThan(MAX_START_STUB_METRES)
+    expect(startStubMetres(spike)).toBeLessThan(MIN_BACKTRACK_METRES)
     expect(judge(spike).rejections).toContain('start-spur')
+  })
+  it('forgives a doorstep stub long enough to be a destination in its own right', () => {
+    // 700 m out to a promenade the walk happens to start on, and back.
+    const spike = polyline([
+      [0, 0], [0, 700],
+      ...[[0, 700], [500, 700], [500, 1200], [0, 1200], [0, 700]] as [number, number][],
+      [0, 0],
+    ])
+    expect(startStubMetres(spike)).toBeGreaterThan(MIN_BACKTRACK_METRES)
+    expect(judge(spike).rejections).not.toContain('start-spur')
   })
   it('lets a walk that doubles back at the door be offered only as a last resort', () => {
     const spike = polyline([[0, 0], [0, 300], [500, 300], [500, 800], [0, 800], [0, 300], [0, 0]])

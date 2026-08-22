@@ -139,7 +139,7 @@ type LoopRouteResponse = Omit<Route,'name'> & { label:string }
 export type QualityOverrides = Partial<{
   maxDistanceError:number; maxDurationError:number; maxRepeatedFraction:number; maxUTurns:number
   maxLegShare:number; minLegShare:number; maxBoundingBoxRatio:number; minCompactness:number
-  maxStartStubMetres:number; maxOutAndBackSpurMetres:number; maxOutAndBackSpurShare:number
+  maxStartStubMetres:number; startStubShare:number; minBacktrackMetres:number
 }>
 export type LoopOverrides = Partial<{
   quality:QualityOverrides; maxSharedFraction:number; joinTurnThresholdDegrees:number

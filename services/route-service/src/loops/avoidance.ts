@@ -104,6 +104,17 @@ function explodeToPolygons(shape: AnyPolygon): Feature<Polygon>[] {
   return shape.geometry.coordinates.map(rings => feature({ type: 'Polygon', coordinates: rings }) as Feature<Polygon>)
 }
 
+/**
+ * A small avoidance disc around one point.
+ *
+ * Used to push a leg off a short dead-end branch: circle the tip the walk
+ * backtracked from and hand it to a reroute the same way an already-walked
+ * corridor is avoided, rather than teaching the router a second mechanism.
+ */
+export function buildSpikeAvoidanceArea(tip: LngLat, radiusMetres: number): Feature<Polygon> {
+  return circle(tip, radiusMetres, { units: 'meters', steps: 16 }) as Feature<Polygon>
+}
+
 export type CustomModel = {
   priority?: Array<Record<string, string>>
   areas?: { type: 'FeatureCollection'; features: Feature<Polygon>[] }

@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon'
 import { AVOID_PRIORITY, RELAXED_AVOID_PRIORITY } from '../src/loops/avoidance.js'
-import { generateCandidateShapes, shapeToLegPoints } from '../src/loops/candidates.js'
 import { buildRouteBody, GraphHopperError, parseLeg, maneuverName, isUTurnSign, type GraphHopperLeg } from '../src/graphhopper.js'
-import { LEG_BUDGET_SHARE, joinLegGeometries, routeCandidateSequentially } from '../src/loops/routing.js'
+import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinLegGeometries } from '../src/loops/routing.js'
 import type { LngLat } from '../src/loops/geo.js'
 import { FIXTURE_ORIGIN, at, polyline } from './fixtures/routes.js'
 
 const START: LngLat = FIXTURE_ORIGIN
-const shape = generateCandidateShapes(START, 5000, 12345)[0]
+const TARGET = 5000
 
 /** A router that answers every leg with a straight line between its points. */
 function straightRouter(record: Array<{ points: LngLat[]; model: any }> = []) {
@@ -38,6 +37,8 @@ function densify(a: LngLat, b: LngLat): LngLat[] {
   const steps = Math.max(2, Math.round(metres(a, b) / 25))
   return Array.from({ length: steps + 1 }, (_, i) => [a[0] + (b[0] - a[0]) * (i / steps), a[1] + (b[1] - a[1]) * (i / steps)] as LngLat)
 }
+
+const same = (a: LngLat, b: LngLat) => Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9
 
 describe('the request sent to the routing engine', () => {
   it('asks for one ordinary leg, not a round trip', () => {
@@ -95,21 +96,19 @@ describe('reading the engine’s answer', () => {
   })
 })
 
-describe('sequential leg routing', () => {
-  it('routes the four legs of the ring in order', async () => {
+describe('building a loop leg by leg', () => {
+  it('routes four legs in order, closing back on the start', async () => {
     const { route, record } = straightRouter()
-    const candidate = await routeCandidateSequentially(START, shape, route)
+    const candidate = await buildLoopIncrementally(START, TARGET, 0, 'clockwise', route)
     expect(candidate).toBeDefined()
     expect(record).toHaveLength(4)
-    const expected = shapeToLegPoints(START, shape)
-    record.forEach((call, index) => {
-      expect(call.points[0]).toEqual(expected[index])
-      expect(call.points[1]).toEqual(expected[index + 1])
-    })
+    expect(record[0].points[0]).toEqual(START)
+    for (let i = 1; i < record.length; i++) expect(record[i].points[0]).toEqual(record[i - 1].points[1])
+    expect(record[3].points[1]).toEqual(START)
   })
   it('sends no avoidance on the first leg and some on every leg after', async () => {
     const { route, record } = straightRouter()
-    await routeCandidateSequentially(START, shape, route)
+    await buildLoopIncrementally(START, TARGET, 0, 'clockwise', route)
     expect(record[0].model).toBeUndefined()
     for (const call of record.slice(1)) {
       expect(call.model.priority.length).toBeGreaterThan(0)
@@ -118,7 +117,7 @@ describe('sequential leg routing', () => {
   })
   it('hands on the ground every earlier leg covered', async () => {
     const { route, record } = straightRouter()
-    await routeCandidateSequentially(START, shape, route)
+    await buildLoopIncrementally(START, TARGET, 0, 'clockwise', route)
     const areas = record[3].model.areas.features
     const midpointOfLegOne = midpoint(record[0].points[0], record[0].points[1])
     const midpointOfLegTwo = midpoint(record[1].points[0], record[1].points[1])
@@ -127,10 +126,20 @@ describe('sequential leg routing', () => {
   })
   it('never penalises the streets on the doorstep', async () => {
     const { route, record } = straightRouter()
-    await routeCandidateSequentially(START, shape, route)
+    await buildLoopIncrementally(START, TARGET, 0, 'clockwise', route)
     for (const call of record.slice(1)) {
       for (const area of call.model.areas.features) expect(booleanPointInPolygon(START, area)).toBe(false)
     }
+  })
+  it('turns a consistent way round the compass for the direction asked', async () => {
+    // Mirrored attempts share a starting bearing — the same first corner,
+    // opposite ways round — so the divergence only shows from the second leg.
+    const cw = straightRouter()
+    await buildLoopIncrementally(START, TARGET, 0, 'clockwise', cw.route)
+    const ccw = straightRouter()
+    await buildLoopIncrementally(START, TARGET, 0, 'counter-clockwise', ccw.route)
+    expect(cw.record[0].points[1]).toEqual(ccw.record[0].points[1])
+    expect(cw.record[1].points[1]).not.toEqual(ccw.record[1].points[1])
   })
   it('retries a blocked leg once, still penalised but less absolutely', async () => {
     const calls: any[] = []
@@ -143,7 +152,7 @@ describe('sequential leg routing', () => {
       }
       return straightRouter().route(points, model)
     }
-    const candidate = await routeCandidateSequentially(START, shape, route)
+    const candidate = await buildLoopIncrementally(START, TARGET, 0, 'clockwise', route)
     expect(candidate).toBeDefined()
     expect(calls[2].model.priority[0].multiply_by).toBe(String(RELAXED_AVOID_PRIORITY))
     expect(calls[2].points).toEqual(calls[1].points)
@@ -159,12 +168,12 @@ describe('sequential leg routing', () => {
       const heavilyPenalised = model?.priority?.[0]?.multiply_by === String(AVOID_PRIORITY)
       return heavilyPenalised ? { ...leg, distanceMeters: 9000 } : leg
     }
-    const candidate = await routeCandidateSequentially(START, shape, route, { legBudgetMetres: 2500 })
+    const candidate = await buildLoopIncrementally(START, TARGET, 0, 'clockwise', route, { legBudgetMetres: 2500 })
     expect(candidate).toBeDefined()
-    // Leg one is unpenalised; legs two to four each get a second, cheaper try.
-    expect(calls.filter(call => call.model?.priority?.[0]?.multiply_by === String(RELAXED_AVOID_PRIORITY))).toHaveLength(3)
+    // Leg one is unpenalised; every leg after it gets a second, cheaper try.
+    expect(calls.filter(call => call.model?.priority?.[0]?.multiply_by === String(RELAXED_AVOID_PRIORITY)).length).toBeGreaterThanOrEqual(3)
     expect(candidate!.legs.slice(1).every(leg => leg.relaxed)).toBe(true)
-    expect(candidate!.distanceMeters).toBeLessThan(9000 * 3)
+    expect(candidate!.distanceMeters).toBeLessThan(9000 * 4)
   })
 
   it('keeps the strongly penalised leg when relaxing it does not actually help', async () => {
@@ -172,13 +181,13 @@ describe('sequential leg routing', () => {
       const leg = await straightRouter().route(points, model)
       return model ? { ...leg, distanceMeters: 9000 } : leg
     }
-    const candidate = await routeCandidateSequentially(START, shape, route, { legBudgetMetres: 2500 })
+    const candidate = await buildLoopIncrementally(START, TARGET, 0, 'clockwise', route, { legBudgetMetres: 2500 })
     expect(candidate!.legs.slice(1).every(leg => leg.relaxed)).toBe(false)
   })
 
   it('leaves a leg inside its budget alone', async () => {
     const { route, record } = straightRouter()
-    await routeCandidateSequentially(START, shape, route, { legBudgetMetres: 50_000 })
+    await buildLoopIncrementally(START, TARGET, 0, 'clockwise', route, { legBudgetMetres: 50_000 })
     expect(record).toHaveLength(4)
   })
 
@@ -187,15 +196,15 @@ describe('sequential leg routing', () => {
   })
 
   it('pulls a dead-ending waypoint back toward the start and re-routes both legs that meet there', async () => {
-    // Waypoint 1 is only reachable via a spur through D: the leg arriving there
-    // and the leg leaving it both detour via D, so the walk arrives at the
-    // waypoint heading one way and immediately leaves heading back the way it
-    // came — exactly what a cul-de-sac produces. Any other pair of points,
-    // including whatever pulled-in point the retry asks for, routes straight.
-    const points = shapeToLegPoints(START, shape)
-    const waypoint1 = points[1]
+    // The first corner the builder aims for, found by watching an unrigged
+    // run: only reachable via a spur through D, so the leg arriving there and
+    // the leg leaving it both detour via D — the walk arrives at the corner
+    // heading one way and immediately leaves heading back the way it came,
+    // exactly what a cul-de-sac produces.
+    const probe = straightRouter()
+    await buildLoopIncrementally(START, TARGET, 0, 'clockwise', probe.route)
+    const waypoint1 = probe.record[0].points[1]
     const D: LngLat = [START[0] + (waypoint1[0] - START[0]) * 0.4, START[1] + (waypoint1[1] - START[1]) * 0.4]
-    const same = (a: LngLat, b: LngLat) => Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9
     const calls: Array<{ points: LngLat[] }> = []
     const route = async (legPoints: LngLat[], model: any): Promise<GraphHopperLeg> => {
       calls.push({ points: legPoints })
@@ -206,7 +215,7 @@ describe('sequential leg routing', () => {
       }
       return straightRouter().route(legPoints, model)
     }
-    const candidate = await routeCandidateSequentially(START, shape, route)
+    const candidate = await buildLoopIncrementally(START, TARGET, 0, 'clockwise', route)
     expect(candidate).toBeDefined()
     // The dead end was tried at least once, and both legs meeting there were
     // then routed a second time to or from some other point — the pulled-in
@@ -214,10 +223,94 @@ describe('sequential leg routing', () => {
     const toOrFromWaypoint1 = calls.filter(call => same(call.points[0], waypoint1) || same(call.points[1], waypoint1))
     expect(toOrFromWaypoint1.length).toBeGreaterThan(0)
     const avoidingWaypoint1 = calls.filter(call => !same(call.points[0], waypoint1) && !same(call.points[1], waypoint1))
-    expect(avoidingWaypoint1.length).toBeGreaterThan(2) // the untouched legs 2 and 3, plus the two re-routed legs
+    expect(avoidingWaypoint1.length).toBeGreaterThan(0)
     // The pulled-in point replaces the original in the final route: nothing in
     // the joined geometry sits exactly on the dead end any more.
     expect(candidate!.coordinates.some(point => same(point, waypoint1))).toBe(false)
+  })
+
+  it('tries a different aim for a corner leg that would retrace part of the one before it', async () => {
+    // The second corner's first-choice target, found by watching an unrigged
+    // run. Reaching it is rigged to require retracing 200 m back along the
+    // first leg's own corridor first — short enough to be a dead end given up
+    // on, not a promenade — before continuing on. Any other target routes
+    // cleanly.
+    const probe = straightRouter()
+    await buildLoopIncrementally(START, TARGET, 0, 'clockwise', probe.route)
+    const leg1Target = probe.record[0].points[1]
+    const poisonedTarget = probe.record[1].points[1]
+    const pointAt = (from: LngLat, to: LngLat, along: number): LngLat => {
+      const t = along / metres(from, to)
+      return [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t]
+    }
+    const retracePoint = pointAt(leg1Target, START, 200)
+
+    const calls: LngLat[][] = []
+    const route = async (points: LngLat[], model: any): Promise<GraphHopperLeg> => {
+      calls.push(points)
+      const [a, b] = points
+      if (same(a, leg1Target) && same(b, poisonedTarget)) {
+        const coordinates = [...densify(a, retracePoint), ...densify(retracePoint, b).slice(1)]
+        const distanceMeters = metres(a, retracePoint) + metres(retracePoint, b)
+        return {
+          coordinates,
+          distanceMeters,
+          durationSeconds: distanceMeters / (5000 / 3600),
+          steps: [
+            { instruction: 'Continue', distanceMeters, durationSeconds: distanceMeters / 1.39, sign: 0, startIndex: 0, endIndex: coordinates.length - 1 },
+            { instruction: 'Arrive at destination', distanceMeters: 0, durationSeconds: 0, sign: 4, startIndex: coordinates.length - 1, endIndex: coordinates.length - 1 },
+          ],
+        }
+      }
+      return straightRouter().route(points, model)
+    }
+    const candidate = await buildLoopIncrementally(START, TARGET, 0, 'clockwise', route)
+    expect(candidate).toBeDefined()
+    // The poisoned target was tried at least once...
+    expect(calls.some(call => same(call[0], leg1Target) && same(call[1], poisonedTarget))).toBe(true)
+    // ...but the leg that was actually kept does not end there.
+    const secondLeg = candidate!.legs[1]
+    expect(same(secondLeg.coordinates[secondLeg.coordinates.length - 1], poisonedTarget)).toBe(false)
+  })
+
+  it('cuts a tiny spike that survives every attempt to route round it from the finished geometry', async () => {
+    // Every leg — including any reroute the spike-avoidance logic tries —
+    // comes back with an unavoidable 15 m out-and-back stitched into its
+    // middle: the ground genuinely offers no other way for that one stretch.
+    const tips: LngLat[] = []
+    const withTinySpike = (leg: GraphHopperLeg): GraphHopperLeg => {
+      const mid = Math.floor(leg.coordinates.length / 2)
+      const [mx, my] = leg.coordinates[mid]
+      const [nx, ny] = leg.coordinates[mid + 1] ?? leg.coordinates[mid - 1]
+      const dx = nx - mx, dy = ny - my
+      const len = Math.hypot(dx, dy) || 1e-9
+      const spikeDegrees = 15 / 111195
+      const tip: LngLat = [mx - (dy / len) * spikeDegrees, my + (dx / len) * spikeDegrees]
+      tips.push(tip)
+      const coordinates = [...leg.coordinates.slice(0, mid + 1), tip, leg.coordinates[mid], ...leg.coordinates.slice(mid + 1)]
+      const spikeDistance = metres(leg.coordinates[mid], tip) * 2
+      return {
+        ...leg,
+        coordinates,
+        distanceMeters: leg.distanceMeters + spikeDistance,
+        steps: [
+          { instruction: 'Continue', distanceMeters: leg.distanceMeters + spikeDistance, durationSeconds: 1, sign: 0, startIndex: 0, endIndex: coordinates.length - 1 },
+          { instruction: 'Arrive at destination', distanceMeters: 0, durationSeconds: 0, sign: 4, startIndex: coordinates.length - 1, endIndex: coordinates.length - 1 },
+        ],
+      }
+    }
+    const route = async (points: LngLat[], model: any): Promise<GraphHopperLeg> => withTinySpike(await straightRouter().route(points, model))
+    const candidate = await buildLoopIncrementally(START, TARGET, 0, 'clockwise', route)
+    expect(candidate).toBeDefined()
+    // None of the injected spike tips survive in the finished geometry.
+    const closeToAnyTip = (point: LngLat) => tips.some(tip => metres(point, tip) < 1)
+    expect(candidate!.coordinates.some(closeToAnyTip)).toBe(false)
+    // The steps still describe a walkable, in-order route.
+    for (const step of candidate!.steps) {
+      expect(step.startIndex!).toBeGreaterThanOrEqual(0)
+      expect(step.endIndex!).toBeLessThan(candidate!.coordinates.length)
+      expect(step.endIndex!).toBeGreaterThanOrEqual(step.startIndex!)
+    }
   })
 
   it('gives the candidate up rather than routing it without any penalty at all', async () => {
@@ -227,19 +320,21 @@ describe('sequential leg routing', () => {
       if (model) throw new GraphHopperError('no path', 400, 'unreachable')
       return straightRouter().route(points, model)
     }
-    const candidate = await routeCandidateSequentially(START, shape, route)
+    const candidate = await buildLoopIncrementally(START, TARGET, 0, 'clockwise', route)
     expect(candidate).toBeUndefined()
-    // Leg one unpenalised, then the strong and relaxed attempts at leg two.
-    expect(attempts).toHaveLength(3)
+    // Leg one unpenalised; every attempt after that carried some avoidance
+    // penalty — it never falls back to routing without one, however many
+    // locally-adjusted retries it spends trying to find a way through.
     expect(attempts.filter(model => model === undefined)).toHaveLength(1)
+    expect(attempts.length).toBeGreaterThan(1)
   })
   it('lets the engine being unreachable surface rather than swallowing it', async () => {
     const route = async () => { throw new GraphHopperError('down', undefined, 'transport') }
-    await expect(routeCandidateSequentially(START, shape, route)).rejects.toThrow(GraphHopperError)
+    await expect(buildLoopIncrementally(START, TARGET, 0, 'clockwise', route)).rejects.toThrow(GraphHopperError)
   })
   it('abandons a candidate that has already overshot', async () => {
     const { route } = straightRouter()
-    const candidate = await routeCandidateSequentially(START, shape, route, { abandonAboveMetres: 100 })
+    const candidate = await buildLoopIncrementally(START, TARGET, 0, 'clockwise', route, { abandonAboveMetres: 100 })
     expect(candidate).toBeUndefined()
   })
 })

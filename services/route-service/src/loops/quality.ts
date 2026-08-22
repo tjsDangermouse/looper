@@ -27,17 +27,32 @@ export const MAX_DISTANCE_ERROR = 0.12
 export const MAX_DURATION_ERROR = 0.15
 export const MAX_REPEATED_FRACTION = 0.12
 /**
- * A retraced spur matters in proportion to the walk it is part of.
- *
- * 150 m of doubling back on a 2 km town loop is a mistake and the walker will
- * notice it. The same 150 m on a 13 km hill walk is the lane between the road
- * and the start of the circuit — 1% of the day — and holding it against the
- * route rejects almost every walk in open country, where the way in is very
- * often the only way in. So the flat 150 m is a floor, not the whole rule.
+ * A short backtrack out in the middle of a walk is not a lane in from the
+ * road — it is a corner that turned out to be a dead end, given up on rather
+ * than routed around. A long one is the opposite: nobody accidentally walks
+ * 500 m up a promenade and back, so at that length it can only be a real
+ * feature — a pier, a headland, a canal towpath with no second path back —
+ * worth keeping rather than a defect worth hiding. So this is a *minimum*:
+ * backtracking shorter than it is always held against a walk; at or past it,
+ * never on length alone.
  */
-export const MAX_OUT_AND_BACK_SPUR_METRES = 150
-export const MAX_OUT_AND_BACK_SPUR_SHARE = 0.04
-export const spurLimitMetres = (routeMetres: number, floorMetres = MAX_OUT_AND_BACK_SPUR_METRES, share = MAX_OUT_AND_BACK_SPUR_SHARE) =>
+export const MIN_BACKTRACK_METRES = 500
+/**
+ * How much of the walk's own length its longest backtrack has to be before
+ * the walk is treated as fundamentally a there-and-back — a promenade, not a
+ * loop with an incidental spur — and excused the checks below that assume a
+ * proper enclosing shape.
+ */
+export const OUT_AND_BACK_SHARE_THRESHOLD = 0.3
+/**
+ * The doorstep stub is judged the opposite way round: a short one is the
+ * shared pavement every loop has, a long one turns the whole walk into a
+ * there-and-back with a loop stuck on the end. Proportional the same way a
+ * lane in from the road matters less on a long day out than a short town
+ * loop.
+ */
+export const START_STUB_SHARE = 0.04
+export const spurLimitMetres = (routeMetres: number, floorMetres: number, share = START_STUB_SHARE) =>
   Math.max(floorMetres, routeMetres * share)
 export const MAX_U_TURNS = 1
 export const MAX_LEG_SHARE = 0.45
@@ -339,8 +354,10 @@ export type QualityThresholds = {
   maxBoundingBoxRatio: number
   minCompactness: number
   maxStartStubMetres: number
-  maxOutAndBackSpurMetres: number
-  maxOutAndBackSpurShare: number
+  startStubShare: number
+  /** See MIN_BACKTRACK_METRES. A minimum, not a maximum: backtracking has to
+   *  reach this length before it stops being held against the walk. */
+  minBacktrackMetres: number
 }
 
 export const DEFAULT_QUALITY_THRESHOLDS: QualityThresholds = {
@@ -353,8 +370,8 @@ export const DEFAULT_QUALITY_THRESHOLDS: QualityThresholds = {
   maxBoundingBoxRatio: MAX_BOUNDING_BOX_RATIO,
   minCompactness: MIN_COMPACTNESS,
   maxStartStubMetres: MAX_START_STUB_METRES,
-  maxOutAndBackSpurMetres: MAX_OUT_AND_BACK_SPUR_METRES,
-  maxOutAndBackSpurShare: MAX_OUT_AND_BACK_SPUR_SHARE,
+  startStubShare: START_STUB_SHARE,
+  minBacktrackMetres: MIN_BACKTRACK_METRES,
 }
 
 /**
@@ -407,23 +424,56 @@ export function analyseRouteQuality(input: QualityInput): QualityReport {
   const stubMetres = startStubMetres(coordinates)
   const total = legDistances.reduce((sum, leg) => sum + leg, 0) || distanceMeters
   const legShares = legDistances.map(leg => (total > 0 ? leg / total : 0))
-  const spurLimit = spurLimitMetres(distanceMeters, t.maxOutAndBackSpurMetres, t.maxOutAndBackSpurShare)
+  const startStubLimit = spurLimitMetres(distanceMeters, t.maxStartStubMetres, t.startStubShare)
+  /** Long enough that it can only be a real feature, not an accident. */
+  const isLongEnoughBacktrack = repeats.longestReverseRunMetres >= t.minBacktrackMetres
+  /**
+   * Short and non-zero: some ground was retraced, but not enough of it to be
+   * the walk's own feature rather than a corner that turned out to be a dead
+   * end. This is the one always held against a walk, regardless of shape.
+   */
+  const isShortBacktrack = repeats.longestReverseRunMetres > 0 && !isLongEnoughBacktrack
+  /**
+   * A walk that is essentially there-and-back — a promenade, a pier, a
+   * headland with one road in — legitimately encloses almost no area, runs
+   * long and thin, and puts about half its distance on a single leg. That is
+   * what the walk is, not a failure of shape. A loop that merely has one
+   * long, legitimate crossing off to the side (a bridge with no second
+   * crossing) still gets judged as the loop it otherwise is.
+   */
+  const isWholeWalkOutAndBack = isLongEnoughBacktrack
+    && repeats.longestReverseRunMetres > distanceMeters * OUT_AND_BACK_SHARE_THRESHOLD
+  /**
+   * Ground repeated beyond the one long crossing already excused above. A
+   * walk is not let off the general scribble check just because one of its
+   * retraced stretches happens to be a legitimate feature.
+   */
+  const scribbleMeters = Math.max(0, repeats.repeatedMeters - (isLongEnoughBacktrack ? repeats.longestReverseRunMetres : 0))
 
   const distanceErrorFraction = targetMetres > 0 ? Math.abs(distanceMeters - targetMetres) / targetMetres : 0
   const durationErrorFraction = targetSeconds && targetSeconds > 0 ? Math.abs(durationSeconds - targetSeconds) / targetSeconds : undefined
 
   if (distanceErrorFraction > t.maxDistanceError) rejections.push('distance')
   if (durationErrorFraction !== undefined && durationErrorFraction > t.maxDurationError) rejections.push('duration')
-  if (repeats.repeatedPercent > t.maxRepeatedFraction * 100) rejections.push('repeated-corridor')
-  if (repeats.longestReverseRunMetres > spurLimit) rejections.push('out-and-back-spur')
+  if (scribbleMeters > distanceMeters * t.maxRepeatedFraction) rejections.push('repeated-corridor')
+  if (isShortBacktrack) rejections.push('out-and-back-spur')
   if (uTurnCount > t.maxUTurns) rejections.push('u-turns')
-  if (legShares.some(share => share > t.maxLegShare)) rejections.push('leg-too-long')
+  // A two-leg shape — out one way, home a different way, no third corner —
+  // can never satisfy this: two shares summing to the whole walk always put
+  // one of them past 45%. That is what a two-leg shape *is*, not a failure
+  // of balance; the check only means something once there is a third corner
+  // to be lopsided against.
+  if (!isWholeWalkOutAndBack && legShares.length > 2 && legShares.some(share => share > t.maxLegShare)) rejections.push('leg-too-long')
   if (legShares.slice(1, -1).some(share => share < t.minLegShare)) rejections.push('leg-too-short')
-  if (boundingBoxRatio > t.maxBoundingBoxRatio) rejections.push('elongated')
-  if (shape < t.minCompactness) rejections.push('shapeless')
-  // The doorstep stub is a spur like any other, and is judged by the same
-  // proportional yardstick: 150 m on a town loop, more on a long day out.
-  if (stubMetres > spurLimit) rejections.push('start-spur')
+  if (!isWholeWalkOutAndBack && boundingBoxRatio > t.maxBoundingBoxRatio) rejections.push('elongated')
+  if (!isWholeWalkOutAndBack && shape < t.minCompactness) rejections.push('shapeless')
+  // The doorstep stub is the same band the mid-route backtrack check applies:
+  // fine as the ordinary shared pavement every loop has, fine again once it
+  // is long enough to be a real feature in its own right (a promenade the
+  // walk happens to start on), and rejected only in between — long enough to
+  // be "a there-and-back with a loop stuck on the end," not long enough to
+  // be a destination.
+  if (stubMetres > startStubLimit && stubMetres < t.minBacktrackMetres) rejections.push('start-spur')
   if (!returnsToStart(coordinates, start)) rejections.push('open-ended')
 
   return {

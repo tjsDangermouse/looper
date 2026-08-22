@@ -85,8 +85,8 @@ const OVERRIDE_RANGES = {
   maxBoundingBoxRatio: [1, 30],
   minCompactness: [0, 1],
   maxStartStubMetres: [0, 3000],
-  maxOutAndBackSpurMetres: [0, 3000],
-  maxOutAndBackSpurShare: [0, 1],
+  startStubShare: [0, 1],
+  minBacktrackMetres: [0, 3000],
 } satisfies Record<keyof QualityThresholds, [number, number]>
 
 function clamp(value: unknown, [low, high]: [number, number]): number | undefined {

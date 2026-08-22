@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_CANDIDATE_COUNT, MAX_RADIUS_SCALE, MIN_RADIUS_SCALE, RING_RADIUS_DIVISOR, WAYPOINT_RADIUS_JITTER, generateCandidateShapes, ringRadiusMetres, shapeToLegPoints } from '../src/loops/candidates.js'
-import { bearingBetween, haversine, normaliseBearing } from '../src/loops/geo.js'
+import { BEARING_JITTER_DEGREES, DEFAULT_ATTEMPT_COUNT, generateLoopAttempts } from '../src/loops/candidates.js'
 import { hashString, mulberry32, seedFor } from '../src/loops/random.js'
 
 const START: [number, number] = [-4.4816, 54.1506]
@@ -34,64 +33,44 @@ describe('seeded randomness', () => {
   })
 })
 
-describe('candidate shapes', () => {
+describe('loop attempts', () => {
   const seed = seedFor(START, TARGET, 0)
-  const shapes = generateCandidateShapes(START, TARGET, seed)
+  const attempts = generateLoopAttempts(seed)
 
-  it('makes twenty-four of them by default', () => {
-    expect(DEFAULT_CANDIDATE_COUNT).toBe(24)
-    expect(shapes).toHaveLength(24)
+  it('makes sixteen of them by default', () => {
+    expect(DEFAULT_ATTEMPT_COUNT).toBe(16)
+    expect(attempts).toHaveLength(16)
   })
   it('is deterministic for the same seed', () => {
-    expect(generateCandidateShapes(START, TARGET, seed)).toEqual(shapes)
+    expect(generateLoopAttempts(seed)).toEqual(attempts)
   })
   it('produces a different set for a different variation', () => {
-    const other = generateCandidateShapes(START, TARGET, seedFor(START, TARGET, 1))
-    expect(other[0].waypoints).not.toEqual(shapes[0].waypoints)
+    const other = generateLoopAttempts(seedFor(START, TARGET, 1))
+    expect(other[0].initialBearing).not.toBe(attempts[0].initialBearing)
   })
-  it('sizes the outer ring at a little over an eighth of the target', () => {
-    expect(RING_RADIUS_DIVISOR).toBe(8.3)
-    expect(ringRadiusMetres(5000)).toBeCloseTo(602.4, 1)
-  })
-  it('keeps every waypoint within the stated radius bounds', () => {
-    const base = ringRadiusMetres(TARGET)
-    for (const shape of shapes) {
-      for (const waypoint of shape.waypoints) {
-        const radius = haversine(START, waypoint)
-        expect(radius).toBeGreaterThan(base * MIN_RADIUS_SCALE * (1 - WAYPOINT_RADIUS_JITTER) - 1)
-        expect(radius).toBeLessThan(base * MAX_RADIUS_SCALE * (1 + WAYPOINT_RADIUS_JITTER) + 1)
-      }
+  it('pairs every clockwise attempt with its counter-clockwise mirror at the same bearing', () => {
+    for (let i = 0; i < attempts.length; i += 2) {
+      expect(attempts[i].direction).toBe('clockwise')
+      expect(attempts[i + 1].direction).toBe('counter-clockwise')
+      expect(attempts[i + 1].initialBearing).toBe(attempts[i].initialBearing)
     }
   })
-  it('places the three waypoints 120° apart', () => {
-    for (const shape of shapes) {
-      const bearings = shape.waypoints.map(waypoint => bearingBetween(START, waypoint))
-      const turn = shape.direction === 'clockwise' ? 1 : -1
-      expect(normaliseBearing(bearings[1])).toBeCloseTo(normaliseBearing(shape.baseBearing + turn * 120), 3)
-      expect(normaliseBearing(bearings[2])).toBeCloseTo(normaliseBearing(shape.baseBearing + turn * 240), 3)
+  it('spreads the attempts around the compass', () => {
+    const octants = new Set(attempts.map(attempt => Math.round(attempt.initialBearing / 45) % 8))
+    // One octant per mirrored pair — every pair shares a bearing.
+    expect(octants.size).toBe(attempts.length / 2)
+  })
+  it('nudges each slot by no more than the stated jitter', () => {
+    expect(BEARING_JITTER_DEGREES).toBe(12)
+    const pairs = attempts.length / 2
+    for (let pair = 0; pair < pairs; pair++) {
+      const slot = (pair * 360) / pairs
+      const attempt = attempts[pair * 2]
+      const drift = Math.abs(((attempt.initialBearing - slot + 540) % 360) - 180)
+      expect(drift).toBeLessThanOrEqual(BEARING_JITTER_DEGREES + 1e-9)
     }
   })
-  it('pairs every clockwise shape with its mirror', () => {
-    for (let i = 0; i < shapes.length; i += 2) {
-      expect(shapes[i].direction).toBe('clockwise')
-      expect(shapes[i + 1].direction).toBe('counter-clockwise')
-      // Same first waypoint, same radii, opposite way round.
-      expect(shapes[i + 1].waypoints[0]).toEqual(shapes[i].waypoints[0])
-      expect(haversine(START, shapes[i + 1].waypoints[1])).toBeCloseTo(haversine(START, shapes[i].waypoints[1]), 6)
-    }
-  })
-  it('spreads the candidates around the compass', () => {
-    const octants = new Set(shapes.map(shape => Math.round(shape.baseBearing / 45) % 8))
-    expect(octants.size).toBe(8)
-  })
-  it('refuses an odd candidate count, which would leave a shape without a mirror', () => {
-    expect(() => generateCandidateShapes(START, TARGET, seed, 7)).toThrow()
-  })
-  it('routes start → A → B → C → start', () => {
-    const points = shapeToLegPoints(START, shapes[0])
-    expect(points).toHaveLength(5)
-    expect(points[0]).toEqual(START)
-    expect(points[4]).toEqual(START)
-    expect(points.slice(1, 4)).toEqual(shapes[0].waypoints)
+  it('refuses an odd attempt count, which would leave a bearing without a mirror', () => {
+    expect(() => generateLoopAttempts(seed, 7)).toThrow()
   })
 })
