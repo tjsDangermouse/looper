@@ -129,7 +129,10 @@ export function MapView({ start, routes, selected, position, follow, heading, co
   useEffect(() => {
     paddingRef.current = padding
     if (!padding) return
-    mapRef.current?.easeTo({ center: followRef.current ? positionRef.current || startRef.current : startRef.current, padding: pad(), duration: 300 })
+    const map = mapRef.current
+    if (!map) return
+    const following = followRef.current
+    map.easeTo({ center: following ? positionRef.current || startRef.current : startRef.current, zoom: following ? Math.max(map.getZoom(), WALK_ZOOM) : map.getZoom(), padding: pad(), duration: 300 })
   }, [padding?.bottom, padding?.right])
 
   return <><div ref={container} style={{ position: 'fixed', inset: 0 }} aria-label="Douglas, Isle of Man map" /><svg aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 1, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>{paths.map(path => <g key={path.id} opacity={selected ? (path.selected ? 1 : .28) : .9}>
