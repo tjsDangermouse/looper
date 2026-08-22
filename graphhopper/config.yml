@@ -11,10 +11,11 @@ graphhopper:
   graph.location: /data/graph-cache
 
   # `weighting` defaults to `custom` in GraphHopper 8+, so the profile is
-  # defined entirely by its custom model. foot.json ships inside the jar.
+  # defined entirely by its custom model. looper_foot.json is ours, not the
+  # jar's bundled foot.json — see the file for why.
   profiles:
     - name: foot
-      custom_model_files: [foot.json]
+      custom_model_files: [looper_foot.json]
 
   # No Contraction Hierarchies: CH bakes one weighting into the graph and
   # cannot accept the per-request custom models Looper depends on. Landmarks

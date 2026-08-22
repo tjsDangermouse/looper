@@ -1,0 +1,22 @@
+// Looper's own walking profile, replacing GraphHopper's bundled foot.json.
+//
+// The stock profile multiplies every edge's priority by `foot_priority`, an
+// OSM-derived score built mostly from road class and sidewalk tags. For a
+// loop generator aiming candidates in many directions, that meant every
+// route funnelled onto the same "well-tagged" arterial roads regardless of
+// bearing: to a walker one residential street is as good as another, but
+// the stock weighting treated them very differently. This profile keeps the
+// real constraints (impassable, dangerous terrain, private access) and
+// drops the road-class preference, so distance and shape decide the route
+// instead.
+{
+  "priority": [
+    { "if": "!foot_access || hike_rating >= 2", "multiply_by": "0" },
+    { "if": "country == DEU && road_class == BRIDLEWAY && foot_road_access != YES", "multiply_by": "0" },
+    { "if": "mtb_rating > 3", "multiply_by": "0.7" },
+    { "if": "foot_road_access == PRIVATE", "multiply_by": "0.1" }
+  ],
+  "speed": [
+    { "if": "true", "limit_to": "foot_average_speed" }
+  ]
+}

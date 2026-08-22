@@ -5,13 +5,20 @@ import { sharedCorridorMetres } from './quality.js'
  * Choosing what to offer.
  *
  * Three loops that all leave by the same street and differ by a block are one
- * choice wearing three hats. A candidate is dropped if it walks more than a
- * third of the same ground as one already chosen, and the picker looks for a
- * different way out of the door before it settles for a second loop heading the
- * same way.
+ * choice wearing three hats. A candidate is dropped if it walks more than
+ * MAX_SHARED_FRACTION of the same ground as one already chosen, and the
+ * picker looks for a different way out of the door before it settles for a
+ * second loop heading the same way.
  */
 
-export const MAX_SHARED_FRACTION = 0.35
+/**
+ * In a town with a natural bottleneck — a harbour, a single bridge, a
+ * headland — every clean loop leaves and returns the same way, whatever
+ * direction it heads in between. Cutting at a third of shared ground threw
+ * those away too and regularly left a walker with one loop where three
+ * genuinely different ones existed but for a shared street at each end.
+ */
+export const MAX_SHARED_FRACTION = 0.55
 /** How far into the walk "which way does this go" is decided. */
 export const INITIAL_BEARING_METRES = 500
 export const INITIAL_BEARING_FRACTION = 0.2

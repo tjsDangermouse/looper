@@ -15,6 +15,7 @@ RUN curl -fsSL -o graphhopper-web.jar \
       "https://repo1.maven.org/maven2/com/graphhopper/graphhopper-web/${GRAPHHOPPER_VERSION}/graphhopper-web-${GRAPHHOPPER_VERSION}.jar"
 
 COPY config.yml /gh/config.yml
+COPY looper_foot.json /gh/looper_foot.json
 COPY entrypoint.sh /gh/entrypoint.sh
 RUN chmod +x /gh/entrypoint.sh && mkdir -p /data/osm /data/graph-cache
 

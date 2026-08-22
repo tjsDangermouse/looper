@@ -83,7 +83,7 @@ describe('choosing which loops to offer', () => {
     expect(selectDiverseRoutes([candidate(twinA, 90, 0), candidate(twinB, 88, 1)], 3)).toHaveLength(1)
     expect(selectDiverseRoutes([], 3)).toHaveLength(0)
   })
-  it('draws the line at a third of the same ground', () => {
-    expect(MAX_SHARED_FRACTION).toBe(.35)
+  it('draws the line just over half the same ground', () => {
+    expect(MAX_SHARED_FRACTION).toBe(.55)
   })
 })
