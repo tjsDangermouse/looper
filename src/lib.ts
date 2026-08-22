@@ -39,21 +39,18 @@ export function nearestProgress(point:Point, coords:Point[], from=0):Progress {
   // it is not, the walk has left the loop and the whole line is fair game again.
   return ahead&&ahead.distanceToRoute<55?ahead:best!
 }
-export function nextTurn(route:Route, progressMeters:number) { let total=0; for(let i=0;i<route.steps.length;i++){ const step=route.steps[i]; total+=step.distanceMeters; if(total>progressMeters) return {...step, index:i, distanceAway:total-progressMeters} } return undefined }
-// Walking the loop the other way round. The app reads a step's instruction as
-// the turn taken at the *end* of that step, so reversing keeps the segments in
-// the opposite order and hands each one the turn it now ends on: the same
-// corner, mirrored (a left going one way is a right coming back), naming the
-// road the walk is about to join rather than the one it joined before.
-const mirror = (instruction:string) => instruction.replace(/\bleft\b/gi,'\u0000').replace(/\bright\b/gi,'left').replace(/\u0000/g,'right')
-const onto = (instruction:string, road?:string) => { const bare=instruction.replace(/\s+onto\s+.+$/i,''); return road?`${bare} onto ${road}`:bare }
-export function reverseRoute(route:Route):Route {
-  const walked = route.steps.filter(step=>step.distanceMeters>0)
-  const steps:Step[] = walked.map((_,i)=>{ const index=walked.length-1-i, step=walked[index], joins=walked[index-1]
-    return { ...step, maneuver: joins?mirrorTurn(turnKind(step)):'arrive', instruction: joins?onto(mirror(step.instruction), joins.road):'Arrive at your starting point' } })
-  return { ...route, reversed:!route.reversed, steps, geometry:{...route.geometry, coordinates:[...route.geometry.coordinates].reverse()} }
+// A step's instruction is the manoeuvre at its *start* — the turn onto the road
+// that step then walks, which is why the step carries that road's name. So the
+// turn being called out is the first step that starts further along the loop
+// than the walker has come, and step 0 (setting off) is never it.
+export function nextTurn(route:Route, progressMeters:number) {
+  let start=0
+  for(let i=0;i<route.steps.length;i++){
+    if(start>progressMeters) return {...route.steps[i], index:i, distanceAway:start-progressMeters}
+    start+=route.steps[i].distanceMeters
+  }
+  return undefined
 }
-
 // ---- Which way to turn ---------------------------------------------------
 // The turn a step ends on, as a shape the walk screen can draw. The two
 // routers disagree on how to say it — ORS numbers its instruction types, the
@@ -85,6 +82,25 @@ export function turnKind(step:{instruction?:string; maneuver?:string|number}|und
 }
 export const mirrorTurn = (turn:Turn):Turn => turn.replace(/left|right/,side=>side==='left'?'right':'left') as Turn
 
+// Walking the loop the other way round. The same roads come in the opposite
+// order, so each reversed step walks the road its forward counterpart walked
+// and is introduced by the *next* forward turn, mirrored: a right off Main
+// Street onto Quay Road going out is a left off Quay Road onto Main Street
+// coming back. The walk sets off along the last road and ends where it began.
+const mirror = (instruction:string) => instruction.replace(/\bleft\b/gi,'\u0000').replace(/\bright\b/gi,'left').replace(/\u0000/g,'right')
+const onto = (instruction:string, road?:string) => { const bare=instruction.replace(/\s+onto\s+.+$/i,''); return road?`${bare} onto ${road}`:bare }
+export function reverseRoute(route:Route):Route {
+  // Zero-length steps — arriving, and the odd roundabout marker — name no road
+  // to walk, so the roads of the walk are the steps that cover ground.
+  const walked = route.steps.filter(step=>step.distanceMeters>0)
+  const steps:Step[] = walked.map((_,j)=>{
+    const road=walked[walked.length-1-j], joins=walked[walked.length-j]
+    if(!joins) return { ...road, maneuver:'straight', instruction: road.road?`Head along ${road.road}`:'Set off along the loop' }
+    return { ...road, maneuver: mirrorTurn(turnKind(joins)), instruction: onto(mirror(joins.instruction), road.road) }
+  })
+  steps.push({ instruction:'Arrive at your starting point', maneuver:'arrive', distanceMeters:0, durationSeconds:0 })
+  return { ...route, reversed:!route.reversed, steps, geometry:{...route.geometry, coordinates:[...route.geometry.coordinates].reverse()} }
+}
 export function dedupeRoutes(routes:Route[]) { return routes.filter((route,i)=>!routes.slice(0,i).some(other=>{const a=route.geometry.coordinates,b=other.geometry.coordinates; const samples=8; let matches=0; for(let s=0;s<samples;s++){const p=a[Math.floor(s*(a.length-1)/(samples-1))],q=b[Math.floor(s*(b.length-1)/(samples-1))]; if(p&&q&&haversine(p,q)<160) matches++} return matches/samples>.7 })) }
 
 // Voice guidance. A turn is announced at most once per band, so walking through
