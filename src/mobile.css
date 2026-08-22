@@ -125,3 +125,14 @@
   .lede { font-size: 21px; }
   .privacy, .help { font-size: 14px; }
 }
+
+/* ---- Debug panel escape hatch ------------------------------------------
+   Every other row here is clamp()ed to fit the 48dvh budget with nothing to
+   scroll, by design. The tuning panel adds a variable, often much taller,
+   amount of content that cannot be clamped down to fit alongside it — so a
+   sheet holding one gets to scroll instead, only while it holds one. */
+.sheet:has(.debug-panel) {
+  max-height: 80dvh;
+  overflow-y: auto;
+}
+.sheet:has(.debug-panel) .sheet-body { overflow: visible; }
