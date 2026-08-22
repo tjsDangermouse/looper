@@ -1,7 +1,7 @@
 import type { Feature, Polygon } from 'geojson'
 import { AVOID_PRIORITY, RELAXED_AVOID_PRIORITY, avoidanceCustomModel, buildAvoidanceAreas } from './avoidance.js'
 import { shapeToLegPoints, type CandidateShape } from './candidates.js'
-import type { LngLat } from './geo.js'
+import { bearingBetween, destination, haversine, normaliseBearing, type LngLat } from './geo.js'
 import { GraphHopperError, type GraphHopperLeg, type GraphHopperStep } from '../graphhopper.js'
 
 /**
@@ -18,6 +18,22 @@ import { GraphHopperError, type GraphHopperLeg, type GraphHopperStep } from '../
  * sending the walk somewhere else entirely.
  */
 export const LEG_BUDGET_SHARE = 0.5
+
+/**
+ * A candidate waypoint is just a point dropped on a circle, with no idea what
+ * street layout is underneath it. Where it lands inside a cul-de-sac, the leg
+ * arriving there and the leg leaving it are forced back down the same short
+ * stub to reach it — not because the ring is a bad shape, but because that
+ * one point happens to sit somewhere only reachable one way. The tell is at
+ * the join: the walk arrives heading one way and immediately leaves heading
+ * almost the opposite way, at the same spot. A corner in open country never
+ * looks like this; a cul-de-sac suburb produces it constantly.
+ */
+export const JOIN_TURN_THRESHOLD_DEGREES = 150
+/** How far to pull a dead-ending waypoint back toward the start, once, before giving up on it. */
+export const WAYPOINT_PULLBACK_SCALE = 0.65
+/** How far from a leg's own end to sample its direction of travel there. */
+const EDGE_BEARING_WINDOW_METRES = 30
 
 export type LegRouter = (points: LngLat[], customModel: ReturnType<typeof avoidanceCustomModel>) => Promise<GraphHopperLeg>
 
@@ -116,6 +132,58 @@ export async function routeCandidateSequentially(
       }
     }
 
+    // The join this leg's *start* sits on is the previous leg's arrival, which
+    // is already routed and committed. Catching a dead end here means undoing
+    // that leg too: both legs meeting at the bad waypoint get re-routed around
+    // a version of it pulled back toward the start, once. A waypoint used only
+    // as this leg's destination is caught on the next iteration instead, by the
+    // same check running on the leg after it — every waypoint but the first and
+    // last is somebody's arrival and somebody's departure.
+    if (index > 0) {
+      const previous = legs[legs.length - 1]
+      const turn = turnAngleDegrees(edgeBearing(previous.coordinates, false), edgeBearing(leg.coordinates, true))
+      if (turn > JOIN_TURN_THRESHOLD_DEGREES) {
+        const original = points[index]
+        const pulledIn = destination(start, haversine(start, original) * WAYPOINT_PULLBACK_SCALE, bearingBetween(start, original))
+        const areasBeforePrevious = buildAvoidanceAreas(walked.slice(0, -1), start, {
+          halfWidthMetres: options.corridorHalfWidthMetres,
+          startExclusionMetres: options.startExclusionMetres,
+        })
+        try {
+          const redonePrevious = await route(
+            [points[index - 1], pulledIn],
+            avoidanceCustomModel(areasBeforePrevious, previous.relaxed ? (options.relaxedPriority ?? RELAXED_AVOID_PRIORITY) : (options.strongPriority ?? AVOID_PRIORITY)),
+          )
+          const walkedWithRedone = [...walked.slice(0, -1), redonePrevious.coordinates]
+          const areasForCurrent = buildAvoidanceAreas(walkedWithRedone, start, {
+            halfWidthMetres: options.corridorHalfWidthMetres,
+            startExclusionMetres: options.startExclusionMetres,
+          })
+          const redoneCurrent = await route(
+            [pulledIn, points[index + 1]],
+            avoidanceCustomModel(areasForCurrent, relaxed ? (options.relaxedPriority ?? RELAXED_AVOID_PRIORITY) : (options.strongPriority ?? AVOID_PRIORITY)),
+          )
+          const redoneTurn = turnAngleDegrees(edgeBearing(redonePrevious.coordinates, false), edgeBearing(redoneCurrent.coordinates, true))
+          // Only keep the pulled-in point if it actually straightened the join;
+          // a still-sharp turn would only be trading one dead end for another,
+          // for the price of two extra requests.
+          if (redoneTurn < turn) {
+            running -= previous.distanceMeters
+            legs.pop()
+            walked.pop()
+            legs.push({ ...redonePrevious, relaxed: previous.relaxed, avoidanceAreaCount: areasBeforePrevious.length })
+            walked.push(redonePrevious.coordinates)
+            running += redonePrevious.distanceMeters
+            points[index] = pulledIn
+            leg = redoneCurrent
+          }
+        } catch (error) {
+          if (!(error instanceof GraphHopperError) || error.kind === 'transport') throw error
+          // Keep the dead-ending join: pulling the waypoint in found no way round either.
+        }
+      }
+    }
+
     running += leg.distanceMeters
     if (options.abandonAboveMetres && running > options.abandonAboveMetres) return undefined
     legs.push({ ...leg, relaxed, avoidanceAreaCount: areas.length })
@@ -174,3 +242,27 @@ export function joinLegGeometries(legs: Array<Pick<GraphHopperLeg, 'coordinates'
 }
 
 const samePoint = (a: LngLat, b: LngLat) => Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9
+
+/**
+ * The direction a leg is travelling right at one end of it — the last stretch
+ * before it arrives, or the first stretch after it departs — rather than the
+ * bearing of the whole leg, which a winding street would blur into something
+ * meaningless.
+ */
+function edgeBearing(coordinates: LngLat[], atStart: boolean, windowMetres = EDGE_BEARING_WINDOW_METRES): number {
+  if (coordinates.length < 2) return 0
+  if (atStart) {
+    let index = 1
+    while (index < coordinates.length - 1 && haversine(coordinates[0], coordinates[index]) < windowMetres) index++
+    return bearingBetween(coordinates[0], coordinates[index])
+  }
+  let index = coordinates.length - 2
+  while (index > 0 && haversine(coordinates[coordinates.length - 1], coordinates[index]) < windowMetres) index--
+  return bearingBetween(coordinates[index], coordinates[coordinates.length - 1])
+}
+
+/** The angle between two bearings, 0-180 degrees either way round the compass. */
+function turnAngleDegrees(a: number, b: number): number {
+  const diff = Math.abs(normaliseBearing(a) - normaliseBearing(b))
+  return diff > 180 ? 360 - diff : diff
+}

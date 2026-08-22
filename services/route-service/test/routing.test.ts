@@ -186,6 +186,40 @@ describe('sequential leg routing', () => {
     expect(LEG_BUDGET_SHARE).toBe(0.5)
   })
 
+  it('pulls a dead-ending waypoint back toward the start and re-routes both legs that meet there', async () => {
+    // Waypoint 1 is only reachable via a spur through D: the leg arriving there
+    // and the leg leaving it both detour via D, so the walk arrives at the
+    // waypoint heading one way and immediately leaves heading back the way it
+    // came — exactly what a cul-de-sac produces. Any other pair of points,
+    // including whatever pulled-in point the retry asks for, routes straight.
+    const points = shapeToLegPoints(START, shape)
+    const waypoint1 = points[1]
+    const D: LngLat = [START[0] + (waypoint1[0] - START[0]) * 0.4, START[1] + (waypoint1[1] - START[1]) * 0.4]
+    const same = (a: LngLat, b: LngLat) => Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9
+    const calls: Array<{ points: LngLat[] }> = []
+    const route = async (legPoints: LngLat[], model: any): Promise<GraphHopperLeg> => {
+      calls.push({ points: legPoints })
+      const [a, b] = legPoints
+      if (same(a, waypoint1) || same(b, waypoint1)) {
+        const viaD = joinLegGeometries([await straightRouter().route([a, D], model), await straightRouter().route([D, b], model)])
+        return { ...viaD, steps: [] }
+      }
+      return straightRouter().route(legPoints, model)
+    }
+    const candidate = await routeCandidateSequentially(START, shape, route)
+    expect(candidate).toBeDefined()
+    // The dead end was tried at least once, and both legs meeting there were
+    // then routed a second time to or from some other point — the pulled-in
+    // replacement, not the original waypoint.
+    const toOrFromWaypoint1 = calls.filter(call => same(call.points[0], waypoint1) || same(call.points[1], waypoint1))
+    expect(toOrFromWaypoint1.length).toBeGreaterThan(0)
+    const avoidingWaypoint1 = calls.filter(call => !same(call.points[0], waypoint1) && !same(call.points[1], waypoint1))
+    expect(avoidingWaypoint1.length).toBeGreaterThan(2) // the untouched legs 2 and 3, plus the two re-routed legs
+    // The pulled-in point replaces the original in the final route: nothing in
+    // the joined geometry sits exactly on the dead end any more.
+    expect(candidate!.coordinates.some(point => same(point, waypoint1))).toBe(false)
+  })
+
   it('gives the candidate up rather than routing it without any penalty at all', async () => {
     const attempts: any[] = []
     const route = async (points: LngLat[], model: any) => {
