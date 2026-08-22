@@ -52,11 +52,30 @@ export function MapView({ start, routes, selected, position, follow, walking, he
 
   // When a fresh batch of routes comes in, pull back (or push in) so every
   // loop is on screen at once, rather than leaving the camera wherever it was.
+  // fitBounds' own padding option goes badly wrong once one side's padding
+  // approaches the container size (as the sheet's does on a phone screen) —
+  // it collapses to a much lower zoom than the space actually requires — so
+  // the fit is done by hand: fit to the margin alone, then shrink and shift
+  // by exactly what the sheet's corner of the screen costs.
   const fitToRoutes = (list: Route[]) => {
     const map = mapRef.current
     if (!map || followRef.current || !list.length) return
     const bounds = list.reduce((bounds, route) => route.geometry.coordinates.reduce((b, point) => b.extend(point), bounds), new maplibregl.LngLatBounds())
-    map.fitBounds(bounds, { padding: { top: 60, left: 60, bottom: 60 + (paddingRef.current?.bottom ?? 0), right: 60 + (paddingRef.current?.right ?? 0) }, duration: 500, maxZoom: WALK_ZOOM })
+    const cam = map.cameraForBounds(bounds, { padding: 60, maxZoom: WALK_ZOOM })
+    if (!cam?.center || cam.zoom === undefined) return
+    const el = map.getContainer()
+    const w = el.clientWidth, h = el.clientHeight
+    const bottomPad = paddingRef.current?.bottom ?? 0
+    const rightPad = paddingRef.current?.right ?? 0
+    const shrink = Math.min(1, (w - 120 - rightPad) / (w - 120), (h - 120 - bottomPad) / (h - 120))
+    const zoom = Math.min(WALK_ZOOM, cam.zoom + Math.log2(shrink))
+    const worldSize = 512 * Math.pow(2, zoom)
+    const centre = maplibregl.MercatorCoordinate.fromLngLat(cam.center as maplibregl.LngLatLike)
+    const shifted = new maplibregl.MercatorCoordinate(centre.x + rightPad / 2 / worldSize, centre.y + bottomPad / 2 / worldSize, centre.z).toLngLat()
+    // The shift above already accounts for the sheet directly, so any padding
+    // still set on the map from an earlier call must be cleared here — left
+    // in place, it would be applied a second time on top of this shift.
+    map.easeTo({ center: shifted, zoom, padding: { top: 0, left: 0, bottom: 0, right: 0 }, duration: 500 })
   }
 
   // The sheet that owns the current screen tends to mount (and set its
@@ -66,6 +85,7 @@ export function MapView({ start, routes, selected, position, follow, walking, he
   const pendingFit = useRef<Route[] | null>(null)
   const pendingFitTimer = useRef<number | undefined>(undefined)
   const triggerFit = (list: Route[]) => {
+    if (!list.length) return
     pendingFit.current = list
     fitToRoutes(list)
     window.clearTimeout(pendingFitTimer.current)
