@@ -1,5 +1,5 @@
 export type Point = [number, number]
-export type Step = { instruction: string; distanceMeters: number; durationSeconds: number; startIndex?: number; endIndex?: number; maneuver?: string; road?: string }
+export type Step = { instruction: string; distanceMeters: number; durationSeconds: number; startIndex?: number; endIndex?: number; maneuver?: string|number; road?: string }
 export type Route = { id: string; name: string; distanceMeters: number; durationSeconds: number; targetDifferencePercent: number; geometry: {type:'LineString'; coordinates: Point[]}; steps: Step[]; reversed?: boolean }
 // One palette for both the drawn lines and the swatch on each route card, so
 // a colour on the map names the same loop in the list.
@@ -10,7 +10,35 @@ export const estimateKmFromMinutes = (minutes:number) => minutes / 12
 export const formatDistance = (meters:number, unit:'km'|'mi'='km') => unit === 'km' ? `${(meters/1000).toFixed(1)} km` : `${kmToMiles(meters/1000).toFixed(1)} mi`
 export const formatTime = (seconds:number) => `${Math.round(seconds / 60)} min`
 export const haversine = (a:Point,b:Point) => { const r=6371000, rad=Math.PI/180, dLat=(b[1]-a[1])*rad,dLng=(b[0]-a[0])*rad; const x=Math.sin(dLat/2)**2+Math.cos(a[1]*rad)*Math.cos(b[1]*rad)*Math.sin(dLng/2)**2; return 2*r*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)) }
-export function nearestProgress(point:Point, coords:Point[]) { let best=Infinity, index=0, before=0; for(let i=0;i<coords.length;i++){ const d=haversine(point,coords[i]); if(d<best){best=d;index=i} if(i<index) before+=haversine(coords[i],coords[i+1]||coords[i]) } return { distanceToRoute:best, index, distanceAlong:before } }
+// How far round the loop the walker has come. Vertices sit tens of metres
+// apart, so the nearest one is refined by projecting onto the segment it lies
+// on. A loop ends where it begins, so the search is anchored to the progress
+// already made: without that, a wobble at the start reads as the final vertex
+// and the walk jumps straight to "almost home".
+const cumulative = (coords:Point[]) => { const out=[0]; for(let i=1;i<coords.length;i++) out.push(out[i-1]+haversine(coords[i-1],coords[i])); return out }
+// Distance to a segment and how far along it the foot of the perpendicular
+// falls, in metres on a local flat frame — ample over one segment's span.
+function projectOnSegment(p:Point,a:Point,b:Point){ const m=6371000*Math.PI/180, scale=Math.cos(a[1]*Math.PI/180)
+  const bx=(b[0]-a[0])*scale*m, by=(b[1]-a[1])*m, px=(p[0]-a[0])*scale*m, py=(p[1]-a[1])*m
+  const length=Math.hypot(bx,by), t=length?Math.min(1,Math.max(0,(px*bx+py*by)/(length*length))):0
+  return { along:t*length, portion:t, distance:Math.hypot(px-bx*t,py-by*t) } }
+export type Progress = { distanceToRoute:number; index:number; distanceAlong:number }
+export function nearestProgress(point:Point, coords:Point[], from=0):Progress {
+  if(coords.length<2) return { distanceToRoute:haversine(point,coords[0]), index:0, distanceAlong:0 }
+  const along=cumulative(coords)
+  let best:Progress|undefined, ahead:Progress|undefined
+  for(let i=0;i<coords.length-1;i++){
+    const seg=projectOnSegment(point,coords[i],coords[i+1])
+    const here:Progress={ distanceToRoute:seg.distance, index:seg.portion>.5?i+1:i, distanceAlong:along[i]+seg.along }
+    if(!best||here.distanceToRoute<best.distanceToRoute) best=here
+    // A little slack behind, so standing still or drifting back a pace does not
+    // strand the walker on the far side of the anchor.
+    if(here.distanceAlong>=from-25&&(!ahead||here.distanceToRoute<ahead.distanceToRoute)) ahead=here
+  }
+  // Keep to the anchored match while it is plausibly the route underfoot; when
+  // it is not, the walk has left the loop and the whole line is fair game again.
+  return ahead&&ahead.distanceToRoute<55?ahead:best!
+}
 export function nextTurn(route:Route, progressMeters:number) { let total=0; for(let i=0;i<route.steps.length;i++){ const step=route.steps[i]; total+=step.distanceMeters; if(total>progressMeters) return {...step, index:i, distanceAway:total-progressMeters} } return undefined }
 // Walking the loop the other way round. The app reads a step's instruction as
 // the turn taken at the *end* of that step, so reversing keeps the segments in
@@ -22,9 +50,40 @@ const onto = (instruction:string, road?:string) => { const bare=instruction.repl
 export function reverseRoute(route:Route):Route {
   const walked = route.steps.filter(step=>step.distanceMeters>0)
   const steps:Step[] = walked.map((_,i)=>{ const index=walked.length-1-i, step=walked[index], joins=walked[index-1]
-    return { ...step, instruction: joins?onto(mirror(step.instruction), joins.road):'Arrive at your starting point' } })
+    return { ...step, maneuver: joins?mirrorTurn(turnKind(step)):'arrive', instruction: joins?onto(mirror(step.instruction), joins.road):'Arrive at your starting point' } })
   return { ...route, reversed:!route.reversed, steps, geometry:{...route.geometry, coordinates:[...route.geometry.coordinates].reverse()} }
 }
+
+// ---- Which way to turn ---------------------------------------------------
+// The turn a step ends on, as a shape the walk screen can draw. The two
+// routers disagree on how to say it — ORS numbers its instruction types, the
+// loop service names them — and a walk saved by an older build carries no
+// maneuver at all, so the wording is read as a last resort.
+export type Turn='left'|'slight-left'|'sharp-left'|'right'|'slight-right'|'sharp-right'|'straight'|'u-turn'|'arrive'
+const ORS_TURNS:Record<number,Turn> = {0:'left',1:'right',2:'sharp-left',3:'sharp-right',4:'slight-left',5:'slight-right',6:'straight',7:'straight',8:'straight',9:'u-turn',10:'arrive',11:'straight',12:'slight-left',13:'slight-right'}
+const NAMED_TURNS:Record<string,Turn> = {'turn-left':'left','turn-right':'right','keep-left':'slight-left','keep-right':'slight-right','u-turn-left':'u-turn','u-turn-right':'u-turn','continue':'straight','roundabout':'straight','finish':'arrive','waypoint':'arrive'}
+const KNOWN = new Set<Turn>(['left','slight-left','sharp-left','right','slight-right','sharp-right','straight','u-turn','arrive'])
+// Sharp and slight are looked for before the bare side, so "slight left" does
+// not read as a square left turn.
+function turnFromWords(instruction:string):Turn {
+  const text=instruction.toLowerCase()
+  if(/u-?turn|turn around/.test(text)) return 'u-turn'
+  if(/arrive|arrived|destination|back where you started/.test(text)) return 'arrive'
+  for(const side of ['left','right'] as const){
+    if(new RegExp(`sharp\\s+${side}`).test(text)) return `sharp-${side}` as Turn
+    if(new RegExp(`(slight(ly)?|bear|keep)\\s+${side}`).test(text)) return `slight-${side}` as Turn
+    if(new RegExp(`\\b${side}\\b`).test(text)) return side
+  }
+  return 'straight'
+}
+export function turnKind(step:{instruction?:string; maneuver?:string|number}|undefined):Turn {
+  if(!step) return 'arrive'
+  const code=step.maneuver
+  if(typeof code==='number') return ORS_TURNS[code]??'straight'
+  if(typeof code==='string'){ const named=NAMED_TURNS[code]??(KNOWN.has(code as Turn)?code as Turn:undefined); if(named) return named }
+  return turnFromWords(step.instruction||'')
+}
+export const mirrorTurn = (turn:Turn):Turn => turn.replace(/left|right/,side=>side==='left'?'right':'left') as Turn
 
 export function dedupeRoutes(routes:Route[]) { return routes.filter((route,i)=>!routes.slice(0,i).some(other=>{const a=route.geometry.coordinates,b=other.geometry.coordinates; const samples=8; let matches=0; for(let s=0;s<samples;s++){const p=a[Math.floor(s*(a.length-1)/(samples-1))],q=b[Math.floor(s*(b.length-1)/(samples-1))]; if(p&&q&&haversine(p,q)<160) matches++} return matches/samples>.7 })) }
 

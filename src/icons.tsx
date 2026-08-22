@@ -1,3 +1,4 @@
+import type { Turn } from './lib'
 // Inline so the UI has no icon-font or sprite dependency, and every glyph
 // inherits currentColor from the control it sits in.
 const base = { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' } as const
@@ -64,3 +65,32 @@ export const ReverseIcon = ({ size = 20 }: { size?: number }) => (
     <path d="M20.5 13a7.5 7.5 0 0 1-7.5 7.5H6.5" /><path d="M9.5 23 6.5 20.5 9.5 18" />
   </svg>
 )
+
+// The turn arrow is drawn rather than listed: a stem, a bend through the angle
+// of the turn, and a head on the straight run out of it. One shape covers
+// slight, square and sharp on either side, so the glyph matches the turn being
+// called out. Sharp turns bend later and reach further, so the head comes down
+// clear of the stem instead of merging with it.
+const ANGLES: Record<Turn, number> = { straight: 0, 'slight-right': 45, right: 90, 'sharp-right': 135, 'slight-left': -45, left: -90, 'sharp-left': -135, 'u-turn': 180, arrive: 0 }
+const at = (x: number, y: number) => `${x.toFixed(1)} ${y.toFixed(1)}`
+function turnPaths(degrees: number) {
+  const sharp = Math.abs(degrees) > 90, bendY = sharp ? 8 : 9, bend = sharp ? 5.5 : 4, run = sharp ? 3.5 : 2.5
+  const radians = degrees * Math.PI / 180, dx = Math.sin(radians), dy = -Math.cos(radians)
+  const mx = 12 + dx * bend, my = bendY + dy * bend, ex = mx + dx * run, ey = my + dy * run
+  return {
+    stem: degrees ? `M12 21V13.5 Q12 ${bendY} ${at(mx, my)} L${at(ex, ey)}` : `M12 21V${(bendY - bend - run).toFixed(1)}`,
+    head: `M${at(ex + dy * 2.2 - dx * 2.2, ey - dx * 2.2 - dy * 2.2)} L${at(ex, ey)} L${at(ex - dy * 2.2 - dx * 2.2, ey + dx * 2.2 - dy * 2.2)}`,
+  }
+}
+export const TurnIcon = ({ turn, size = 40 }: { turn: Turn; size?: number }) => {
+  // A U-turn doubles back over its own stem, so it gets a bend of its own.
+  const { stem, head } = turn === 'u-turn'
+    ? { stem: 'M8.5 21V11.5a3.5 3.5 0 0 1 7 0V17', head: 'M12.6 14.4 15.5 17.4 18.4 14.4' }
+    : turnPaths(ANGLES[turn])
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...base} strokeWidth={2.1}>
+      <path d={stem} />
+      {turn === 'arrive' ? <circle cx="12" cy="4.5" r="2.6" fill="currentColor" stroke="none" /> : <path d={head} />}
+    </svg>
+  )
+}
