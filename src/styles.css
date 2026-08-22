@@ -137,54 +137,7 @@ h1 { font-size: clamp(46px, 15vw, 68px); line-height: .95; letter-spacing: -.05e
 .route-card i { display: block; border-radius: 9px; }
 .route-card strong { font-weight: 600; }
 .route-card p { color: var(--muted); margin: 0; }
-/* ---- Debug drawer (?debug=1 only) --------------------------------------
-   Fixed to the side and independent of the sheet and screen underneath —
-   it opens over the map on a translucent backdrop rather than displacing
-   any part of the ordinary layout. */
-.debug-tab {
-  position: fixed; z-index: 5; top: calc(var(--chrome-top) + 2px); right: 14px;
-  width: var(--chrome-btn); height: var(--chrome-btn); border-radius: 50%;
-  background: #08192b99; backdrop-filter: blur(6px); color: var(--text);
-  border: 1px solid var(--line); font-size: 17px; line-height: 1;
-}
-.debug-tab.changed { color: var(--accent); border-color: var(--accent); }
-/* Invisible on purpose: it exists only so a tap outside the drawer closes
-   it. The whole point of the drawer is watching the map and route cards
-   change live while it's open, so nothing behind it should dim. */
-.debug-scrim {
-  position: fixed; inset: 0; z-index: 4;
-  pointer-events: none;
-}
-.debug-scrim.open { pointer-events: auto; }
-.debug-drawer {
-  position: fixed; z-index: 6; top: 0; right: 0; bottom: 0;
-  width: min(86vw, 340px); overflow-y: auto;
-  padding: calc(var(--chrome-top) + 56px) 18px 24px;
-  background: #08192bd9; backdrop-filter: blur(10px);
-  border-left: 1px solid var(--line);
-  transform: translateX(100%); transition: transform .25s ease;
-}
-.debug-drawer.open { transform: translateX(0); }
-.debug-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.debug-head .eyebrow { margin: 0; }
-.debug-status { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
-.debug-tab.busy { color: var(--accent); animation: debug-pulse 1s ease-in-out infinite; }
-@keyframes debug-pulse { 50% { opacity: .5; } }
-.debug-diagnostics {
-  background: var(--raised); border: 1px solid var(--line); border-radius: 10px;
-  padding: 8px 10px; margin: 0 0 16px; font-size: 12px; color: var(--muted);
-  transition: opacity .15s ease;
-}
-.debug-diagnostics.stale { opacity: .45; }
-.debug-diagnostics p { margin: 0; }
-.debug-diagnostics b { color: var(--text); }
-.debug-warn { color: var(--warn); }
-.debug-rejections { margin-top: 4px !important; word-break: break-word; }
-.debug-sliders { display: flex; flex-direction: column; gap: 16px; padding-bottom: 12px; }
-.debug-slider { display: block; }
-.debug-slider-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
-.debug-slider input[type=range] { width: 100%; accent-color: var(--accent); outline: none; }
-.debug-slider input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+@keyframes pulse { 50% { opacity: .5; } }
 .head-actions { display: flex; align-items: center; gap: 10px; flex: none; }
 .sheet-head .icon-btn { width: 38px; height: 38px; background: var(--raised); border: 1px solid var(--line); box-shadow: none; }
 .sheet-head .icon-btn.on { color: var(--accent); border-color: var(--accent); }
@@ -207,6 +160,8 @@ h1 { font-size: clamp(46px, 15vw, 68px); line-height: .95; letter-spacing: -.05e
 }
 .icon-btn:active { transform: scale(.94); }
 .icon-btn.on { color: var(--accent); }
+.icon-btn:disabled { opacity: .5; }
+.icon-btn.busy { color: var(--accent); animation: pulse 1s ease-in-out infinite; }
 .guidance {
   position: absolute; bottom: max(17px, env(safe-area-inset-bottom)); left: 12px; right: 12px;
   background: var(--sheet); color: var(--text); border: 1px solid var(--line);
