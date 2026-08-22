@@ -60,8 +60,8 @@ export const CheckIcon = ({ size = 18 }: { size?: number }) => (
 
 export const ReverseIcon = ({ size = 20 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...base}>
-    <path d="M3.5 11A7.5 7.5 0 0 1 11 3.5h6.5" /><path d="M14.5 1 17.5 3.5 14.5 6" />
-    <path d="M20.5 13a7.5 7.5 0 0 1-7.5 7.5H6.5" /><path d="M9.5 23 6.5 20.5 9.5 18" />
+    <path d="M3 7h14" /><path d="M13 3l4 4-4 4" />
+    <path d="M21 17H7" /><path d="M11 13l-4 4 4 4" />
   </svg>
 )
 
