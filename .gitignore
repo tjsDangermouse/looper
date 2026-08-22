@@ -2,3 +2,6 @@
 .cert/
 node_modules/
 dist/
+# OSM extracts are large and reproducible: the import script downloads them.
+data/*.osm.pbf
+.DS_Store

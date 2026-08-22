@@ -1,0 +1,44 @@
+# Local development stack: GraphHopper (walking graph) behind the Looper route
+# service. The PWA talks only to the route service on :8080.
+name: looper
+
+services:
+  graphhopper:
+    build:
+      context: ./graphhopper
+      args:
+        GRAPHHOPPER_VERSION: ${GRAPHHOPPER_VERSION:-11.0}
+    environment:
+      # A file already in ./data wins; otherwise the extract is downloaded once.
+      OSM_PBF_PATH: ${OSM_PBF_PATH:-isle-of-man-latest.osm.pbf}
+      OSM_PBF_URL: ${OSM_PBF_URL:-https://download.geofabrik.de/europe/isle-of-man-latest.osm.pbf}
+      GH_HEAP: ${GH_HEAP:-2g}
+    volumes:
+      # The imported graph survives restarts and rebuilds of the image.
+      - graph-cache:/data/graph-cache
+      - ./data:/data/osm
+    # Published for local debugging only. The production stack keeps GraphHopper
+    # on the internal network with no published port.
+    ports:
+      - "${GRAPHHOPPER_PORT:-8989}:8989"
+    restart: unless-stopped
+
+  route-service:
+    build:
+      context: ./services/route-service
+    environment:
+      PORT: 8080
+      GRAPHHOPPER_URL: http://graphhopper:8989
+      GRAPHHOPPER_PROFILE: ${GRAPHHOPPER_PROFILE:-foot}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      NODE_ENV: ${NODE_ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${ROUTE_SERVICE_PORT:-8080}:8080"
+    depends_on:
+      graphhopper:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  graph-cache:

@@ -1,0 +1,74 @@
+# GraphHopper 11.0 configuration for Looper.
+#
+# Only the walking profile is built. Looper never asks GraphHopper for a
+# round trip: it asks for ordinary point-to-point legs and supplies its own
+# custom model per request, so the graph is prepared for flexible (non-CH)
+# routing with landmarks for speed.
+graphhopper:
+
+  # Set by entrypoint.sh at import time; ignored when an imported graph exists.
+  datareader.file: ""
+  graph.location: /data/graph-cache
+
+  # `weighting` defaults to `custom` in GraphHopper 8+, so the profile is
+  # defined entirely by its custom model. foot.json ships inside the jar.
+  profiles:
+    - name: foot
+      custom_model_files: [foot.json]
+
+  # No Contraction Hierarchies: CH bakes one weighting into the graph and
+  # cannot accept the per-request custom models Looper depends on. Landmarks
+  # give most of the speed back and stay valid as long as a request only ever
+  # *lowers* priority (raises edge weight), which is all Looper's avoidance
+  # areas ever do.
+  profiles_ch: []
+  profiles_lm:
+    - profile: foot
+
+  # foot.json refers to foot_access, foot_priority, foot_average_speed,
+  # foot_road_access, hike_rating, mtb_rating, country and road_class.
+  # road_environment and surface are carried for path details only.
+  graph.encoded_values: foot_access, foot_priority, foot_average_speed, foot_road_access, hike_rating, mtb_rating, country, road_class, road_environment, surface
+
+  # The shipped default drops footway/path/steps, which would gut a walking
+  # graph. Drop the roads a pedestrian may not use instead.
+  import.osm.ignored_highways: motorway,trunk
+
+  # Small islands legitimately have detached path networks; 200 edges keeps
+  # unreachable fragments out without discarding real coastal paths.
+  prepare.min_network_size: 200
+  prepare.subnetworks.threads: 1
+
+  #### Routing ####
+  routing.max_visited_nodes: 1000000
+  # Backstop only. The Looper service applies its own, much shorter, timeout.
+  routing.timeout_ms: 20000
+  routing.snap_preventions_default: tunnel, bridge, ferry
+  routing.non_ch.max_waypoint_distance: 1000000
+
+  graph.dataaccess.default_type: RAM_STORE
+  datareader.preferred_language: en
+
+server:
+  application_connectors:
+    - type: http
+      port: 8989
+      # Inside the compose network only; in production this port is not
+      # published to the host (see docker-compose.prod.yml).
+      bind_host: 0.0.0.0
+      max_request_header_size: 50k
+  request_log:
+    appenders: []
+  admin_connectors:
+    - type: http
+      port: 8990
+      bind_host: 0.0.0.0
+
+logging:
+  level: INFO
+  loggers:
+    com.graphhopper: INFO
+  appenders:
+    - type: console
+      # Never echo request coordinates into container logs.
+      log_format: "%d{ISO8601} %-5level %logger{20} - %msg%n"

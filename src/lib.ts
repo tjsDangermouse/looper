@@ -1,4 +1,7 @@
 export type Point = [number, number]
+export type LoopMode = 'distance'|'time'
+export type Unit = 'km'|'mi'
+
 export type Step = { instruction: string; distanceMeters: number; durationSeconds: number; startIndex?: number; endIndex?: number; maneuver?: string|number; road?: string }
 export type Route = { id: string; name: string; distanceMeters: number; durationSeconds: number; targetDifferencePercent: number; geometry: {type:'LineString'; coordinates: Point[]}; steps: Step[]; reversed?: boolean }
 // One palette for both the drawn lines and the swatch on each route card, so
@@ -124,9 +127,37 @@ export function reverseRoute(route:Route):Route {
 }
 export function dedupeRoutes(routes:Route[]) { return routes.filter((route,i)=>!routes.slice(0,i).some(other=>{const a=route.geometry.coordinates,b=other.geometry.coordinates; const samples=8; let matches=0; for(let s=0;s<samples;s++){const p=a[Math.floor(s*(a.length-1)/(samples-1))],q=b[Math.floor(s*(b.length-1)/(samples-1))]; if(p&&q&&haversine(p,q)<160) matches++} return matches/samples>.7 })) }
 
-// Voice guidance. A turn is announced at most once per band, so walking in
-// from far out gives a prompt at distance, one near the corner, and the bare
-// instruction at it — no repetition.
+// ---- Looper route service ----------------------------------------------
+// The app talks to Looper's own API and to nothing else. Where that API lives
+// is a build-time setting: blank in development, where Vite proxies /v1 to the
+// local route service, and the deployed service's origin in production.
+export const apiBase = (import.meta.env?.VITE_LOOPER_API_BASE ?? '').replace(/\/+$/, '')
+
+type LoopRouteResponse = Omit<Route,'name'> & { label:string }
+
+/** Ask for loops. Errors carry a sentence a walker can act on, nothing more. */
+export async function requestLoops(input:{ start:Point; mode:LoopMode; distanceKm?:number; durationMinutes?:number; unit:Unit; variation:number }):Promise<{ routes:Route[]; warning?:string }> {
+  const response = await fetch(`${apiBase}/v1/loops`, {
+    method:'POST', headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({
+      start:{ lng:input.start[0], lat:input.start[1] },
+      mode:input.mode,
+      distanceKm: input.mode==='distance' ? input.distanceKm : undefined,
+      durationMinutes: input.mode==='time' ? input.durationMinutes : undefined,
+      units: input.unit,
+      variation: input.variation,
+    }),
+  })
+  const data = await response.json().catch(()=>({}))
+  if (!response.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'Routes are unavailable right now.')
+  // The service names a loop for the way it heads; the app has always called
+  // that a route's name.
+  const routes = (data.routes ?? []).map((route:LoopRouteResponse)=>({ ...route, name: route.label }))
+  return { routes, warning: typeof data?.warning === 'string' ? data.warning : undefined }
+}
+
+// Voice guidance. A turn is announced at most once per band, so walking through
+// 400 m → 100 m → the corner itself gives three prompts and no repetition.
 export type Band='soon'|'near'|'now'
 export const turnBand = (metresAway:number):Band|undefined => metresAway<30?'now':metresAway<120?'near':metresAway<450?'soon':undefined
 // Say the distance that is actually left. The bands decide *when* to speak;

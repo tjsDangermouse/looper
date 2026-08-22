@@ -2,7 +2,7 @@
 // cache-first for everything including the HTML shell, so a phone that had
 // once loaded the app kept serving that copy forever — new deploys were
 // invisible without a hard refresh, which mobile browsers barely offer.
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SHELL = `looper-shell-${VERSION}`;   // HTML, manifest, icon
 const ASSETS = `looper-assets-${VERSION}`; // Vite's content-hashed JS/CSS
 const KEEP = [SHELL, ASSETS];
@@ -29,7 +29,7 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;   // tiles, fonts: leave to the browser
-  if (url.pathname.startsWith('/api/')) return;      // routes must never come from cache
+  if (url.pathname.startsWith('/v1/')) return;       // routes must never come from cache
 
   // Navigations: network first, so a new deploy is picked up on the next
   // launch. Cache is only the offline fallback.
