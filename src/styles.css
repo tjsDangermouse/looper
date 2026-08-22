@@ -175,7 +175,8 @@ h1 { font-size: clamp(46px, 15vw, 68px); line-height: .95; letter-spacing: -.05e
 .debug-sliders { display: flex; flex-direction: column; gap: 16px; padding-bottom: 12px; }
 .debug-slider { display: block; }
 .debug-slider-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
-.debug-slider input[type=range] { width: 100%; accent-color: var(--accent); }
+.debug-slider input[type=range] { width: 100%; accent-color: var(--accent); outline: none; }
+.debug-slider input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
 .head-actions { display: flex; align-items: center; gap: 10px; flex: none; }
 .sheet-head .icon-btn { width: 38px; height: 38px; background: var(--raised); border: 1px solid var(--line); box-shadow: none; }
 .sheet-head .icon-btn.on { color: var(--accent); border-color: var(--accent); }

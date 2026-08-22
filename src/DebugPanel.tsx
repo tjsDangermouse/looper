@@ -64,8 +64,8 @@ const SLIDERS:Slider[] = [
  * cards. Living on its own, fixed to the side and independent of whatever
  * screen is showing, it can open over the map without disturbing either.
  */
-export function DebugPanel({ overrides, onChange, diagnostics, busy }:{
-  overrides:LoopOverrides; onChange:(o:LoopOverrides)=>void; diagnostics?:Diagnostics; busy:boolean
+export function DebugPanel({ overrides, onChange, diagnostics }:{
+  overrides:LoopOverrides; onChange:(o:LoopOverrides)=>void; diagnostics?:Diagnostics
 }) {
   const [open,setOpen]=useState(false)
   const changed = SLIDERS.filter(s => { const v = s.get(overrides); return v !== undefined && v !== s.default })
@@ -89,7 +89,7 @@ export function DebugPanel({ overrides, onChange, diagnostics, busy }:{
           const value = s.get(overrides) ?? s.default
           return <label key={s.key} className="debug-slider" title={s.hint}>
             <div className="debug-slider-head"><span>{s.label}</span><span>{value}</span></div>
-            <input type="range" min={s.min} max={s.max} step={s.step} value={value} disabled={busy}
+            <input type="range" min={s.min} max={s.max} step={s.step} value={value}
               onChange={e => onChange(s.set(overrides, Number(e.target.value)))} />
           </label>
         })}
