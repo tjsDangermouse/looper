@@ -125,8 +125,6 @@ export function reverseRoute(route:Route):Route {
   steps.push({ instruction:'Arrive at your starting point', maneuver:'arrive', distanceMeters:0, durationSeconds:0 })
   return { ...route, reversed:!route.reversed, steps:tidySteps(steps), geometry:{...route.geometry, coordinates:[...route.geometry.coordinates].reverse()} }
 }
-export function dedupeRoutes(routes:Route[]) { return routes.filter((route,i)=>!routes.slice(0,i).some(other=>{const a=route.geometry.coordinates,b=other.geometry.coordinates; const samples=8; let matches=0; for(let s=0;s<samples;s++){const p=a[Math.floor(s*(a.length-1)/(samples-1))],q=b[Math.floor(s*(b.length-1)/(samples-1))]; if(p&&q&&haversine(p,q)<160) matches++} return matches/samples>.7 })) }
-
 // ---- Looper route service ----------------------------------------------
 // The app talks to Looper's own API and to nothing else. Where that API lives
 // is a build-time setting: blank in development, where Vite proxies /v1 to the

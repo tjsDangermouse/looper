@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MapView } from './MapView'
 import { CheckIcon, ClockIcon, CloseIcon, CompassIcon, LocateIcon, LoopIcon, ReverseIcon, SoundOffIcon, SoundOnIcon, TurnIcon, WalkIcon } from './icons'
-import { compassAvailable, requestCompass, watchHeading, routeColours, dedupeRoutes, estimateKmFromMinutes, requestLoops, reverseRoute, formatDistance, formatTime, nearestProgress, nextTurn, primeSpeech, speak, speechAvailable, stopSpeaking, turnAnnouncement, turnKind, type Diagnostics, type LoopOverrides, type Point, type Route } from './lib'
+import { compassAvailable, requestCompass, watchHeading, routeColours, estimateKmFromMinutes, requestLoops, reverseRoute, formatDistance, formatTime, nearestProgress, nextTurn, primeSpeech, speak, speechAvailable, stopSpeaking, turnAnnouncement, turnKind, type Diagnostics, type LoopOverrides, type Point, type Route } from './lib'
 import { DebugPanel } from './DebugPanel'
 // Generating a set of loops means routing dozens of candidates and measuring
 // every one, which takes a few seconds. Saying what is being done beats a
@@ -57,10 +57,9 @@ export function LooperApp(){const [screen,setScreen]=useState<Screen>('welcome')
   lastAsk.current={key,variation}
   const seq=++requestSeq.current
   setBusy(true);setStage(0);setError('');setReversed(false)
-  try{const {routes:found,warning,diagnostics:diag}=await requestLoops({start,mode,distanceKm:mode==='distance'?distanceKm:undefined,durationMinutes:mode==='time'?Number(amount):undefined,unit,variation,overrides:debugMode?overridesRef.current:undefined})
+  try{const {routes:choices,warning,diagnostics:diag}=await requestLoops({start,mode,distanceKm:mode==='distance'?distanceKm:undefined,durationMinutes:mode==='time'?Number(amount):undefined,unit,variation,overrides:debugMode?overridesRef.current:undefined})
    if(seq!==requestSeq.current)return // a later request already started; its result is the one that counts
    setDiagnostics(diag)
-   const choices=dedupeRoutes(found)
    if(!choices.length)throw new Error(warning||'We couldn’t find a clean loop of that length from here. Try a different distance or move the start point.')
    setRoutes(choices);setSelected(choices[0]);setScreen('choices')
    setError(warning||'')
