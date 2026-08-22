@@ -60,9 +60,12 @@ export const MAX_BOUNDING_BOX_RATIO = 4.5
  * The ring this generator builds from — a spoke out, two sides of a triangle,
  * a spoke back — scores about 0.37 when the streets cooperate perfectly, so
  * the bar has to sit below that. Measured against routes drawn out and looked
- * at: below 0.20 is a tangle, 0.26 and up is a walk.
+ * at: below 0.20 is a tangle, 0.26 and up is a walk. 0.21-0.25 was being
+ * spent rejecting real neighbourhood loops in tightly-streeted suburbs — a
+ * walk crossing eight named streets, not two roads threaded back and forth —
+ * so the bar sits at the tangle line itself rather than a margin above it.
  */
-export const MIN_COMPACTNESS = 0.25
+export const MIN_COMPACTNESS = 0.2
 /**
  * The stub at the door: how far the walk goes out before it commits to the
  * circuit, and comes back along afterwards. A few tens of metres is the shared
