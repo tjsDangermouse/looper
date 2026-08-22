@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { LoopOverrides, Diagnostics } from './lib'
 
 /**
@@ -56,31 +57,43 @@ const SLIDERS:Slider[] = [
     get:o=>o.candidateCount, set:(o,v)=>({ ...o, candidateCount:v }) },
 ]
 
+/**
+ * A slide-out drawer, not part of the route-picker sheet: the sheet's rows
+ * are sized to fit a fixed budget with nothing to scroll, and twelve sliders
+ * have no honest way to fit that budget alongside the map and the route
+ * cards. Living on its own, fixed to the side and independent of whatever
+ * screen is showing, it can open over the map without disturbing either.
+ */
 export function DebugPanel({ overrides, onChange, diagnostics, busy }:{
   overrides:LoopOverrides; onChange:(o:LoopOverrides)=>void; diagnostics?:Diagnostics; busy:boolean
 }) {
+  const [open,setOpen]=useState(false)
   const changed = SLIDERS.filter(s => { const v = s.get(overrides); return v !== undefined && v !== s.default })
-  return <section className="debug-panel">
-    <div className="debug-head">
-      <p className="eyebrow">tuning panel · debug</p>
-      {changed.length > 0 && <button className="text" onClick={() => onChange({})}>Reset {changed.length}</button>}
-    </div>
-    {diagnostics && <div className="debug-diagnostics">
-      <p><b>{diagnostics.passed}</b>/{diagnostics.candidates} candidates passed cleanly · <b>{diagnostics.offered}</b> offered
-        {diagnostics.retracing && <span className="debug-warn"> · falling back to retracing walks</span>}</p>
-      {Object.keys(diagnostics.rejections).length > 0 && <p className="debug-rejections">
-        {Object.entries(diagnostics.rejections).sort((a,b)=>b[1]-a[1]).map(([reason,count]) => `${reason} ×${count}`).join('  ·  ')}
-      </p>}
-    </div>}
-    <div className="debug-sliders">
-      {SLIDERS.map(s => {
-        const value = s.get(overrides) ?? s.default
-        return <label key={s.key} className="debug-slider" title={s.hint}>
-          <div className="debug-slider-head"><span>{s.label}</span><span>{value}</span></div>
-          <input type="range" min={s.min} max={s.max} step={s.step} value={value} disabled={busy}
-            onChange={e => onChange(s.set(overrides, Number(e.target.value)))} />
-        </label>
-      })}
-    </div>
-  </section>
+  return <>
+    <button className={'debug-tab'+(changed.length?' changed':'')} aria-expanded={open} aria-label={open?'Close tuning panel':'Open tuning panel'} onClick={()=>setOpen(o=>!o)}>{open?'✕':'⚙'}</button>
+    <div className={'debug-scrim'+(open?' open':'')} onClick={()=>setOpen(false)} aria-hidden="true"/>
+    <aside className={'debug-drawer'+(open?' open':'')} aria-hidden={!open}>
+      <div className="debug-head">
+        <p className="eyebrow">tuning panel · debug</p>
+        {changed.length > 0 && <button className="text" onClick={() => onChange({})}>Reset {changed.length}</button>}
+      </div>
+      {diagnostics && <div className="debug-diagnostics">
+        <p><b>{diagnostics.passed}</b>/{diagnostics.candidates} candidates passed cleanly · <b>{diagnostics.offered}</b> offered
+          {diagnostics.retracing && <span className="debug-warn"> · falling back to retracing walks</span>}</p>
+        {Object.keys(diagnostics.rejections).length > 0 && <p className="debug-rejections">
+          {Object.entries(diagnostics.rejections).sort((a,b)=>b[1]-a[1]).map(([reason,count]) => `${reason} ×${count}`).join('  ·  ')}
+        </p>}
+      </div>}
+      <div className="debug-sliders">
+        {SLIDERS.map(s => {
+          const value = s.get(overrides) ?? s.default
+          return <label key={s.key} className="debug-slider" title={s.hint}>
+            <div className="debug-slider-head"><span>{s.label}</span><span>{value}</span></div>
+            <input type="range" min={s.min} max={s.max} step={s.step} value={value} disabled={busy}
+              onChange={e => onChange(s.set(overrides, Number(e.target.value)))} />
+          </label>
+        })}
+      </div>
+    </aside>
+  </>
 }
