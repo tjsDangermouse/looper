@@ -64,20 +64,21 @@ const SLIDERS:Slider[] = [
  * cards. Living on its own, fixed to the side and independent of whatever
  * screen is showing, it can open over the map without disturbing either.
  */
-export function DebugPanel({ overrides, onChange, diagnostics }:{
-  overrides:LoopOverrides; onChange:(o:LoopOverrides)=>void; diagnostics?:Diagnostics
+export function DebugPanel({ overrides, onChange, diagnostics, busy }:{
+  overrides:LoopOverrides; onChange:(o:LoopOverrides)=>void; diagnostics?:Diagnostics; busy:boolean
 }) {
   const [open,setOpen]=useState(false)
   const changed = SLIDERS.filter(s => { const v = s.get(overrides); return v !== undefined && v !== s.default })
   return <>
-    <button className={'debug-tab'+(changed.length?' changed':'')} aria-expanded={open} aria-label={open?'Close tuning panel':'Open tuning panel'} onClick={()=>setOpen(o=>!o)}>{open?'✕':'⚙'}</button>
+    <button className={'debug-tab'+(changed.length?' changed':'')+(busy?' busy':'')} aria-expanded={open} aria-label={open?'Close tuning panel':'Open tuning panel'} onClick={()=>setOpen(o=>!o)}>{open?'✕':'⚙'}</button>
     <div className={'debug-scrim'+(open?' open':'')} onClick={()=>setOpen(false)} aria-hidden="true"/>
     <aside className={'debug-drawer'+(open?' open':'')} aria-hidden={!open}>
       <div className="debug-head">
         <p className="eyebrow">tuning panel · debug</p>
         {changed.length > 0 && <button className="text" onClick={() => onChange({})}>Reset {changed.length}</button>}
       </div>
-      {diagnostics && <div className="debug-diagnostics">
+      <p className="debug-status">{busy?'Searching…':'Idle'}</p>
+      {diagnostics && <div className={'debug-diagnostics'+(busy?' stale':'')}>
         <p><b>{diagnostics.passed}</b>/{diagnostics.candidates} candidates passed cleanly · <b>{diagnostics.offered}</b> offered
           {diagnostics.retracing && <span className="debug-warn"> · falling back to retracing walks</span>}</p>
         {Object.keys(diagnostics.rejections).length > 0 && <p className="debug-rejections">
