@@ -12,6 +12,13 @@ import { GraphHopperError, type GraphHopperLeg, type GraphHopperStep } from '../
  * ground the earlier legs already covered, weighted twenty times against.
  */
 
+/**
+ * No single leg of a four-leg ring should be half the whole walk. Past that,
+ * the avoidance penalty is no longer nudging the route round a corner — it is
+ * sending the walk somewhere else entirely.
+ */
+export const LEG_BUDGET_SHARE = 0.5
+
 export type LegRouter = (points: LngLat[], customModel: ReturnType<typeof avoidanceCustomModel>) => Promise<GraphHopperLeg>
 
 export type RoutedLeg = GraphHopperLeg & {
@@ -40,6 +47,11 @@ export type SequentialRoutingOptions = {
    * remaining legs. Distance overshoot is the cheapest signal we have.
    */
   abandonAboveMetres?: number
+  /**
+   * The length beyond which a single leg is no longer shaping a loop but being
+   * dictated to by the avoidance penalty. See the retry below.
+   */
+  legBudgetMetres?: number
   signal?: AbortSignal
 }
 
@@ -83,6 +95,24 @@ export async function routeCandidateSequentially(
       } catch (retryError) {
         if (!(retryError instanceof GraphHopperError) || retryError.kind === 'transport') throw retryError
         return undefined
+      }
+    }
+
+    // GraphHopper never *refuses* a penalised corridor — it walks round it. In a
+    // dense grid "round it" is the next street; on a single road up a valley it
+    // can be six kilometres to dodge nine hundred metres, and the loop comes
+    // back at twice the length asked for and is thrown away for it. So the one
+    // retry each leg gets is spent here too, not only on an outright failure.
+    if (!relaxed && areas.length && options.legBudgetMetres && leg.distanceMeters > options.legBudgetMetres) {
+      try {
+        const cheaper = await route(pair, avoidanceCustomModel(areas, options.relaxedPriority ?? RELAXED_AVOID_PRIORITY))
+        if (cheaper.distanceMeters < leg.distanceMeters) {
+          leg = cheaper
+          relaxed = true
+        }
+      } catch (error) {
+        if (!(error instanceof GraphHopperError) || error.kind === 'transport') throw error
+        // Keep the strongly penalised leg: it routed, it is just a long way round.
       }
     }
 

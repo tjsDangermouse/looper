@@ -3,7 +3,7 @@ import booleanPointInPolygon from '@turf/boolean-point-in-polygon'
 import { AVOID_PRIORITY, RELAXED_AVOID_PRIORITY } from '../src/loops/avoidance.js'
 import { generateCandidateShapes, shapeToLegPoints } from '../src/loops/candidates.js'
 import { buildRouteBody, GraphHopperError, parseLeg, maneuverName, isUTurnSign, type GraphHopperLeg } from '../src/graphhopper.js'
-import { joinLegGeometries, routeCandidateSequentially } from '../src/loops/routing.js'
+import { LEG_BUDGET_SHARE, joinLegGeometries, routeCandidateSequentially } from '../src/loops/routing.js'
 import type { LngLat } from '../src/loops/geo.js'
 import { FIXTURE_ORIGIN, at, polyline } from './fixtures/routes.js'
 
@@ -148,6 +148,44 @@ describe('sequential leg routing', () => {
     expect(calls[2].model.priority[0].multiply_by).toBe(String(RELAXED_AVOID_PRIORITY))
     expect(calls[2].points).toEqual(calls[1].points)
   })
+  it('spends the retry when the penalty buys an absurd detour, not only on a refusal', async () => {
+    // The real failure in open country: the engine never refuses a penalised
+    // corridor, it walks six kilometres round it. Nothing throws, so a retry
+    // that only fires on an exception never fires at all.
+    const calls: any[] = []
+    const route = async (points: LngLat[], model: any) => {
+      calls.push({ points, model })
+      const leg = await straightRouter().route(points, model)
+      const heavilyPenalised = model?.priority?.[0]?.multiply_by === String(AVOID_PRIORITY)
+      return heavilyPenalised ? { ...leg, distanceMeters: 9000 } : leg
+    }
+    const candidate = await routeCandidateSequentially(START, shape, route, { legBudgetMetres: 2500 })
+    expect(candidate).toBeDefined()
+    // Leg one is unpenalised; legs two to four each get a second, cheaper try.
+    expect(calls.filter(call => call.model?.priority?.[0]?.multiply_by === String(RELAXED_AVOID_PRIORITY))).toHaveLength(3)
+    expect(candidate!.legs.slice(1).every(leg => leg.relaxed)).toBe(true)
+    expect(candidate!.distanceMeters).toBeLessThan(9000 * 3)
+  })
+
+  it('keeps the strongly penalised leg when relaxing it does not actually help', async () => {
+    const route = async (points: LngLat[], model: any) => {
+      const leg = await straightRouter().route(points, model)
+      return model ? { ...leg, distanceMeters: 9000 } : leg
+    }
+    const candidate = await routeCandidateSequentially(START, shape, route, { legBudgetMetres: 2500 })
+    expect(candidate!.legs.slice(1).every(leg => leg.relaxed)).toBe(false)
+  })
+
+  it('leaves a leg inside its budget alone', async () => {
+    const { route, record } = straightRouter()
+    await routeCandidateSequentially(START, shape, route, { legBudgetMetres: 50_000 })
+    expect(record).toHaveLength(4)
+  })
+
+  it('holds one leg to half the walk before calling the penalty the problem', () => {
+    expect(LEG_BUDGET_SHARE).toBe(0.5)
+  })
+
   it('gives the candidate up rather than routing it without any penalty at all', async () => {
     const attempts: any[] = []
     const route = async (points: LngLat[], model: any) => {

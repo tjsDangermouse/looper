@@ -152,8 +152,12 @@ volume must be persistent, or every restart pays for a fresh import.
 4. **Diversity.** Survivors are ranked, then filtered so no two offered walks share more
    than a third of their ground, preferring different ways out of the door.
 
-If nothing passes, the response carries no routes and a plain sentence saying so. Looper
-does not pad the list with walks nobody wanted.
+If no clean loop passes, Looper falls back to walks of the right length that double back
+on themselves, and says so plainly — some places have one road up a valley and no circuit
+at any distance. Only if even the length is out of reach does it return nothing.
+
+The fallback never mixes with clean loops: a walk that retraces is offered only when there
+is no clean one at all, so the list is never a quiet blend of two different answers.
 
 ## Checks
 
@@ -170,9 +174,12 @@ cd services/route-service && npm run lint && npm run typecheck && npm test
 
 ## Known limits
 
-- **There is not always a loop.** Coastlines, rivers, railways, sparse rural paths and
-  cul-de-sac estates can leave no clean circuit at a chosen distance. Looper says so
-  rather than offering a walk out and back.
+- **There is not always a clean loop.** Coastlines, rivers, railways, sparse rural paths
+  and cul-de-sac estates can leave no circuit at a chosen distance. Looper then offers the
+  best walk of the right length that doubles back, labelled as such.
+- **Open country wants longer walks.** The distance at which a clean loop exists is set by
+  the terrain: around a single valley road it may be 12 km when 5 km was asked for. Nothing
+  is stretched to fit — the shorter request falls back or returns nothing.
 - **Distance is a target, not a promise.** Loops are offered within ±12% of the request.
   Where the streets cannot get closer than that, nothing is offered.
 - **Live guidance needs the app open.** Browser PWAs cannot guarantee guidance while

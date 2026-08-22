@@ -26,7 +26,19 @@ import { isUTurnSign } from '../graphhopper.js'
 export const MAX_DISTANCE_ERROR = 0.12
 export const MAX_DURATION_ERROR = 0.15
 export const MAX_REPEATED_FRACTION = 0.12
+/**
+ * A retraced spur matters in proportion to the walk it is part of.
+ *
+ * 150 m of doubling back on a 2 km town loop is a mistake and the walker will
+ * notice it. The same 150 m on a 13 km hill walk is the lane between the road
+ * and the start of the circuit — 1% of the day — and holding it against the
+ * route rejects almost every walk in open country, where the way in is very
+ * often the only way in. So the flat 150 m is a floor, not the whole rule.
+ */
 export const MAX_OUT_AND_BACK_SPUR_METRES = 150
+export const MAX_OUT_AND_BACK_SPUR_SHARE = 0.04
+export const spurLimitMetres = (routeMetres: number) =>
+  Math.max(MAX_OUT_AND_BACK_SPUR_METRES, routeMetres * MAX_OUT_AND_BACK_SPUR_SHARE)
 export const MAX_U_TURNS = 1
 export const MAX_LEG_SHARE = 0.45
 export const MIN_LEG_SHARE = 0.08
@@ -245,6 +257,19 @@ export type QualityInput = {
   maneuverSigns?: Array<number | undefined>
 }
 
+/**
+ * The rejections that mean "this is not the walk you asked for": the wrong
+ * length, the wrong duration, or not actually returning to the start. Every
+ * other rejection is about the *shape* of the walk — retracing, hairpins,
+ * lopsided legs, a long thin corridor.
+ *
+ * Where the ground offers no clean loop at all, Looper would rather offer a
+ * walk that doubles back than nothing, so the shape rules can be set aside as
+ * a last resort. These three never can: a 9 km trudge is not an answer to
+ * someone who asked for 5 km.
+ */
+export const ESSENTIAL_REJECTIONS = ['distance', 'duration', 'open-ended'] as const
+
 export type QualityReport = {
   pass: boolean
   /** Machine-readable reasons, for logs and tests. Never shown to a walker. */
@@ -259,6 +284,12 @@ export type QualityReport = {
   durationOnly: boolean
   /** True when the only thing wrong is the length, which a resized ring may fix. */
   distanceOnly: boolean
+  /**
+   * Right length, right place, but the shape is compromised — it retraces, or
+   * doubles back, or is a long thin corridor. Offered only where nothing clean
+   * exists, and never silently.
+   */
+  passesEssentials: boolean
 }
 
 export function analyseRouteQuality(input: QualityInput): QualityReport {
@@ -279,7 +310,7 @@ export function analyseRouteQuality(input: QualityInput): QualityReport {
   if (distanceErrorFraction > MAX_DISTANCE_ERROR) rejections.push('distance')
   if (durationErrorFraction !== undefined && durationErrorFraction > MAX_DURATION_ERROR) rejections.push('duration')
   if (repeats.repeatedPercent > MAX_REPEATED_FRACTION * 100) rejections.push('repeated-corridor')
-  if (repeats.longestReverseRunMetres > MAX_OUT_AND_BACK_SPUR_METRES) rejections.push('out-and-back-spur')
+  if (repeats.longestReverseRunMetres > spurLimitMetres(distanceMeters)) rejections.push('out-and-back-spur')
   if (uTurnCount > MAX_U_TURNS) rejections.push('u-turns')
   if (legShares.some(share => share > MAX_LEG_SHARE)) rejections.push('leg-too-long')
   if (legShares.some(share => share < MIN_LEG_SHARE)) rejections.push('leg-too-short')
@@ -303,6 +334,7 @@ export function analyseRouteQuality(input: QualityInput): QualityReport {
     longestReverseRunMetres: repeats.longestReverseRunMetres,
     durationOnly: rejections.length === 1 && rejections[0] === 'duration',
     distanceOnly: rejections.length === 1 && rejections[0] === 'distance',
+    passesEssentials: !rejections.some(reason => (ESSENTIAL_REJECTIONS as readonly string[]).includes(reason)),
   }
 }
 

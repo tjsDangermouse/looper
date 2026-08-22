@@ -38,7 +38,9 @@ export function LooperApp(){const [screen,setScreen]=useState<Screen>('welcome')
    const choices=dedupeRoutes(found)
    if(!choices.length)throw new Error(warning||'We couldn’t find a clean loop of that length from here. Try a different distance or move the start point.')
    setRoutes(choices);setSelected(choices[0]);setScreen('choices')
-   setError(choices.length<3?`We found ${choices.length} loop${choices.length===1?'':'s'} from here.`:'')
+   // A warning means the walks on offer are not clean loops, which the walker
+   // needs told before they pick one; the count is only worth saying otherwise.
+   setError(warning||(choices.length<3?`We found ${choices.length} loop${choices.length===1?'':'s'} from here.`:''))
   }catch(e){setError(e instanceof Error?e.message:'Routes are unavailable right now.')}finally{setBusy(false)}}
  function beginWalk(r:Route){if(!muted)primeSpeech();spoken.current='';walked.current=0;setProgress(0);setFollowing(true);setSelected(r);setScreen('walk');localStorage.setItem('looper-route',JSON.stringify(r))}
  // The compass is only read while it is being used, and iOS only grants it

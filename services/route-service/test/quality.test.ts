@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_BOUNDING_BOX_RATIO, MAX_DISTANCE_ERROR, MAX_OUT_AND_BACK_SPUR_METRES, MAX_REPEATED_FRACTION, MAX_U_TURNS, analyseRouteQuality, countUTurns, findRepeatedCorridors, sharedCorridorMetres } from '../src/loops/quality.js'
+import { ESSENTIAL_REJECTIONS, MAX_BOUNDING_BOX_RATIO, spurLimitMetres, MAX_DISTANCE_ERROR, MAX_OUT_AND_BACK_SPUR_METRES, MAX_REPEATED_FRACTION, MAX_U_TURNS, analyseRouteQuality, countUTurns, findRepeatedCorridors, sharedCorridorMetres } from '../src/loops/quality.js'
 import { pathLength, type LngLat } from '../src/loops/geo.js'
 import { FIXTURE_ORIGIN, cleanLoop, longOutAndBack, narrowElongated, polyline, repeatedBridge, sharedStartLoop, simpleCrossing, twinA, twinB } from './fixtures/routes.js'
 
@@ -68,6 +68,28 @@ describe('U-turns', () => {
   })
 })
 
+describe('how long a spur may be', () => {
+  it('holds a short town loop to the flat 150 m', () => {
+    expect(spurLimitMetres(2000)).toBe(150)
+    expect(spurLimitMetres(3750)).toBe(150)
+  })
+  it('lets a long walk have a proportionate one', () => {
+    // The lane in from the road, on a 13 km hill walk: 1% of the day.
+    expect(spurLimitMetres(13000)).toBe(520)
+  })
+  it('offers a long country loop whose only shared stretch is the way in', () => {
+    // A 10 km circuit reached down a 300 m lane and returned along it.
+    const lane: [number, number][] = [[0, -300], [0, 0]]
+    const circuit = polyline([...lane, [2400, 0], [2400, 2400], [0, 2400], [0, 0], ...[...lane].reverse()])
+    const report = judge(circuit)
+    expect(report.longestReverseRunMetres).toBeGreaterThan(150)
+    expect(report.rejections).not.toContain('out-and-back-spur')
+  })
+  it('still refuses a long walk that doubles back for kilometres', () => {
+    expect(judge(polyline([[0, 0], [6000, 0], [0, 0]])).rejections).toContain('out-and-back-spur')
+  })
+})
+
 describe('hard rejections', () => {
   it('offers a clean loop', () => {
     const report = judge(cleanLoop)
@@ -127,6 +149,32 @@ describe('hard rejections', () => {
   it('refuses a route that never comes back', () => {
     const open = polyline([[0, 0], [900, 0], [900, 900]])
     expect(judge(open).rejections).toContain('open-ended')
+  })
+})
+
+describe('what can be set aside when nothing clean exists', () => {
+  it('treats the wrong length, the wrong time and an open end as never negotiable', () => {
+    expect([...ESSENTIAL_REJECTIONS]).toEqual(['distance', 'duration', 'open-ended'])
+  })
+  it('would offer a there-and-back of the right length as a last resort', () => {
+    const report = judge(longOutAndBack)
+    expect(report.pass).toBe(false)
+    expect(report.passesEssentials).toBe(true)
+  })
+  it('would offer a route that repeats a bridge section', () => {
+    expect(judge(repeatedBridge).passesEssentials).toBe(true)
+  })
+  it('would offer a long thin valley walk', () => {
+    expect(judge(narrowElongated).passesEssentials).toBe(true)
+  })
+  it('would never offer one of the wrong length, however clean its shape', () => {
+    expect(judge(cleanLoop, { targetMetres: pathLength(cleanLoop) / 1.4 }).passesEssentials).toBe(false)
+  })
+  it('would never offer one that fails to come back', () => {
+    expect(judge(polyline([[0, 0], [900, 0], [900, 900]])).passesEssentials).toBe(false)
+  })
+  it('would never offer one that takes the wrong amount of time', () => {
+    expect(judge(cleanLoop, { targetSeconds: 600 }).passesEssentials).toBe(false)
   })
 })
 

@@ -4,7 +4,7 @@ import { DEFAULT_CANDIDATE_COUNT, generateCandidateShapes } from './candidates.j
 import { initialBearing, labelRoutes, selectDiverseRoutes } from './diversity.js'
 import type { LngLat } from './geo.js'
 import { analyseRouteQuality, type QualityReport } from './quality.js'
-import { routeCandidateSequentially, type LegRouter, type RoutedCandidate } from './routing.js'
+import { LEG_BUDGET_SHARE, routeCandidateSequentially, type LegRouter, type RoutedCandidate } from './routing.js'
 import { seedFor } from './random.js'
 import { targetMetresFor, targetSecondsFor, type LoopMode } from './units.js'
 
@@ -18,6 +18,16 @@ import { targetMetresFor, targetSecondsFor, type LoopMode } from './units.js'
 
 export const NO_CLEAN_LOOP_WARNING =
   'We couldn’t find a clean loop of that length from here. Try a different distance or move the start point.'
+
+/**
+ * Shown when the only walks of the right length double back on themselves.
+ * Some places have no circuit at all at a given distance — one road up a
+ * valley, a headland, a village of cul-de-sacs — and a walk that returns the
+ * way it came is a better answer than no walk, as long as nobody is misled
+ * about what they are getting.
+ */
+export const RETRACES_WARNING =
+  'There’s no clean loop of that length from here, so these walks retrace part of the way back.'
 
 export type LoopRequest = {
   start: { lng: number; lat: number }
@@ -75,6 +85,8 @@ export type Diagnostics = {
   rejections: Record<string, number>
   /** Which of the two allowed single retries was used, if any. */
   retry: Retry
+  /** True when nothing clean existed and the walks offered double back. */
+  retracing: boolean
   targetMetres: number
 }
 
@@ -98,6 +110,7 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
   const first = await attempt(firstTarget, 1)
 
   let passing = first.passing
+  let extra: Analysed[] = []
   let retry: Retry = 'none'
   let targetMetres = firstTarget
 
@@ -113,6 +126,7 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
       targetMetres = firstTarget * clampScale(targetSeconds / observed)
       const second = await attempt(targetMetres, 1)
       retry = 'duration'
+      extra = second.analysed
       passing = merge(passing, second.passing)
     } else if (first.analysed.length) {
       // The ring was the wrong size for these streets. How much a network
@@ -126,12 +140,20 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
       if (Math.abs(scale - 1) > 0.05) {
         const second = await attempt(firstTarget, scale)
         retry = 'radius'
+        extra = second.analysed
         passing = merge(passing, second.passing)
       }
     }
   }
 
-  const chosen = selectDiverseRoutes(passing.map(toSelectable), 3)
+  // Clean loops first. Only if there are none at all does Looper fall back to
+  // walks of the right length that double back — never as a top-up alongside a
+  // clean loop, which would quietly mix two different kinds of answer.
+  const analysed = merge(first.analysed, extra)
+  const retracing = passing.length === 0
+  const offerable = retracing ? analysed.filter(entry => entry.report.passesEssentials) : passing
+
+  const chosen = selectDiverseRoutes(offerable.map(toSelectable), 3)
   const labels = labelRoutes(chosen.map(entry => ({ bearing: entry.bearing, distanceMeters: entry.source.candidate.distanceMeters })))
 
   options.onDiagnostics?.({
@@ -142,11 +164,13 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
     rejections,
     retry,
     targetMetres,
+    retracing: retracing && chosen.length > 0,
   })
 
   if (!chosen.length) return { routes: [], warning: NO_CLEAN_LOOP_WARNING }
 
   return {
+    warning: retracing ? RETRACES_WARNING : undefined,
     routes: chosen.map((entry, position) => {
       const { candidate, quality } = entry.source
       return {
@@ -175,9 +199,10 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
     const shapes = generateCandidateShapes(start, target, seed, options.candidateCount ?? DEFAULT_CANDIDATE_COUNT, radiusScale)
     const routed = await mapWithConcurrency(shapes, options.concurrency ?? 6, async shape => {
       const candidate = await routeCandidateSequentially(start, shape, options.route, {
-        // Generous: a candidate that overshoots is still evidence about how
-        // much this network stretches a ring, and that evidence steers the retry.
+        // Generous: a candidate that overshoots is still evidence about how much
+        // this network stretches a ring, and that evidence steers the retry.
         abandonAboveMetres: target * 2.2,
+        legBudgetMetres: target * LEG_BUDGET_SHARE,
         signal: options.signal,
       })
       if (!candidate) return undefined

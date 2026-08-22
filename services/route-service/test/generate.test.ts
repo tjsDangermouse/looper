@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { GraphHopperError, type GraphHopperLeg } from '../src/graphhopper.js'
-import { NO_CLEAN_LOOP_WARNING, generateLoops, mapWithConcurrency, type LoopRequest } from '../src/loops/generate.js'
+import { NO_CLEAN_LOOP_WARNING, RETRACES_WARNING, generateLoops, mapWithConcurrency, type LoopRequest } from '../src/loops/generate.js'
 import { haversine, type LngLat } from '../src/loops/geo.js'
 
 const START = { lng: -4.4816, lat: 54.1506 }
@@ -138,6 +138,66 @@ describe('generating loops', () => {
   it('lets the engine being down surface as a failure rather than an empty list', async () => {
     const down = async () => { throw new GraphHopperError('down', undefined, 'transport') }
     await expect(generateLoops(request(), { route: down })).rejects.toThrow(GraphHopperError)
+  })
+})
+
+describe('falling back where no clean loop exists', () => {
+  /**
+   * A single road up a valley: the engine will route along it and nowhere else,
+   * so every candidate is a walk out and back. The right length is still
+   * reachable — half out, half back.
+   */
+  function valleyEngine(targetMetres: number) {
+    return async (): Promise<GraphHopperLeg> => {
+      const out = targetMetres / 8
+      const along = (metres: number): LngLat => [START.lng, START.lat + metres / 111195]
+      // Every leg is dragged onto the one road, so legs run up and back down it.
+      const from = along(0)
+      const to = along(out)
+      const coordinates: LngLat[] = []
+      const steps = 40
+      for (let i = 0; i <= steps; i++) coordinates.push([from[0], from[1] + (to[1] - from[1]) * (i / steps)])
+      for (let i = 1; i <= steps; i++) coordinates.push([to[0], to[1] + (from[1] - to[1]) * (i / steps)])
+      const distanceMeters = out * 2
+      return {
+        coordinates,
+        distanceMeters,
+        durationSeconds: distanceMeters / (5000 / 3600),
+        steps: [
+          { instruction: 'Continue', distanceMeters, durationSeconds: distanceMeters / 1.39, sign: 0, maneuver: 'continue', startIndex: 0, endIndex: coordinates.length - 1 },
+          { instruction: 'Arrive at destination', distanceMeters: 0, durationSeconds: 0, sign: 4, maneuver: 'finish', startIndex: coordinates.length - 1, endIndex: coordinates.length - 1 },
+        ],
+      }
+    }
+  }
+
+  it('offers a walk that doubles back rather than nothing at all', async () => {
+    const result = await generateLoops(request(), { route: valleyEngine(5000) })
+    expect(result.routes.length).toBeGreaterThan(0)
+    expect(result.warning).toBe(RETRACES_WARNING)
+  })
+
+  it('says plainly that these walks retrace, without blaming the map', async () => {
+    const result = await generateLoops(request(), { route: valleyEngine(5000) })
+    expect(result.warning).toMatch(/retrace/i)
+    expect(result.warning).not.toMatch(/graphhopper|osm|engine|candidate|score/i)
+  })
+
+  it('still holds the walk to the length that was asked for', async () => {
+    const result = await generateLoops(request({ distanceKm: 5 }), { route: valleyEngine(5000) })
+    for (const route of result.routes) expect(Math.abs(route.targetDifferencePercent)).toBeLessThanOrEqual(12)
+  })
+
+  it('never mixes a doubling-back walk in with a clean loop', async () => {
+    const result = await generateLoops(request(), { route: fakeEngine() })
+    expect(result.warning).toBeUndefined()
+    for (const route of result.routes) expect(route.quality.repeatedPercent).toBeLessThanOrEqual(12)
+  })
+
+  it('still offers nothing when even the length is out of reach', async () => {
+    const result = await generateLoops(request(), { route: valleyEngine(20000) })
+    expect(result.routes).toHaveLength(0)
+    expect(result.warning).toBe(NO_CLEAN_LOOP_WARNING)
   })
 })
 
