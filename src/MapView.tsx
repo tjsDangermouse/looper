@@ -50,6 +50,15 @@ export function MapView({ start, routes, selected, position, follow, heading, co
 
   const pad = (): maplibregl.PaddingOptions => ({ top: 0, left: 0, bottom: paddingRef.current?.bottom ?? 0, right: paddingRef.current?.right ?? 0 })
 
+  // When a fresh batch of routes comes in, pull back (or push in) so every
+  // loop is on screen at once, rather than leaving the camera wherever it was.
+  const fitToRoutes = (list: Route[]) => {
+    const map = mapRef.current
+    if (!map || followRef.current || !list.length) return
+    const bounds = list.reduce((bounds, route) => route.geometry.coordinates.reduce((b, point) => b.extend(point), bounds), new maplibregl.LngLatBounds())
+    map.fitBounds(bounds, { padding: { top: 60, left: 60, bottom: 60 + (paddingRef.current?.bottom ?? 0), right: 60 + (paddingRef.current?.right ?? 0) }, duration: 500, maxZoom: WALK_ZOOM })
+  }
+
   const redraw = () => {
     const map = mapRef.current
     if (!map) return
@@ -112,7 +121,8 @@ export function MapView({ start, routes, selected, position, follow, heading, co
     map.easeTo({ bearing: heading, padding: pad(), duration: 300 })
   }, [courseUp, heading])
 
-  useEffect(() => { routesRef.current = routes; selectedRef.current = selected; redraw() }, [routes, selected])
+  useEffect(() => { routesRef.current = routes; redraw(); fitToRoutes(routes) }, [routes])
+  useEffect(() => { selectedRef.current = selected; redraw() }, [selected])
   useEffect(() => { startRef.current = start; marker.current?.setLngLat(start); if (!followRef.current) mapRef.current?.flyTo({ center: start, padding: pad(), duration: 450 }) }, [start])
   // Re-centre whenever the sheet's height changes so the marker stays in the
   // middle of the map area left uncovered by it.
