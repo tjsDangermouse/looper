@@ -82,6 +82,27 @@ export function turnKind(step:{instruction?:string; maneuver?:string|number}|und
 }
 export const mirrorTurn = (turn:Turn):Turn => turn.replace(/left|right/,side=>side==='left'?'right':'left') as Turn
 
+// Routers occasionally clip a metre into a side road and straight back out. A
+// walker cannot act on that: it calls a turn onto the road already underfoot
+// and hides the turn that genuinely comes next. Steps too short to walk are
+// folded into the one before, as is any step that rejoins the road already
+// being walked — you cannot turn onto the road you are on. The ground covered
+// is kept, so the distances still add up to the length of the loop.
+const MICRO_STEP_METRES = 10
+export function tidySteps(steps:Step[]):Step[] {
+  const out:Step[] = []
+  for(const step of steps){
+    const last=out[out.length-1]
+    const rejoins = !!last?.road && last.road===step.road
+    if(last && turnKind(step)!=='arrive' && (step.distanceMeters<MICRO_STEP_METRES || rejoins)){
+      last.distanceMeters+=step.distanceMeters; last.durationSeconds+=step.durationSeconds; last.endIndex=step.endIndex
+      continue
+    }
+    out.push({...step})
+  }
+  return out
+}
+
 // Walking the loop the other way round. The same roads come in the opposite
 // order, so each reversed step walks the road its forward counterpart walked
 // and is introduced by the *next* forward turn, mirrored: a right off Main
@@ -99,23 +120,32 @@ export function reverseRoute(route:Route):Route {
     return { ...road, maneuver: mirrorTurn(turnKind(joins)), instruction: onto(mirror(joins.instruction), road.road) }
   })
   steps.push({ instruction:'Arrive at your starting point', maneuver:'arrive', distanceMeters:0, durationSeconds:0 })
-  return { ...route, reversed:!route.reversed, steps, geometry:{...route.geometry, coordinates:[...route.geometry.coordinates].reverse()} }
+  return { ...route, reversed:!route.reversed, steps:tidySteps(steps), geometry:{...route.geometry, coordinates:[...route.geometry.coordinates].reverse()} }
 }
 export function dedupeRoutes(routes:Route[]) { return routes.filter((route,i)=>!routes.slice(0,i).some(other=>{const a=route.geometry.coordinates,b=other.geometry.coordinates; const samples=8; let matches=0; for(let s=0;s<samples;s++){const p=a[Math.floor(s*(a.length-1)/(samples-1))],q=b[Math.floor(s*(b.length-1)/(samples-1))]; if(p&&q&&haversine(p,q)<160) matches++} return matches/samples>.7 })) }
 
-// Voice guidance. A turn is announced at most once per band, so walking through
-// 400 m → 100 m → the corner itself gives three prompts and no repetition.
+// Voice guidance. A turn is announced at most once per band, so walking in
+// from far out gives a prompt at distance, one near the corner, and the bare
+// instruction at it — no repetition.
 export type Band='soon'|'near'|'now'
 export const turnBand = (metresAway:number):Band|undefined => metresAway<30?'now':metresAway<120?'near':metresAway<450?'soon':undefined
-const lead = (band:Band, unit:'km'|'mi') => band==='near'?(unit==='mi'?'In one hundred yards, ':'In one hundred metres, '):(unit==='mi'?'In a quarter of a mile, ':'In four hundred metres, ')
+// Say the distance that is actually left. The bands decide *when* to speak;
+// they used to decide what was spoken too, so a turn first picked up part way
+// into a band — right after the turn before it — was called out at the band's
+// nominal distance: "in one hundred metres" with the corner 45 m away.
+const round = (value:number, step:number) => Math.round(value/step)*step
+const spokenDistance = (metres:number, unit:'km'|'mi') => unit==='mi'
+  ? `${round(metres*1.09361, metres*1.09361<100?10:50)} yards`
+  : `${round(metres, metres<100?10:50)} metres`
 // Instructions arrive sentence-cased ("Turn left onto…"); lower the first word
 // when it follows a lead-in so the sentence reads as one phrase.
 const joinCase = (instruction:string) => instruction.replace(/^[A-Z](?![A-Z])/, c=>c.toLowerCase())
 export function turnAnnouncement(turn:{index:number; instruction:string; distanceAway:number}|undefined, unit:'km'|'mi') {
   if(!turn) return undefined
   const band=turnBand(turn.distanceAway); if(!band) return undefined
-  return { key:`${turn.index}:${band}`, text:band==='now'?turn.instruction:lead(band,unit)+joinCase(turn.instruction) }
+  return { key:`${turn.index}:${band}`, text:band==='now'?turn.instruction:`In ${spokenDistance(turn.distanceAway,unit)}, ${joinCase(turn.instruction)}` }
 }
+
 
 // ---- Compass -----------------------------------------------------------
 // Which way the walker is facing, so the map can turn with them. iOS hands us
