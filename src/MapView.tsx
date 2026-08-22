@@ -3,7 +3,7 @@ import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { headingGap, routeColours, type Point, type Route } from './lib'
 
-type Props = { start: Point; routes: Route[]; selected?: string; position?: Point; follow?: boolean; heading?: number; courseUp?: boolean; onFollowChange?: (following: boolean) => void; onPoint: (point: Point) => void; padding?: { bottom: number; right: number } }
+type Props = { start: Point; routes: Route[]; selected?: string; position?: Point; follow?: boolean; walking?: boolean; heading?: number; courseUp?: boolean; onFollowChange?: (following: boolean) => void; onPoint: (point: Point) => void; padding?: { bottom: number; right: number } }
 type Arrow = { x: number; y: number; angle: number }
 type Path = { id: string; points: string; colour: string; selected: boolean; arrows: Arrow[] }
 // Chevrons dropped at an even spacing along the drawn line, pointing the way
@@ -31,7 +31,7 @@ function arrowsAlong(pixels: { x: number; y: number }[]) {
 
 const style: maplibregl.StyleSpecification = { version: 8, sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors' } }, layers: [{ id: 'osm', type: 'raster', source: 'osm' }] }
 
-export function MapView({ start, routes, selected, position, follow, heading, courseUp, onFollowChange, onPoint, padding }: Props) {
+export function MapView({ start, routes, selected, position, follow, walking, heading, courseUp, onFollowChange, onPoint, padding }: Props) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | undefined>(undefined)
   const marker = useRef<maplibregl.Marker | undefined>(undefined)
@@ -57,6 +57,19 @@ export function MapView({ start, routes, selected, position, follow, heading, co
     if (!map || followRef.current || !list.length) return
     const bounds = list.reduce((bounds, route) => route.geometry.coordinates.reduce((b, point) => b.extend(point), bounds), new maplibregl.LngLatBounds())
     map.fitBounds(bounds, { padding: { top: 60, left: 60, bottom: 60 + (paddingRef.current?.bottom ?? 0), right: 60 + (paddingRef.current?.right ?? 0) }, duration: 500, maxZoom: WALK_ZOOM })
+  }
+
+  // The sheet that owns the current screen tends to mount (and set its
+  // padding) right after a fit is requested, and its own re-centre would
+  // otherwise cancel the fit's zoom mid-flight. Remembering the pending fit
+  // lets the padding effect redo it with the settled padding instead.
+  const pendingFit = useRef<Route[] | null>(null)
+  const pendingFitTimer = useRef<number | undefined>(undefined)
+  const triggerFit = (list: Route[]) => {
+    pendingFit.current = list
+    fitToRoutes(list)
+    window.clearTimeout(pendingFitTimer.current)
+    pendingFitTimer.current = window.setTimeout(() => { pendingFit.current = null }, 600)
   }
 
   const redraw = () => {
@@ -110,6 +123,17 @@ export function MapView({ start, routes, selected, position, follow, heading, co
     map.easeTo({ center: positionRef.current || startRef.current, zoom: Math.max(map.getZoom(), WALK_ZOOM), padding: pad(), duration: 800 })
   }, [follow])
 
+  // Leaving the walk screen: pull back out to the whole loop, since the
+  // walker was left zoomed in on wherever they'd got to.
+  const walkingRef = useRef(walking)
+  useEffect(() => {
+    if (walkingRef.current && !walking) {
+      const route = routesRef.current.find(r => r.id === selectedRef.current)
+      if (route) triggerFit([route])
+    }
+    walkingRef.current = walking
+  }, [walking])
+
   // Course-up: the map turns so the way the walker faces is up the screen.
   // Rotation is a camera move like any other, so the drawn line and its arrows
   // re-project with it; north-up winds the bearing back to zero.
@@ -121,7 +145,9 @@ export function MapView({ start, routes, selected, position, follow, heading, co
     map.easeTo({ bearing: heading, padding: pad(), duration: 300 })
   }, [courseUp, heading])
 
-  useEffect(() => { routesRef.current = routes; redraw(); fitToRoutes(routes) }, [routes])
+  const routeIds = routes.map(r => r.id).join(',')
+  useEffect(() => { routesRef.current = routes; redraw() }, [routes])
+  useEffect(() => { triggerFit(routesRef.current) }, [routeIds])
   useEffect(() => { selectedRef.current = selected; redraw() }, [selected])
   useEffect(() => { startRef.current = start; marker.current?.setLngLat(start); if (!followRef.current) mapRef.current?.flyTo({ center: start, padding: pad(), duration: 450 }) }, [start])
   // Re-centre whenever the sheet's height changes so the marker stays in the
@@ -131,6 +157,7 @@ export function MapView({ start, routes, selected, position, follow, heading, co
     if (!padding) return
     const map = mapRef.current
     if (!map) return
+    if (pendingFit.current) { fitToRoutes(pendingFit.current); return }
     const following = followRef.current
     map.easeTo({ center: following ? positionRef.current || startRef.current : startRef.current, zoom: following ? Math.max(map.getZoom(), WALK_ZOOM) : map.getZoom(), padding: pad(), duration: 300 })
   }, [padding?.bottom, padding?.right])
