@@ -8,7 +8,7 @@ import { DebugPanel } from './DebugPanel'
 // spinner that could mean anything.
 const FINDING=['Building clean loops around you…','Checking for overlaps and detours…']
 type Screen='welcome'|'planner'|'choices'|'walk'
-const DEFAULT:Point=[-4.4816,54.1506] // Douglas, Isle of Man
+const DEFAULT:Point=[-4.517837412123816,54.15767997688426] // Home
 export function LooperApp(){const [screen,setScreen]=useState<Screen>('welcome'),[start,setStart]=useState<Point>(DEFAULT),[position,setPosition]=useState<Point>(),[locationState,setLocationState]=useState(''),[mode,setMode]=useState<'distance'|'time'>('distance'),[unit,setUnit]=useState<'km'|'mi'>('km'),[amount,setAmount]=useState('4'),[routes,setRoutes]=useState<Route[]>([]),[selected,setSelected]=useState<Route>(),[busy,setBusy]=useState(false),[error,setError]=useState(''),[muted,setMuted]=useState(false),[offRoute,setOffRoute]=useState(false),[progress,setProgress]=useState(0),[following,setFollowing]=useState(false),[courseUp,setCourseUp]=useState(false),[heading,setHeading]=useState<number>(),[reversed,setReversed]=useState(false),[sheetOpen,setSheetOpen]=useState(true),[padding,setPadding]=useState({bottom:0,right:0}),[stage,setStage]=useState(0)
  // The tuning panel: reachable only with ?debug=1, so its knobs never turn up
  // for a walker who did not go looking for them.
