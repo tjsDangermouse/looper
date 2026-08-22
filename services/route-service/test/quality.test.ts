@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ESSENTIAL_REJECTIONS, MAX_BOUNDING_BOX_RATIO, spurLimitMetres, MAX_DISTANCE_ERROR, MAX_OUT_AND_BACK_SPUR_METRES, MAX_REPEATED_FRACTION, MAX_U_TURNS, analyseRouteQuality, countUTurns, findRepeatedCorridors, sharedCorridorMetres } from '../src/loops/quality.js'
+import { ESSENTIAL_REJECTIONS, MAX_BOUNDING_BOX_RATIO, MAX_START_STUB_METRES, MIN_COMPACTNESS, spurLimitMetres, startStubMetres, MAX_DISTANCE_ERROR, MAX_OUT_AND_BACK_SPUR_METRES, MAX_REPEATED_FRACTION, MAX_U_TURNS, analyseRouteQuality, countUTurns, findRepeatedCorridors, sharedCorridorMetres } from '../src/loops/quality.js'
 import { pathLength, type LngLat } from '../src/loops/geo.js'
 import { FIXTURE_ORIGIN, cleanLoop, longOutAndBack, narrowElongated, polyline, repeatedBridge, sharedStartLoop, simpleCrossing, twinA, twinB } from './fixtures/routes.js'
 
@@ -136,10 +136,17 @@ describe('hard rejections', () => {
     const report = judge(cleanLoop, { legDistances: [total * .6, total * .2, total * .1, total * .1] })
     expect(report.rejections).toContain('leg-too-long')
   })
-  it('refuses a route with a token leg', () => {
+  it('refuses a route with a token leg round the outer ring', () => {
     const total = pathLength(cleanLoop)
-    const report = judge(cleanLoop, { legDistances: [total * .4, total * .37, total * .2, total * .03] })
+    const report = judge(cleanLoop, { legDistances: [total * .4, total * .03, total * .37, total * .2] })
     expect(report.rejections).toContain('leg-too-short')
+  })
+  it('allows a short spoke out to the ring, which is where the door happens to be', () => {
+    // The first waypoint snapped to a street just round the corner. That is not
+    // a fault in the walk, and rejecting it threw out good loops.
+    const total = pathLength(cleanLoop)
+    const report = judge(cleanLoop, { legDistances: [total * .03, total * .4, total * .37, total * .2] })
+    expect(report.rejections).not.toContain('leg-too-short')
   })
   it('refuses a long thin route', () => {
     const report = judge(narrowElongated)
@@ -175,6 +182,63 @@ describe('what can be set aside when nothing clean exists', () => {
   })
   it('would never offer one that takes the wrong amount of time', () => {
     expect(judge(cleanLoop, { targetSeconds: 600 }).passesEssentials).toBe(false)
+  })
+})
+
+describe('the stub at the door', () => {
+  it('finds none on a loop that starts on the circuit', () => {
+    expect(startStubMetres(cleanLoop)).toBeLessThan(20)
+  })
+  it('measures the shared lane a loop is reached down', () => {
+    // 60 m out to the circle and 60 m back at the end.
+    expect(startStubMetres(sharedStartLoop)).toBeGreaterThan(40)
+    expect(startStubMetres(sharedStartLoop)).toBeLessThan(80)
+  })
+  it('judges the doorstep stub in proportion, like any other spur', () => {
+    // 187 m at the door of a 5 km walk is the lane in; the same at the door of
+    // a 3 km walk is a there-and-back with a loop stuck on the end.
+    expect(spurLimitMetres(5000)).toBeGreaterThan(187)
+    expect(spurLimitMetres(3000)).toBeLessThan(187)
+  })
+  it('forgives a doorstep but not a spur', () => {
+    expect(judge(sharedStartLoop).rejections).not.toContain('start-spur')
+    const spike = polyline([
+      [0, 0], [0, 300],
+      ...[[0, 300], [500, 300], [500, 800], [0, 800], [0, 300]] as [number, number][],
+      [0, 0],
+    ])
+    expect(startStubMetres(spike)).toBeGreaterThan(MAX_START_STUB_METRES)
+    expect(judge(spike).rejections).toContain('start-spur')
+  })
+  it('lets a walk that doubles back at the door be offered only as a last resort', () => {
+    const spike = polyline([[0, 0], [0, 300], [500, 300], [500, 800], [0, 800], [0, 300], [0, 0]])
+    expect(judge(spike).passesEssentials).toBe(true)
+  })
+})
+
+describe('walks that enclose nothing', () => {
+  it('sets the bar below what the generator’s own ring can reach', () => {
+    expect(MIN_COMPACTNESS).toBeLessThan(0.37)
+    expect(MIN_COMPACTNESS).toBeGreaterThan(0.15)
+  })
+  it('offers a proper circuit', () => {
+    expect(judge(cleanLoop).rejections).not.toContain('shapeless')
+  })
+  it('refuses a figure of eight, which encloses nothing on balance', () => {
+    expect(judge(simpleCrossing).rejections).toContain('shapeless')
+  })
+  it('refuses a walk threaded back through the same blocks', () => {
+    // Out along one street and back along the next one over: never repeats a
+    // step, never turns round, and is not a loop.
+    const zigzag = polyline([
+      [0, 0], [1200, 0], [1200, 60], [40, 60], [40, 120], [1200, 120], [1200, 180], [0, 180], [0, 0],
+    ])
+    const report = judge(zigzag)
+    expect(report.quality.repeatedPercent).toBeLessThan(12)
+    expect(report.rejections).toContain('shapeless')
+  })
+  it('still lets it through as a last resort', () => {
+    expect(judge(simpleCrossing).passesEssentials).toBe(true)
   })
 })
 

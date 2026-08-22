@@ -41,8 +41,35 @@ export const spurLimitMetres = (routeMetres: number) =>
   Math.max(MAX_OUT_AND_BACK_SPUR_METRES, routeMetres * MAX_OUT_AND_BACK_SPUR_SHARE)
 export const MAX_U_TURNS = 1
 export const MAX_LEG_SHARE = 0.45
+/**
+ * Applies to the outer-ring legs only — A→B and B→C — not to the spokes out to
+ * the ring and back. Where the first waypoint snaps to a street near the door,
+ * the spoke is legitimately short, and holding that against the walk threw out
+ * some of the best loops the generator made. A ring that has collapsed to a
+ * point fails on shape instead, which is what actually makes it a bad walk.
+ */
 export const MIN_LEG_SHARE = 0.08
 export const MAX_BOUNDING_BOX_RATIO = 4.5
+/**
+ * How much ground the walk actually encloses, against a circle of the same
+ * length. A walk can hit the distance exactly, never repeat a street and still
+ * be a scribble: out along one road, back along the next one over, threaded
+ * through the same few blocks. It reads as a loop to every other measure here
+ * and as a mess to anyone looking at the map.
+ *
+ * The ring this generator builds from — a spoke out, two sides of a triangle,
+ * a spoke back — scores about 0.37 when the streets cooperate perfectly, so
+ * the bar has to sit below that. Measured against routes drawn out and looked
+ * at: below 0.20 is a tangle, 0.26 and up is a walk.
+ */
+export const MIN_COMPACTNESS = 0.25
+/**
+ * The stub at the door: how far the walk goes out before it commits to the
+ * circuit, and comes back along afterwards. A few tens of metres is the shared
+ * pavement every loop has. Two hundred is a there-and-back with a loop on the
+ * end, and it is the single thing that most makes a drawn route look wrong.
+ */
+export const MAX_START_STUB_METRES = 150
 export const ENDPOINT_TOLERANCE_METRES = 40
 
 // --- Repeat detection tuning ------------------------------------------------
@@ -181,6 +208,40 @@ export function findRepeatedCorridors(coordinates: LngLat[], options: { ignoreSt
 }
 
 /**
+ * The length of the shared out-and-back stub at the start.
+ *
+ * Walk outwards from the beginning and inwards from the end at the same pace;
+ * while the two are on the same ground, the walk has not started its loop yet.
+ * Deliberately not subject to the 75 m that retrace detection forgives — that
+ * allowance exists so a shared doorstep is not called retracing, not so a
+ * quarter-kilometre spur can hide behind it.
+ */
+export function startStubMetres(coordinates: LngLat[], toleranceMetres = 25): number {
+  const { samples, totalMetres } = resample(coordinates, SAMPLE_METRES)
+  if (samples.length < 4 || totalMetres <= 0) return 0
+  // Where the walk is when it has `target` metres behind it.
+  const at = (target: number): Sample => {
+    let low = 0
+    let high = samples.length - 1
+    while (low < high) {
+      const mid = (low + high) >> 1
+      if (samples[mid].along < target) low = mid + 1
+      else high = mid
+    }
+    const previous = samples[low - 1]
+    return previous && Math.abs(previous.along - target) < Math.abs(samples[low].along - target) ? previous : samples[low]
+  }
+
+  let stub = 0
+  for (const sample of samples) {
+    if (sample.along * 2 >= totalMetres) break
+    if (distanceBetween(sample.mid, at(totalMetres - sample.along).mid) > toleranceMetres) break
+    stub = sample.along
+  }
+  return stub
+}
+
+/**
  * Turn-arounds, from the line itself.
  *
  * An angle alone is not enough: a switchback lane or a tight corner round a
@@ -279,6 +340,8 @@ export type QualityReport = {
   durationErrorFraction?: number
   boundingBoxRatio: number
   legShares: number[]
+  /** Out-and-back length at the door before the loop proper begins. */
+  startStubMetres: number
   longestReverseRunMetres: number
   /** True when the only thing wrong is the time, which one retry may fix. */
   durationOnly: boolean
@@ -301,6 +364,7 @@ export function analyseRouteQuality(input: QualityInput): QualityReport {
   const shape = isoperimetricCompactness(coordinates)
   const { longMetres, shortMetres } = boundingBoxSides(coordinates)
   const boundingBoxRatio = shortMetres > 0 ? longMetres / shortMetres : Infinity
+  const stubMetres = startStubMetres(coordinates)
   const total = legDistances.reduce((sum, leg) => sum + leg, 0) || distanceMeters
   const legShares = legDistances.map(leg => (total > 0 ? leg / total : 0))
 
@@ -313,8 +377,12 @@ export function analyseRouteQuality(input: QualityInput): QualityReport {
   if (repeats.longestReverseRunMetres > spurLimitMetres(distanceMeters)) rejections.push('out-and-back-spur')
   if (uTurnCount > MAX_U_TURNS) rejections.push('u-turns')
   if (legShares.some(share => share > MAX_LEG_SHARE)) rejections.push('leg-too-long')
-  if (legShares.some(share => share < MIN_LEG_SHARE)) rejections.push('leg-too-short')
+  if (legShares.slice(1, -1).some(share => share < MIN_LEG_SHARE)) rejections.push('leg-too-short')
   if (boundingBoxRatio > MAX_BOUNDING_BOX_RATIO) rejections.push('elongated')
+  if (shape < MIN_COMPACTNESS) rejections.push('shapeless')
+  // The doorstep stub is a spur like any other, and is judged by the same
+  // proportional yardstick: 150 m on a town loop, more on a long day out.
+  if (stubMetres > spurLimitMetres(distanceMeters)) rejections.push('start-spur')
   if (!returnsToStart(coordinates, start)) rejections.push('open-ended')
 
   return {
@@ -331,6 +399,7 @@ export function analyseRouteQuality(input: QualityInput): QualityReport {
     durationErrorFraction,
     boundingBoxRatio,
     legShares,
+    startStubMetres: stubMetres,
     longestReverseRunMetres: repeats.longestReverseRunMetres,
     durationOnly: rejections.length === 1 && rejections[0] === 'duration',
     distanceOnly: rejections.length === 1 && rejections[0] === 'distance',
