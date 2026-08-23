@@ -46,6 +46,7 @@ final class AppModel: ObservableObject {
     @Published var following = false
     @Published var courseUp = false
     @Published var showingVoiceSettings = false
+    @Published private(set) var favoriteRoutes: [Route]
     @Published private(set) var selectedVoiceIdentifier: String?
     @Published var reversed = false
     @Published var findingStage = 0
@@ -58,6 +59,7 @@ final class AppModel: ObservableObject {
     private let locationManager: LocationManager
     private let speechManager: SpeechManager
     private let routeStore: RouteStore
+    private let favoritesStore: FavoritesStore
     private let routeTileCache: RouteTileCache
 
     private static let variationStride = 3
@@ -76,6 +78,7 @@ final class AppModel: ObservableObject {
         speechManager: SpeechManager = SpeechManager(),
         httpClient: LoopsHTTPClient = URLSessionLoopsHTTPClient(),
         routeStore: RouteStore = RouteStore(),
+        favoritesStore: FavoritesStore = FavoritesStore(),
         routeTileCache: RouteTileCache = RouteTileCache()
     ) {
         self.apiBase = apiBase
@@ -83,7 +86,9 @@ final class AppModel: ObservableObject {
         self.speechManager = speechManager
         self.httpClient = httpClient
         self.routeStore = routeStore
+        self.favoritesStore = favoritesStore
         self.routeTileCache = routeTileCache
+        self.favoriteRoutes = favoritesStore.load()
         self.selectedVoiceIdentifier = speechManager.selectedVoiceIdentifier
         #if DEBUG
         seedPreviewStateIfRequested()
@@ -175,6 +180,30 @@ final class AppModel: ObservableObject {
     func toggleReversed() {
         reversed.toggle()
         selected = selected.map(reverseRoute)
+    }
+
+    func isFavorite(_ route: Route) -> Bool {
+        favoriteRoutes.contains { $0.id == route.id }
+    }
+
+    func toggleFavorite(_ route: Route) {
+        if let index = favoriteRoutes.firstIndex(where: { $0.id == route.id }) {
+            favoriteRoutes.remove(at: index)
+        } else {
+            // Most recently saved first makes the last route someone chose easy
+            // to find in Settings.
+            favoriteRoutes.insert(route, at: 0)
+        }
+        favoritesStore.save(favoriteRoutes)
+    }
+
+    func openFavorite(_ route: Route) {
+        routes = [route]
+        selected = route
+        reversed = false
+        showsRouteOverlay = true
+        screen = .choices
+        showingVoiceSettings = false
     }
 
     func setWalkingPaceUnit(_ newUnit: LooperKit.Unit) {

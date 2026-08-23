@@ -57,10 +57,11 @@ struct ChoicesView: View {
                     }
 
                     ForEach(Array(model.shownRoutes.enumerated()), id: \.element.id) { index, route in
-                        Button {
-                            model.selected = route
-                            model.showsRouteOverlay = true
-                        } label: {
+                        HStack(spacing: 0) {
+                            Button {
+                                model.selected = route
+                                model.showsRouteOverlay = true
+                            } label: {
                             HStack(spacing: 12) {
                                 Circle()
                                     .fill(Color(hex: routeColours[index % routeColours.count]))
@@ -77,16 +78,29 @@ struct ChoicesView: View {
                                         .foregroundStyle(Color(hex: "9cc36b"))
                                 }
                             }
-                            .padding(12)
-                            .frame(minHeight: 64)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(model.selected?.id == route.id ? Color.white.opacity(0.08) : Color.clear)
-                            )
+                            .padding(.leading, 12)
+                            .padding(.vertical, 12)
                             .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                model.toggleFavorite(route)
+                            } label: {
+                                Image(systemName: model.isFavorite(route) ? "heart.fill" : "heart")
+                                    .font(.title3)
+                                    .foregroundStyle(model.isFavorite(route) ? Color.looperAccent : .secondary)
+                                    .frame(width: 44, height: 44)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(model.isFavorite(route) ? "Remove \(route.name) from saved routes" : "Save \(route.name) for later")
                         }
-                        .buttonStyle(.plain)
+                        .frame(minHeight: 64)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(model.selected?.id == route.id ? Color.white.opacity(0.08) : Color.clear)
+                        )
                     }
                 }
             }
