@@ -209,6 +209,19 @@ cd services/route-service && npm run lint && npm run typecheck && npm test
 - **Geolocation needs HTTPS.** Test on a phone against the deployed URL, not a LAN
   address.
 
+## Possible future work
+
+- **Offline map-area downloads.** Let a walker download tiles for a chosen area ahead
+  of time, for use with no signal. `RouteTileCache.swift` already does this per-route
+  automatically via MapLibre's `MLNOfflineStorage` / `MLNTilePyramidOfflineRegion`, but
+  ties the pack to a single walk and releases it when the walk ends. A user-facing
+  version would reuse the same API with a persistent (not auto-released) pack: let the
+  walker pick an area (e.g. the current map viewport), show download progress via the
+  pack's KVO progress updates, and add a small list in Settings to view/delete saved
+  areas since they'd no longer expire on their own. Tile storage grows fast at high
+  zoom (the walk cache already goes to zoom 18), so a manual download would likely want
+  a capped zoom range and an estimated-size prompt before starting.
+
 ## Attribution
 
 Map data and routing are derived from **OpenStreetMap**, © OpenStreetMap contributors,
