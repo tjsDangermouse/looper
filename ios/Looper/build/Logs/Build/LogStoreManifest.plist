@@ -6,7 +6,7 @@
 	<integer>12</integer>
 	<key>logs</key>
 	<dict>
-		<key>5AE74267-B388-49A0-AAB3-B306BC4E4CA3</key>
+		<key>723377F8-B18D-446F-92D7-4AB1723D4B4C</key>
 		<dict>
 			<key>className</key>
 			<string>IDECommandLineBuildLog</string>
@@ -15,7 +15,7 @@
 			<key>domainType</key>
 			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
 			<key>fileName</key>
-			<string>5AE74267-B388-49A0-AAB3-B306BC4E4CA3.xcactivitylog</string>
+			<string>723377F8-B18D-446F-92D7-4AB1723D4B4C.xcactivitylog</string>
 			<key>hasPrimaryLog</key>
 			<true/>
 			<key>primaryObservable</key>
@@ -38,15 +38,15 @@
 			<key>schemeIdentifier-sharedScheme</key>
 			<integer>1</integer>
 			<key>signature</key>
-			<string>Building project Looper with scheme Looper and configuration Debug</string>
+			<string>Building project Looper with scheme Looper</string>
 			<key>timeStartedRecording</key>
-			<real>809169448.505862</real>
+			<real>809169742.08412004</real>
 			<key>timeStoppedRecording</key>
-			<real>809169452.97966397</real>
+			<real>809169744.55525804</real>
 			<key>title</key>
-			<string>Building project Looper with scheme Looper and configuration Debug</string>
+			<string>Building project Looper with scheme Looper</string>
 			<key>uniqueIdentifier</key>
-			<string>5AE74267-B388-49A0-AAB3-B306BC4E4CA3</string>
+			<string>723377F8-B18D-446F-92D7-4AB1723D4B4C</string>
 		</dict>
 	</dict>
 </dict>

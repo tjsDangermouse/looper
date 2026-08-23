@@ -69,6 +69,10 @@ struct WelcomeView: View {
             .foregroundStyle(.secondary)
 
             Spacer()
+
+            Text(AppVersion.displayString)
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)

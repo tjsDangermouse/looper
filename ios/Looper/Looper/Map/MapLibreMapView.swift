@@ -5,7 +5,7 @@ import LooperKit
 
 /// Close enough to read the next corner and its street, wide enough to hold a
 /// couple of hundred metres of the loop around the walker.
-private let walkZoom: Double = 17
+private let walkZoom: Double = 16
 private let chevronSpacing: NSNumber = 110
 
 struct MapLibreMapView: UIViewRepresentable {

@@ -31,6 +31,8 @@ targets:
     info:
       path: Looper/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -38,13 +40,14 @@ targets:
         NSLocationAlwaysAndWhenInUseUsageDescription: "Looper can keep giving turn-by-turn guidance while your phone is locked, if you allow location access at all times."
         UIBackgroundModes:
           - location
+          - audio
         ITSAppUsesNonExemptEncryption: false
         LooperAPIBase: $(LOOPER_API_BASE)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woollams.Looper
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        CURRENT_PROJECT_VERSION: "3"
         TARGETED_DEVICE_FAMILY: "1"
       configs:
         Debug:

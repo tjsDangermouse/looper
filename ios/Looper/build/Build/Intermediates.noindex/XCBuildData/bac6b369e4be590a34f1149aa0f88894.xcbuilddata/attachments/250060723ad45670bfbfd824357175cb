@@ -1,0 +1,89 @@
+{
+  "" : {
+    "diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/LooperKit-primary.dia",
+    "emit-module-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/LooperKit-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/LooperKit-primary-emit-module.dia",
+    "pch" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/LooperKit-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/LooperKit-primary.swiftdeps"
+  },
+  "/Users/simonwoollams/GitHub/Walkabout/ios/LooperKit/Sources/LooperKit/Announcements.swift" : {
+    "const-values" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Announcements.swiftconstvalues",
+    "dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Announcements.d",
+    "diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Announcements.dia",
+    "index-unit-output-path" : "/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Announcements.o",
+    "llvm-bc" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Announcements.bc",
+    "object" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Announcements.o",
+    "swift-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Announcements.swiftdeps",
+    "swiftmodule" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Announcements~partial.swiftmodule"
+  },
+  "/Users/simonwoollams/GitHub/Walkabout/ios/LooperKit/Sources/LooperKit/Formatting.swift" : {
+    "const-values" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Formatting.swiftconstvalues",
+    "dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Formatting.d",
+    "diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Formatting.dia",
+    "index-unit-output-path" : "/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Formatting.o",
+    "llvm-bc" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Formatting.bc",
+    "object" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Formatting.o",
+    "swift-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Formatting.swiftdeps",
+    "swiftmodule" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Formatting~partial.swiftmodule"
+  },
+  "/Users/simonwoollams/GitHub/Walkabout/ios/LooperKit/Sources/LooperKit/Geo.swift" : {
+    "const-values" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Geo.swiftconstvalues",
+    "dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Geo.d",
+    "diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Geo.dia",
+    "index-unit-output-path" : "/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Geo.o",
+    "llvm-bc" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Geo.bc",
+    "object" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Geo.o",
+    "swift-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Geo.swiftdeps",
+    "swiftmodule" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Geo~partial.swiftmodule"
+  },
+  "/Users/simonwoollams/GitHub/Walkabout/ios/LooperKit/Sources/LooperKit/Heading.swift" : {
+    "const-values" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Heading.swiftconstvalues",
+    "dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Heading.d",
+    "diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Heading.dia",
+    "index-unit-output-path" : "/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Heading.o",
+    "llvm-bc" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Heading.bc",
+    "object" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Heading.o",
+    "swift-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Heading.swiftdeps",
+    "swiftmodule" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Heading~partial.swiftmodule"
+  },
+  "/Users/simonwoollams/GitHub/Walkabout/ios/LooperKit/Sources/LooperKit/Models.swift" : {
+    "const-values" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Models.swiftconstvalues",
+    "dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Models.d",
+    "diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Models.dia",
+    "index-unit-output-path" : "/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Models.o",
+    "llvm-bc" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Models.bc",
+    "object" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Models.o",
+    "swift-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Models.swiftdeps",
+    "swiftmodule" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Models~partial.swiftmodule"
+  },
+  "/Users/simonwoollams/GitHub/Walkabout/ios/LooperKit/Sources/LooperKit/Networking.swift" : {
+    "const-values" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Networking.swiftconstvalues",
+    "dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Networking.d",
+    "diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Networking.dia",
+    "index-unit-output-path" : "/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Networking.o",
+    "llvm-bc" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Networking.bc",
+    "object" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Networking.o",
+    "swift-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Networking.swiftdeps",
+    "swiftmodule" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Networking~partial.swiftmodule"
+  },
+  "/Users/simonwoollams/GitHub/Walkabout/ios/LooperKit/Sources/LooperKit/Turns.swift" : {
+    "const-values" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Turns.swiftconstvalues",
+    "dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Turns.d",
+    "diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Turns.dia",
+    "index-unit-output-path" : "/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Turns.o",
+    "llvm-bc" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Turns.bc",
+    "object" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Turns.o",
+    "swift-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Turns.swiftdeps",
+    "swiftmodule" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Turns~partial.swiftmodule"
+  },
+  "/Users/simonwoollams/GitHub/Walkabout/ios/LooperKit/Sources/LooperKit/Walk.swift" : {
+    "const-values" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Walk.swiftconstvalues",
+    "dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Walk.d",
+    "diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Walk.dia",
+    "index-unit-output-path" : "/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Walk.o",
+    "llvm-bc" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Walk.bc",
+    "object" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Walk.o",
+    "swift-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Walk.swiftdeps",
+    "swiftmodule" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/LooperKit.build/Debug-iphonesimulator/LooperKit.build/Objects-normal/arm64/Walk~partial.swiftmodule"
+  }
+}
