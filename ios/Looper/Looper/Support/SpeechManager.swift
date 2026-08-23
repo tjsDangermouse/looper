@@ -4,7 +4,7 @@ import AVFoundation
 /// announcements keep firing while the phone is locked — the PWA limitation
 /// this native app exists to fix.
 final class SpeechManager: NSObject {
-    private let synthesizer = AVSpeechSynthesizer()
+    private nonisolated(unsafe) let synthesizer = AVSpeechSynthesizer()
     private let selectedVoiceKey = "selectedVoiceIdentifier"
 
     override init() {
