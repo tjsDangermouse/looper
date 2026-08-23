@@ -226,13 +226,22 @@ struct MapLibreMapView: UIViewRepresentable {
         private func paddedCenter(_ target: CLLocationCoordinate2D, zoom: Double, mapView: MLNMapView) -> CLLocationCoordinate2D {
             let padding = parent.padding
             guard padding.bottom > 0 || padding.right > 0, mapView.bounds.width > 0, mapView.bounds.height > 0 else { return target }
-            mapView.setCenter(target, zoomLevel: zoom, animated: false)
-            let visiblePoint = CGPoint(x: mapView.bounds.midX - padding.right / 2, y: mapView.bounds.midY - padding.bottom / 2)
-            let atVisiblePoint = mapView.convert(visiblePoint, toCoordinateFrom: mapView)
-            return CLLocationCoordinate2D(
-                latitude: 2 * target.latitude - atVisiblePoint.latitude,
-                longitude: 2 * target.longitude - atVisiblePoint.longitude
-            )
+            // Do not temporarily call setCenter(target) here to use the map's
+            // conversion methods. That change is rendered immediately, then
+            // the caller animates to the padded centre; each GPS update thus
+            // looked like a jump down followed by a slide back up.
+            //
+            // Work directly in Mercator coordinates instead. `direction` is
+            // clockwise from north, so rotate the visible-area offset into
+            // map coordinates before shifting the camera centre.
+            let worldSize = 512 * pow(2, zoom)
+            let angle = mapView.direction * .pi / 180
+            let cosine = cos(angle), sine = sin(angle)
+            let right = Double(padding.right) / 2 / worldSize
+            let bottom = Double(padding.bottom) / 2 / worldSize
+            let x = mercatorX(target.longitude) + cosine * right - sine * bottom
+            let y = mercatorY(target.latitude) + sine * right + cosine * bottom
+            return CLLocationCoordinate2D(latitude: latFromMercatorY(y), longitude: lngFromMercatorX(x))
         }
 
         /// The start point moving (choosing a new spot, or a fresh GPS fix)
