@@ -47,14 +47,12 @@ struct ContentView: View {
                 }
                 .overlay(alignment: .topTrailing) {
                     if model.screen != .walk {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 10) {
                             Button(action: model.returnHome) {
                                 Image(systemName: "house.fill")
                                     .foregroundStyle(.white)
-                                    .padding(10)
-                                    .background(Color.looperSheet, in: Circle())
-                                    .shadow(color: .black.opacity(0.25), radius: 10, y: 6)
                             }
+                            .buttonStyle(IconButtonStyle())
                             .accessibilityLabel("Home")
 
                             Button {
@@ -62,10 +60,8 @@ struct ContentView: View {
                             } label: {
                                 Image(systemName: "gearshape.fill")
                                     .foregroundStyle(.white)
-                                    .padding(10)
-                                    .background(Color.looperSheet, in: Circle())
-                                    .shadow(color: .black.opacity(0.25), radius: 10, y: 6)
                             }
+                            .buttonStyle(IconButtonStyle())
                             .accessibilityLabel("Settings")
                         }
                         .padding(.top, 8)

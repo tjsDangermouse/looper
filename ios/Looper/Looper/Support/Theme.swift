@@ -19,4 +19,8 @@ extension Color {
 
     static let looperBackground = Color(hex: "061523")
     static let looperSheet = Color(hex: "08192b")
+    static let looperRaised = Color(hex: "0d2437")
+    static let looperLine = Color(hex: "1d3448")
+    static let looperAccent = Color(hex: "9cc36b")
+    static let looperOnAccent = Color(hex: "06180a")
 }

@@ -22,26 +22,28 @@ struct WelcomeView: View {
                     .foregroundStyle(.secondary)
             }
 
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 if model.hasActiveWalk {
                     Button(action: model.continueWalk) {
                         Label("Continue loop", systemImage: "figure.walk")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color(hex: "9cc36b"))
+                    .buttonStyle(PrimaryButtonStyle())
                 }
 
                 Button(action: model.requestLocation) {
                     Label("Use my location", systemImage: "location.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color(hex: "9cc36b"))
+                .buttonStyle(PrimaryButtonStyle())
 
-                Button("Choose on map") { model.screen = .planner }
-                    .buttonStyle(.bordered)
-                    .frame(maxWidth: .infinity)
+                Button {
+                    model.screen = .planner
+                } label: {
+                    Text("Choose on map")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(SecondaryButtonStyle())
             }
             .padding(.horizontal, 32)
             .padding(.top, 8)
@@ -65,8 +67,7 @@ struct WelcomeView: View {
             Button("How live guidance works") {
                 model.locationState = "Looper keeps giving live guidance even while your phone is locked."
             }
-            .font(.footnote)
-            .foregroundStyle(.secondary)
+            .buttonStyle(TextLinkButtonStyle())
 
             Spacer()
 

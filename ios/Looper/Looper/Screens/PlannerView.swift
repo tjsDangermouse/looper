@@ -10,16 +10,14 @@ struct PlannerView: View {
         BottomSheet {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("start point · tap map to move")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text("How far shall we walk?")
-                            .font(.title2.bold())
-                    }
+                    Text("How far shall we walk?")
+                        .font(.title2.bold())
                     Spacer()
-                    Button("Use my location", action: model.requestLocation)
-                        .font(.footnote)
+                    Button(action: model.requestLocation) {
+                        Image(systemName: "location.fill")
+                    }
+                    .buttonStyle(IconButtonStyle(background: .looperRaised, bordered: true))
+                    .accessibilityLabel("Use my location")
                 }
 
                 Picker("Mode", selection: $model.mode) {
@@ -63,8 +61,7 @@ struct PlannerView: View {
                     Label(model.busy ? findingMessages[model.findingStage] : "Find my loops", systemImage: "arrow.triangle.2.circlepath")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color(hex: "9cc36b"))
+                .buttonStyle(PrimaryButtonStyle())
                 .disabled(model.busy)
             }
             .padding(.top, 4)

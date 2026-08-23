@@ -22,15 +22,22 @@ struct ChoicesView: View {
                         } label: {
                             Image(systemName: "arrow.triangle.2.circlepath")
                         }
+                        .buttonStyle(IconButtonStyle(background: .looperRaised, bordered: true))
                         .disabled(model.busy)
                         Button {
                             model.toggleReversed()
                         } label: {
                             Image(systemName: "arrow.left.arrow.right")
                         }
-                        .foregroundStyle(model.reversed ? Color(hex: "9cc36b") : .primary)
-                        Button("Edit") { model.screen = .planner }
-                            .font(.subheadline)
+                        .buttonStyle(IconButtonStyle(background: .looperRaised, bordered: true))
+                        .foregroundStyle(model.reversed ? Color.looperAccent : .white)
+                        Button {
+                            model.screen = .planner
+                        } label: {
+                            Image(systemName: "pencil")
+                        }
+                        .buttonStyle(IconButtonStyle(background: .looperRaised, bordered: true))
+                        .accessibilityLabel("Edit")
                     }
 
                     if !model.error.isEmpty {
@@ -58,10 +65,13 @@ struct ChoicesView: View {
                                 }
                             }
                             .padding(12)
+                            .frame(minHeight: 64)
+                            .frame(maxWidth: .infinity)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
                                     .fill(model.selected?.id == route.id ? Color.white.opacity(0.08) : Color.clear)
                             )
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -74,11 +84,8 @@ struct ChoicesView: View {
                     model.beginWalk(selected)
                 } label: {
                     Label("Start walk", systemImage: "figure.walk")
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 12)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color(hex: "9cc36b"))
+                .buttonStyle(PillButtonStyle())
                 .padding(.bottom, 8)
             }
         }

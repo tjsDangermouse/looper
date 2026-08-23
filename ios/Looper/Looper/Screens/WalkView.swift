@@ -6,38 +6,43 @@ struct WalkView: View {
 
     var body: some View {
         VStack {
-            HStack(spacing: 16) {
+            HStack(spacing: 10) {
                 Button(action: model.endWalk) {
                     Image(systemName: "xmark")
                 }
+                .buttonStyle(IconButtonStyle())
+
                 Button(action: model.returnHome) {
                     Image(systemName: "house.fill")
                 }
+                .buttonStyle(IconButtonStyle())
                 .accessibilityLabel("Home")
+
                 Spacer()
+
                 Button {
                     model.following = true
                 } label: {
                     Image(systemName: "location.fill")
                 }
-                .foregroundStyle(model.following ? Color(hex: "9cc36b") : .primary)
+                .buttonStyle(IconButtonStyle())
+                .foregroundStyle(model.following ? Color.looperAccent : .white)
 
                 Button {
                     model.toggleCourseUp()
                 } label: {
                     Image(systemName: "location.north.line.fill")
                 }
+                .buttonStyle(IconButtonStyle())
                 .disabled(!model.compassAvailable)
-                .foregroundStyle(model.courseUp ? Color(hex: "9cc36b") : .primary)
+                .foregroundStyle(model.courseUp ? Color.looperAccent : .white)
 
                 Button(action: model.toggleMute) {
                     Image(systemName: model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                 }
-                .foregroundStyle(model.muted ? .secondary : Color(hex: "9cc36b"))
+                .buttonStyle(IconButtonStyle())
+                .foregroundStyle(model.muted ? .secondary : Color.looperAccent)
             }
-            .font(.title3)
-            .padding()
-            .background(.ultraThinMaterial, in: Capsule())
             .padding(.horizontal)
             .padding(.top, 8)
 
@@ -58,10 +63,10 @@ struct WalkView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         Button("Show route from here") { model.offRoute = false }
-                            .buttonStyle(.borderedProminent)
-                            .tint(Color(hex: "9cc36b"))
+                            .frame(maxWidth: .infinity)
+                            .buttonStyle(PrimaryButtonStyle(height: 46))
                         Button("End walk", action: model.endWalk)
-                            .font(.footnote)
+                            .buttonStyle(TextLinkButtonStyle())
                     }
                 } else if let selected = model.selected {
                     let turn = model.turn
