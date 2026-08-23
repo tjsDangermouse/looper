@@ -14,6 +14,8 @@ final class AppModel: ObservableObject {
 
     @Published var screen: Screen = .welcome
     @Published var start: Point = AppModel.defaultStart
+    @Published var position: Point?
+    @Published var heading: Double?
     @Published var locationState = ""
     @Published var mode: LoopMode = .distance
     @Published var unit: LooperKit.Unit = .km
@@ -46,6 +48,7 @@ final class AppModel: ObservableObject {
     private var badFixes = 0
     private var findingStageTask: Task<Void, Never>?
     private var walkWatchTask: Task<Void, Never>?
+    private var headingWatchTask: Task<Void, Never>?
 
     init(
         apiBase: String,
@@ -74,6 +77,10 @@ final class AppModel: ObservableObject {
         if target == "find" {
             screen = .planner
             findRoutes()
+            return
+        }
+        if target == "locate" {
+            requestLocation()
             return
         }
         func sampleRoute(id: String, name: String) -> Route {
@@ -141,6 +148,7 @@ final class AppModel: ObservableObject {
             do {
                 let point = try await locationManager.requestOneShotLocation()
                 start = point
+                position = point
                 locationState = ""
                 screen = .planner
             } catch let error as CLError where error.code == .denied {
@@ -229,6 +237,7 @@ final class AppModel: ObservableObject {
         courseUp = false
         screen = .choices
         stopWalkWatch()
+        stopHeadingWatch()
         speechManager.stop()
     }
 
@@ -243,6 +252,7 @@ final class AppModel: ObservableObject {
                     continue
                 }
                 locationState = ""
+                position = update.point
                 let match = nearestProgress(update.point, selected.geometry.coordinates, from: walked)
                 walked = match.distanceAlong
                 progress = match.distanceAlong
@@ -279,15 +289,29 @@ final class AppModel: ObservableObject {
         if muted { speechManager.stop() } else { speechManager.prime(); spoken = "" }
     }
 
-    // The compass is only read while it is being used, and iOS only grants
-    // background/precise access from inside the tap that asks for it.
+    // The compass is only read while it is being used.
     func toggleCourseUp() {
-        if courseUp { courseUp = false; return }
+        if courseUp { courseUp = false; stopHeadingWatch(); return }
         guard compassAvailable else {
             locationState = "A compass is not available on this device."
             return
         }
         locationState = ""
         courseUp = true
+        startHeadingWatch()
+    }
+
+    private func startHeadingWatch() {
+        stopHeadingWatch()
+        headingWatchTask = Task {
+            for await value in locationManager.headingUpdates() {
+                heading = value
+            }
+        }
+    }
+
+    private func stopHeadingWatch() {
+        headingWatchTask?.cancel()
+        headingWatchTask = nil
     }
 }

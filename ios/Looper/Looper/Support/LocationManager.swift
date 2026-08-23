@@ -1,9 +1,10 @@
 import CoreLocation
 import LooperKit
 
-/// Wraps CoreLocation for the app's own progress-tracking needs (the map's
-/// blue dot and camera-follow use MLNMapView's own built-in location
-/// handling instead — see MapLibreMapView).
+/// Wraps CoreLocation for the app's own progress-tracking and camera-follow
+/// needs — the map's camera is driven explicitly by AppModel (mirroring the
+/// web app's MapView.tsx), not by MLNMapView's own built-in follow mode,
+/// since that mode doesn't give control over zoom.
 final class LocationManager: NSObject {
     struct PositionUpdate {
         var point: Point
@@ -15,6 +16,7 @@ final class LocationManager: NSObject {
     private let manager = CLLocationManager()
     private var oneShotContinuation: CheckedContinuation<Point, Error>?
     private var positionContinuation: AsyncStream<PositionUpdate>.Continuation?
+    private var headingContinuation: AsyncStream<Double>.Continuation?
 
     override init() {
         super.init()
@@ -40,6 +42,18 @@ final class LocationManager: NSObject {
             manager.startUpdatingLocation()
             continuation.onTermination = { [weak self] _ in
                 self?.manager.stopUpdatingLocation()
+            }
+        }
+    }
+
+    /// Watches heading for the duration the stream is being iterated — the
+    /// map is only read while course-up is being used.
+    func headingUpdates() -> AsyncStream<Double> {
+        AsyncStream { continuation in
+            headingContinuation = continuation
+            manager.startUpdatingHeading()
+            continuation.onTermination = { [weak self] _ in
+                self?.manager.stopUpdatingHeading()
             }
         }
     }
@@ -70,5 +84,11 @@ extension LocationManager: CLLocationManagerDelegate {
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         updateBackgroundCapability()
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        guard newHeading.headingAccuracy >= 0 else { return }
+        let heading = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
+        headingContinuation?.yield(heading)
     }
 }
