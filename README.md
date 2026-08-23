@@ -143,6 +143,16 @@ CORS_ORIGINS=https://looper.example.com docker compose -f docker-compose.prod.ym
 Set `CORS_ORIGINS` to the PWA's exact origin. It defaults to `*`, which is convenient
 locally and wrong in production.
 
+### Updating only the route service
+
+On a Windows host using the `looper_router` Compose project, rebuild and replace only the
+route service without interrupting either GraphHopper container or an in-progress PBF
+download:
+
+```powershell
+docker compose -p looper_router up -d --build --no-deps --force-recreate route-service
+```
+
 Sizing: the Isle of Man graph runs comfortably in 512 MB. England's first import is the
 memory-hungry phase — use at least 8 GB available RAM with the default 6 GB England heap.
 The graph volumes must be persistent, or every restart pays for a fresh import.
