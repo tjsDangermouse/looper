@@ -30,7 +30,7 @@ services:
         GRAPHHOPPER_VERSION: ${GRAPHHOPPER_VERSION:-11.0}
     environment:
       OSM_PBF_PATH: ${OSM_PBF_ENGLAND_PATH:-england-latest.osm.pbf}
-      OSM_PBF_URL: ${OSM_PBF_ENGLAND_URL:-https://download.geofabrik.de/europe/great-britain/england-latest.osm.pbf}
+      OSM_PBF_URL: ${OSM_PBF_ENGLAND_URL:-https://download.geofabrik.de/europe/united-kingdom/england-latest.osm.pbf}
       GH_HEAP: ${GH_ENGLAND_HEAP:-6g}
     volumes:
       - graph-cache-england:/data/graph-cache

@@ -73,7 +73,7 @@ The importer accepts a local file or a download URL, in that order of preference
 OSM_PBF_IOM_PATH=isle-of-man-latest.osm.pbf                              # looked for in ./data
 OSM_PBF_IOM_URL=https://download.geofabrik.de/europe/isle-of-man-latest.osm.pbf
 OSM_PBF_ENGLAND_PATH=england-latest.osm.pbf
-OSM_PBF_ENGLAND_URL=https://download.geofabrik.de/europe/great-britain/england-latest.osm.pbf
+OSM_PBF_ENGLAND_URL=https://download.geofabrik.de/europe/united-kingdom/england-latest.osm.pbf
 ```
 
 If the file named by `OSM_PBF_PATH` is not there, the URL is downloaded once into the
