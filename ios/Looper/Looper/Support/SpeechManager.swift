@@ -3,9 +3,14 @@ import AVFoundation
 /// Turn-by-turn voice guidance. Configured for background playback so
 /// announcements keep firing while the phone is locked — the PWA limitation
 /// this native app exists to fix.
-final class SpeechManager {
+final class SpeechManager: NSObject {
     private let synthesizer = AVSpeechSynthesizer()
     private let selectedVoiceKey = "selectedVoiceIdentifier"
+
+    override init() {
+        super.init()
+        synthesizer.delegate = self
+    }
 
     /// Only voices already available on the device appear here. iOS manages
     /// downloads of enhanced and premium voice packs in Settings.
@@ -50,12 +55,22 @@ final class SpeechManager {
         let utterance = AVSpeechUtterance(string: text)
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         utterance.voice = selectedVoice
+        prime()
         synthesizer.stopSpeaking(at: .immediate)
         synthesizer.speak(utterance)
     }
 
     func stop() {
         synthesizer.stopSpeaking(at: .immediate)
+        deactivate()
+    }
+
+    /// Other apps' audio only needs to duck for the duration of an
+    /// announcement — release the session once it's finished speaking so
+    /// music/podcasts return to full volume instead of staying ducked for
+    /// the rest of the walk.
+    private func deactivate() {
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     func qualityName(for voice: AVSpeechSynthesisVoice) -> String {
@@ -76,5 +91,11 @@ final class SpeechManager {
         case .enhanced: return 2
         default: return 1
         }
+    }
+}
+
+extension SpeechManager: AVSpeechSynthesizerDelegate {
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        deactivate()
     }
 }
