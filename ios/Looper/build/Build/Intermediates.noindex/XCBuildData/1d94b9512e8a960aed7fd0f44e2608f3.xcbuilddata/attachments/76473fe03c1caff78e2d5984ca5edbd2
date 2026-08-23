@@ -1,4 +1,0 @@
-module LooperKit {
-header "LooperKit-Swift.h"
-export *
-}
