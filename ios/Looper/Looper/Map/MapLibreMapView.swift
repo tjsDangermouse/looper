@@ -81,6 +81,7 @@ struct MapLibreMapView: UIViewRepresentable {
         private var lastFitRouteIDs: [String] = []
         private var lastFittedRoutes: [Route] = []
         private var lastPadding: (bottom: CGFloat, right: CGFloat) = (0, 0)
+        private var zeroBoundsRetries = 0
 
         init(parent: MapLibreMapView) {
             self.parent = parent
@@ -110,6 +111,25 @@ struct MapLibreMapView: UIViewRepresentable {
 
         func sync() {
             guard let mapView, styleReady else { return }
+            // Before the view has a real, laid-out size, none of the camera
+            // maths below can do anything but guess — and worse, if it ran
+            // anyway it would mark whatever changed (start, padding, ...) as
+            // already "handled", so the real correction would never happen
+            // once a size does arrive. Bail out entirely and wait for the
+            // next state change (padding arriving is normally what re-runs
+            // this) rather than touch any of the tracked previous values.
+            guard mapView.bounds.width > 0, mapView.bounds.height > 0 else {
+                // Auto Layout hasn't resolved the view's frame yet — retry
+                // next run-loop tick rather than waiting on some other state
+                // change to happen to call sync() again. Capped so a view
+                // that's stuck at zero size for some other reason doesn't
+                // spin forever.
+                guard zeroBoundsRetries < 120 else { return }
+                zeroBoundsRetries += 1
+                DispatchQueue.main.async { [weak self] in self?.sync() }
+                return
+            }
+            zeroBoundsRetries = 0
             syncRoutes(mapView)
             if parent.routes.isEmpty { lastFittedRoutes = [] }
             updateStartMarker(mapView)
