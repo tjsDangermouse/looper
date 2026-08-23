@@ -5,6 +5,7 @@ private let findingMessages = ["Building clean loops around you…", "Checking f
 
 struct PlannerView: View {
     @ObservedObject var model: AppModel
+    @FocusState private var amountFocused: Bool
 
     var body: some View {
         BottomSheet {
@@ -34,6 +35,7 @@ struct PlannerView: View {
                     TextField(model.mode == .distance ? "Distance" : "Minutes", text: $model.amount)
                         .keyboardType(.decimalPad)
                         .textFieldStyle(.roundedBorder)
+                        .focused($amountFocused)
 
                     if model.mode == .distance {
                         Picker("Unit", selection: $model.unit) {
@@ -57,7 +59,10 @@ struct PlannerView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Button(action: model.findRoutes) {
+                Button {
+                    amountFocused = false
+                    model.findRoutes()
+                } label: {
                     Label(model.busy ? findingMessages[model.findingStage] : "Find my loops", systemImage: "arrow.triangle.2.circlepath")
                         .frame(maxWidth: .infinity)
                 }

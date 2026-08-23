@@ -172,9 +172,14 @@ export function reverseRoute(route:Route):Route {
 export const apiBase = (import.meta.env?.VITE_LOOPER_API_BASE ?? '').replace(/\/+$/, '')
 
 type LoopRouteResponse = Omit<Route,'name'> & { label:string }
+const EXCLUSION_POINT_LIMIT = 120
+const compactRoute = (coordinates:Point[]) => {
+  if(coordinates.length<=EXCLUSION_POINT_LIMIT) return coordinates
+  return Array.from({length:EXCLUSION_POINT_LIMIT},(_,index)=>coordinates[Math.round(index*(coordinates.length-1)/(EXCLUSION_POINT_LIMIT-1))])
+}
 
 /** Ask for loops. Errors carry a sentence a walker can act on, nothing more. */
-export async function requestLoops(input:{ start:Point; mode:LoopMode; distanceKm?:number; durationMinutes?:number; unit:Unit; variation:number; excludeRoutes?:Route[] }):Promise<{ routes:Route[]; warning?:string }> {
+export async function requestLoops(input:{ start:Point; mode:LoopMode; distanceKm?:number; durationMinutes?:number; unit:Unit; variation:number; excludeRoutes?:Array<Pick<Route,'geometry'>> }):Promise<{ routes:Route[]; warning?:string }> {
   const response = await fetch(`${apiBase}/v1/loops`, {
     method:'POST', headers:{ 'Content-Type':'application/json' },
     body: JSON.stringify({
@@ -184,7 +189,7 @@ export async function requestLoops(input:{ start:Point; mode:LoopMode; distanceK
       durationMinutes: input.mode==='time' ? input.durationMinutes : undefined,
       units: input.unit,
       variation: input.variation,
-      exclude: input.excludeRoutes?.map(route=>route.geometry.coordinates),
+      exclude: input.excludeRoutes?.map(route=>compactRoute(route.geometry.coordinates)),
     }),
   })
   const data = await response.json().catch(()=>({}))

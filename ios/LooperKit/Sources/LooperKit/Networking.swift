@@ -25,6 +25,14 @@ struct LoopRequestBody: Encodable {
     let exclude: [[Point]]?
 }
 
+private let exclusionPointLimit = 120
+private func compactRoute(_ coordinates: [Point]) -> [Point] {
+    guard coordinates.count > exclusionPointLimit else { return coordinates }
+    return (0..<exclusionPointLimit).map { index in
+        coordinates[Int((Double(index) * Double(coordinates.count - 1) / Double(exclusionPointLimit - 1)).rounded())]
+    }
+}
+
 private struct LoopsResponseBody: Decodable {
     struct RouteDTO: Decodable {
         let id: String
@@ -96,7 +104,7 @@ public func requestLoops(
         durationMinutes: mode == .time ? durationMinutes : nil,
         units: unit,
         variation: variation,
-        exclude: excludeRoutes.isEmpty ? nil : excludeRoutes.map { $0.geometry.coordinates }
+        exclude: excludeRoutes.isEmpty ? nil : excludeRoutes.map { compactRoute($0.geometry.coordinates) }
     )
     let encoded = try JSONEncoder().encode(body)
     let (data, statusCode) = try await client.post(url: url, body: encoded)

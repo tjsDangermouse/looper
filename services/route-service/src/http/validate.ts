@@ -75,7 +75,7 @@ function parseExcludedRoutes(value: unknown): [number, number][][] | undefined {
   if (value === undefined) return undefined
   if (!Array.isArray(value) || value.length > 3) throw new ValidationError('Send valid previous loops.', 'exclude')
   return value.map(route => {
-    if (!Array.isArray(route) || route.length < 2 || route.length > 2_000) throw new ValidationError('Send valid previous loops.', 'exclude')
+    if (!Array.isArray(route) || route.length < 2 || route.length > 120) throw new ValidationError('Send valid previous loops.', 'exclude')
     return route.map(point => {
       if (!Array.isArray(point) || point.length !== 2 || !point.every(Number.isFinite)) throw new ValidationError('Send valid previous loops.', 'exclude')
       return [point[0], point[1]] as [number, number]

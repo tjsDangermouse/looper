@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ChoicesView: View {
     @ObservedObject var model: AppModel
+    @State private var refreshPulse = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,6 +24,17 @@ struct ChoicesView: View {
                             Image(systemName: "arrow.triangle.2.circlepath")
                         }
                         .buttonStyle(IconButtonStyle(background: .looperRaised, bordered: true))
+                        .foregroundStyle(model.busy ? Color.looperAccent : .white)
+                        .scaleEffect(refreshPulse ? 1.12 : 1)
+                        .animation(
+                            model.busy
+                                ? .easeInOut(duration: 0.6).repeatForever(autoreverses: true)
+                                : .easeOut(duration: 0.2),
+                            value: refreshPulse
+                        )
+                        .onChange(of: model.busy) { _, busy in
+                            refreshPulse = busy
+                        }
                         .disabled(model.busy)
                         Button {
                             model.toggleReversed()

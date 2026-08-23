@@ -79,6 +79,7 @@ struct MapLibreMapView: UIViewRepresentable {
         private var lastHeading: Double?
         private var lastWalking = false
         private var lastFitRouteIDs: [String] = []
+        private var lastFitSelectedRouteID: String?
         private var lastFittedRoutes: [Route] = []
         private var lastPadding: (bottom: CGFloat, right: CGFloat) = (0, 0)
         private var zeroBoundsRetries = 0
@@ -131,13 +132,26 @@ struct MapLibreMapView: UIViewRepresentable {
             }
             zeroBoundsRetries = 0
             syncRoutes(mapView)
-            if parent.routes.isEmpty { lastFittedRoutes = [] }
+            if parent.routes.isEmpty {
+                lastFittedRoutes = []
+                lastFitRouteIDs = []
+                lastFitSelectedRouteID = nil
+            }
             updateStartMarker(mapView)
             let didFit = syncFit(mapView) || syncWalkingEnd(mapView)
-            if !didFit { syncPaddingRecenter(mapView) }
-            syncStartCamera(mapView)
-            syncPositionCamera(mapView)
-            syncFollowCamera(mapView)
+            if didFit {
+                // A route fit has just placed the geometry in the visible map
+                // area. Do not immediately replace it with the start or GPS
+                // camera update that happens to share this SwiftUI pass.
+                lastStart = parent.start
+                lastPosition = parent.position
+                lastFollow = parent.follow
+            } else {
+                syncPaddingRecenter(mapView)
+                syncStartCamera(mapView)
+                syncPositionCamera(mapView)
+                syncFollowCamera(mapView)
+            }
             syncCourseUp(mapView)
         }
 
@@ -269,20 +283,47 @@ struct MapLibreMapView: UIViewRepresentable {
             mapView.setDirection(heading, animated: true)
         }
 
-        /// When a fresh batch of routes comes in (or the sheet's padding
-        /// changes), pull back so every loop is on screen at once, rather
-        /// than leaving the camera wherever it was. Skipped while following,
-        /// since the walker's own position is driving the camera then.
+        /// A fresh batch is fitted as a group so every option can be compared.
+        /// A card selection then fits that one loop, giving it more useful map
+        /// space without hiding the overview until the walker chooses it.
         /// Returns whether it actually performed a fit this call.
         @discardableResult
         private func syncFit(_ mapView: MLNMapView) -> Bool {
             let routeIDs = parent.routes.map(\.id)
-            defer { lastFitRouteIDs = routeIDs }
+            let selectedRouteID = parent.selectedRouteID
+            let routesChanged = routeIDs != lastFitRouteIDs
+            let selectionChanged = selectedRouteID != lastFitSelectedRouteID
+            defer {
+                lastFitRouteIDs = routeIDs
+                lastFitSelectedRouteID = selectedRouteID
+            }
             guard !parent.follow, !parent.routes.isEmpty else { return false }
-            guard routeIDs != lastFitRouteIDs else { return false }
-            guard fit(parent.routes, mapView: mapView) else { return false }
-            lastFittedRoutes = parent.routes
+            let fitRoutes: [Route]
+            if routesChanged {
+                fitRoutes = parent.routes
+            } else if selectionChanged, let selectedRouteID,
+                      let selectedRoute = parent.routes.first(where: { $0.id == selectedRouteID }) {
+                fitRoutes = [selectedRoute]
+            } else {
+                return false
+            }
+            guard fit(fitRoutes, mapView: mapView) else { return false }
+            lastFittedRoutes = fitRoutes
+            settleFit(fitRoutes, routeIDs: routeIDs, selectedRouteID: selectedRouteID)
             return true
+        }
+
+        /// MapLibre can finish laying out its camera just after SwiftUI has
+        /// measured the sheet. Repeat the same fit on the settled layout so a
+        /// loop's lower edge is never left underneath that sheet.
+        private func settleFit(_ routes: [Route], routeIDs: [String], selectedRouteID: String?) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self, weak mapView] in
+                guard let self, let mapView,
+                      self.parent.routes.map(\.id) == routeIDs,
+                      self.parent.selectedRouteID == selectedRouteID,
+                      !self.parent.follow else { return }
+                self.fit(routes, mapView: mapView)
+            }
         }
 
         /// Leaving the walk screen: pull back out to the whole loop, since
@@ -321,7 +362,9 @@ struct MapLibreMapView: UIViewRepresentable {
 
             let w = Double(mapView.bounds.width), h = Double(mapView.bounds.height)
             guard w > 120, h > 120 else { return false }
-            let margin = 40.0
+            // A generous margin keeps the outer edge of a selected loop clear
+            // of the sheet, safe-area edge, and floating map controls.
+            let margin = 64.0
             let bottomPad = Double(parent.padding.bottom), rightPad = Double(parent.padding.right)
 
             let x0 = mercatorX(bounds.sw.longitude), x1 = mercatorX(bounds.ne.longitude)

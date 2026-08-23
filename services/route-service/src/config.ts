@@ -6,7 +6,8 @@ const number = (value: string | undefined, fallback: number) => {
 
 export const config = {
   port: number(process.env.PORT, 8080),
-  graphhopperUrl: process.env.GRAPHHOPPER_URL ?? 'http://localhost:8989',
+  graphhopperIomUrl: process.env.GRAPHHOPPER_IOM_URL ?? process.env.GRAPHHOPPER_URL ?? 'http://localhost:8989',
+  graphhopperEnglandUrl: process.env.GRAPHHOPPER_ENGLAND_URL ?? 'http://graphhopper-england:8989',
   graphhopperProfile: process.env.GRAPHHOPPER_PROFILE ?? 'foot',
   /** Per-leg routing timeout. */
   legTimeoutMs: number(process.env.LEG_TIMEOUT_MS, 8000),

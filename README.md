@@ -36,9 +36,10 @@ docker compose up --build     # GraphHopper + route service
 npm install && npm run dev    # the PWA on :5173, proxying /v1 to :8080
 ```
 
-The first `docker compose up` imports the OpenStreetMap extract before GraphHopper will
-answer. On the Isle of Man that takes well under a minute; the container reports healthy
-once `/info` responds. Later starts reuse the imported graph and come up in seconds.
+The first `docker compose up` imports both OpenStreetMap extracts before the route service
+will answer. The Isle of Man import is quick; England takes longer and needs substantially
+more memory. Each container reports healthy once `/info` responds. Later starts reuse the
+imported graphs and come up in seconds.
 
 Check the stack is alive:
 
@@ -61,40 +62,31 @@ GRAPHHOPPER_URL=http://localhost:8989 npm run dev
 
 ## Importing OpenStreetMap data
 
-The Isle of Man is the default region. Nothing in the stack is specific to it — any
-Geofabrik (or other) `.osm.pbf` extract works.
+The stack currently serves Isle of Man and England from separate GraphHopper graphs. The
+route service selects a graph from the requested starting location; a location outside
+those supported areas receives a clear availability message.
 
 The importer accepts a local file or a download URL, in that order of preference:
 
 ```bash
 # .env
-OSM_PBF_PATH=isle-of-man-latest.osm.pbf                                  # looked for in ./data
-OSM_PBF_URL=https://download.geofabrik.de/europe/isle-of-man-latest.osm.pbf
+OSM_PBF_IOM_PATH=isle-of-man-latest.osm.pbf                              # looked for in ./data
+OSM_PBF_IOM_URL=https://download.geofabrik.de/europe/isle-of-man-latest.osm.pbf
+OSM_PBF_ENGLAND_PATH=england-latest.osm.pbf
+OSM_PBF_ENGLAND_URL=https://download.geofabrik.de/europe/great-britain/england-latest.osm.pbf
 ```
 
 If the file named by `OSM_PBF_PATH` is not there, the URL is downloaded once into the
 volume and reused. Data is never re-downloaded or re-imported on an ordinary restart.
-
-### Switching region
-
-```bash
-# e.g. Greater Manchester instead
-OSM_PBF_URL=https://download.geofabrik.de/europe/great-britain/england/greater-manchester-latest.osm.pbf
-OSM_PBF_PATH=greater-manchester-latest.osm.pbf
-```
-
-Then rebuild the graph (below). Larger extracts need more memory for the import — raise
-`GH_HEAP` to roughly 2–4 GB per country-sized extract.
 
 ### Rebuilding the graph after an OSM update
 
 The graph is only built when there isn't one. To replace it deliberately:
 
 ```bash
-docker compose run --rm graphhopper import                       # uses OSM_PBF_PATH / OSM_PBF_URL
-docker compose run --rm graphhopper import /data/osm/some.pbf    # or an explicit file
-docker compose run --rm graphhopper import https://example.com/region.osm.pbf
-docker compose up -d graphhopper
+docker compose run --rm graphhopper-iom import                    # uses the IOM variables
+docker compose run --rm graphhopper-england import                 # uses the England variables
+docker compose up -d graphhopper-iom graphhopper-england
 ```
 
 `import` wipes the graph cache and rebuilds from scratch, so GraphHopper is unavailable
@@ -131,9 +123,9 @@ CORS_ORIGINS=https://looper.example.com docker compose -f docker-compose.prod.ym
 Set `CORS_ORIGINS` to the PWA's exact origin. It defaults to `*`, which is convenient
 locally and wrong in production.
 
-Sizing: the Isle of Man graph runs comfortably in 512 MB. Import is the memory-hungry
-phase — give the machine at least `GH_HEAP` plus 512 MB during the first boot. The graph
-volume must be persistent, or every restart pays for a fresh import.
+Sizing: the Isle of Man graph runs comfortably in 512 MB. England's first import is the
+memory-hungry phase — use at least 8 GB available RAM with the default 6 GB England heap.
+The graph volumes must be persistent, or every restart pays for a fresh import.
 
 ## How a loop is generated
 
