@@ -67,9 +67,15 @@ final class AppModel: ObservableObject {
     #if DEBUG
     /// Lets a debug build jump straight to a screen with sample data, without
     /// a live route service — set LOOPER_PREVIEW to "choices" or "walk" in
-    /// the scheme/launch environment.
+    /// the scheme/launch environment. LOOPER_PREVIEW=find instead exercises
+    /// the real network path against the configured apiBase.
     private func seedPreviewStateIfRequested() {
         guard let target = ProcessInfo.processInfo.environment["LOOPER_PREVIEW"] else { return }
+        if target == "find" {
+            screen = .planner
+            findRoutes()
+            return
+        }
         func sampleRoute(id: String, name: String) -> Route {
             Route(
                 id: id, name: name, distanceMeters: 4200, durationSeconds: 3000,

@@ -48,6 +48,6 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
       configs:
         Debug:
-          LOOPER_API_BASE: "http://localhost:8080"
+          LOOPER_API_BASE: "https://www.woollams.com/looper_router"
         Release:
-          LOOPER_API_BASE: "https://looper-routes.example.com"
+          LOOPER_API_BASE: "https://www.woollams.com/looper_router"
