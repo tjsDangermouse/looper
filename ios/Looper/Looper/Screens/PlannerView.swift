@@ -5,12 +5,13 @@ private let findingMessages = ["Building clean loops around you…", "Checking f
 
 struct PlannerView: View {
     @ObservedObject var model: AppModel
+    @FocusState private var amountFocused: Bool
 
     var body: some View {
         BottomSheet {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top) {
-                    Text("How far shall we walk?")
+                    Text("How far shall we Loop?")
                         .font(.title2.bold())
                     Spacer()
                     Button(action: model.requestLocation) {
@@ -20,11 +21,29 @@ struct PlannerView: View {
                     .accessibilityLabel("Use my location")
                 }
 
-                Picker("Mode", selection: $model.mode) {
-                    Label("Distance", systemImage: "figure.walk").tag(LoopMode.distance)
-                    Label("Time", systemImage: "clock").tag(LoopMode.time)
+                HStack(spacing: 12) {
+                    Picker("Activity", selection: $model.activity) {
+                        Label("Walk", systemImage: "figure.walk")
+                            .labelStyle(.iconOnly)
+                            .tag(Activity.walking)
+                        Label("Run", systemImage: "figure.run")
+                            .labelStyle(.iconOnly)
+                            .tag(Activity.running)
+                    }
+                    .pickerStyle(.segmented)
+                    .controlSize(.large)
+
+                    Picker("Plan by", selection: $model.mode) {
+                        Label("Distance", systemImage: "ruler")
+                            .labelStyle(.iconOnly)
+                            .tag(LoopMode.distance)
+                        Label("Time", systemImage: "clock")
+                            .labelStyle(.iconOnly)
+                            .tag(LoopMode.time)
+                    }
+                    .pickerStyle(.segmented)
+                    .controlSize(.large)
                 }
-                .pickerStyle(.segmented)
 
                 Text(model.mode == .distance ? "Your distance" : "Your time")
                     .font(.caption)
@@ -34,6 +53,7 @@ struct PlannerView: View {
                     TextField(model.mode == .distance ? "Distance" : "Minutes", text: $model.amount)
                         .keyboardType(.decimalPad)
                         .textFieldStyle(.roundedBorder)
+                        .focused($amountFocused)
 
                     if model.mode == .distance {
                         Picker("Unit", selection: $model.unit) {
@@ -57,7 +77,10 @@ struct PlannerView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Button(action: model.findRoutes) {
+                Button {
+                    amountFocused = false
+                    model.findRoutes()
+                } label: {
                     Label(model.busy ? findingMessages[model.findingStage] : "Find my loops", systemImage: "arrow.triangle.2.circlepath")
                         .frame(maxWidth: .infinity)
                 }

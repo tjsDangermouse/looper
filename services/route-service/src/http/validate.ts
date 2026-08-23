@@ -39,6 +39,25 @@ export function parseLoopRequest(body: unknown): LoopRequest {
   const units = input.units === 'mi' ? 'mi' : input.units === 'km' ? 'km' : undefined
   if (!units) throw new ValidationError('Choose kilometres or miles.', 'units')
 
+  const activity = input.activity === undefined || input.activity === null
+    ? undefined
+    : input.activity === 'walking' || input.activity === 'running' ? input.activity : undefined
+  if (input.activity !== undefined && input.activity !== null && !activity) {
+    throw new ValidationError('Choose walking or running.', 'activity')
+  }
+
+  let walkingPaceMinutesPerKm: number | undefined
+  if ((input.walkingPaceMinutes !== undefined && input.walkingPaceMinutes !== null) || (input.walkingPaceUnit !== undefined && input.walkingPaceUnit !== null)) {
+    const pace = Number(input.walkingPaceMinutes)
+    const paceUnit = input.walkingPaceUnit === 'mi' ? 'mi' : input.walkingPaceUnit === 'km' ? 'km' : undefined
+    if (!Number.isFinite(pace) || !paceUnit) throw new ValidationError('Choose a valid walking pace.', 'walkingPaceMinutes')
+    walkingPaceMinutesPerKm = paceUnit === 'km' ? pace : pace / 0.621371
+    const minimumPace = activity === 'running' ? 2 : 4
+    if (walkingPaceMinutesPerKm < minimumPace || walkingPaceMinutesPerKm > 30) {
+      throw new ValidationError(`Choose a ${activity === 'running' ? 'running' : 'walking'} pace between ${minimumPace} and 30 minutes per km.`, 'walkingPaceMinutes')
+    }
+  }
+
   let distanceKm: number | undefined
   let durationMinutes: number | undefined
   if (mode === 'distance') {
@@ -65,6 +84,8 @@ export function parseLoopRequest(body: unknown): LoopRequest {
     distanceKm,
     durationMinutes,
     units,
+    ...(activity ? { activity } : {}),
+    ...(walkingPaceMinutesPerKm !== undefined ? { walkingPaceMinutesPerKm } : {}),
     variation: Math.trunc(rawVariation),
     ...(exclude ? { exclude } : {}),
     overrides: parseOverrides(input.overrides),
@@ -75,7 +96,7 @@ function parseExcludedRoutes(value: unknown): [number, number][][] | undefined {
   if (value === undefined) return undefined
   if (!Array.isArray(value) || value.length > 3) throw new ValidationError('Send valid previous loops.', 'exclude')
   return value.map(route => {
-    if (!Array.isArray(route) || route.length < 2 || route.length > 2_000) throw new ValidationError('Send valid previous loops.', 'exclude')
+    if (!Array.isArray(route) || route.length < 2 || route.length > 120) throw new ValidationError('Send valid previous loops.', 'exclude')
     return route.map(point => {
       if (!Array.isArray(point) || point.length !== 2 || !point.every(Number.isFinite)) throw new ValidationError('Send valid previous loops.', 'exclude')
       return [point[0], point[1]] as [number, number]

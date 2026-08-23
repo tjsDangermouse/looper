@@ -6,6 +6,7 @@ import { createRateLimiter } from './http/rateLimit.js'
 import { ValidationError, parseLoopRequest } from './http/validate.js'
 import { generateLoops, type Diagnostics } from './loops/generate.js'
 import type { LngLat } from './loops/geo.js'
+import { graphForLocation, REGION_BOUNDS, type RegionalGraph } from './regions.js'
 
 /**
  * The Looper API.
@@ -17,17 +18,23 @@ import type { LngLat } from './loops/geo.js'
  * any response, and no engine error text reaches a browser.
  */
 
-const MAX_BODY_BYTES = 8 * 1024
+// Refresh requests include compact outlines of the three loops already shown,
+// so the service can deliberately avoid them without accepting unbounded input.
+const MAX_BODY_BYTES = 32 * 1024
 const GENERIC_ERROR = 'Routes are unavailable right now. Please try again.'
 const BUSY_ERROR = 'The route service is busy. Please try again in a moment.'
+const UNSUPPORTED_LOCATION = 'Looper is not available for this location yet.'
 
-export function createApp(options: { graphhopper?: GraphHopperClient } = {}): Server {
-  const graphhopper = options.graphhopper
-    ?? new GraphHopperClient(config.graphhopperUrl, config.graphhopperProfile, config.legTimeoutMs)
+export function createApp(options: { graphhopper?: GraphHopperClient; regionalGraphs?: RegionalGraph[] } = {}): Server {
+  const graphhopper = options.graphhopper ?? new GraphHopperClient(config.graphhopperIomUrl, config.graphhopperProfile, config.legTimeoutMs)
+  const regionalGraphs = options.regionalGraphs ?? [
+    { id: 'isle-of-man' as const, bounds: REGION_BOUNDS['isle-of-man'], graphhopper },
+    { id: 'england' as const, bounds: REGION_BOUNDS.england, graphhopper: new GraphHopperClient(config.graphhopperEnglandUrl, config.graphhopperProfile, config.legTimeoutMs) },
+  ]
   const limiter = createRateLimiter(config.rateLimitPerMinute)
 
   return createServer((request, response) => {
-    void handle(request, response, graphhopper, limiter).catch(error => {
+    void handle(request, response, regionalGraphs, limiter).catch(error => {
       log('error', 'unhandled', { error: String(error) })
       if (!response.headersSent) send(response, 500, { error: GENERIC_ERROR })
     })
@@ -37,14 +44,14 @@ export function createApp(options: { graphhopper?: GraphHopperClient } = {}): Se
 async function handle(
   request: IncomingMessage,
   response: ServerResponse,
-  graphhopper: GraphHopperClient,
+  regionalGraphs: RegionalGraph[],
   limiter: ReturnType<typeof createRateLimiter>,
 ) {
   applyCors(request, response)
   if (request.method === 'OPTIONS') { response.writeHead(204); response.end(); return }
 
   const path = new URL(request.url ?? '/', 'http://localhost').pathname
-  if (path === '/health' && request.method === 'GET') return health(response, graphhopper)
+  if (path === '/health' && request.method === 'GET') return health(response, regionalGraphs[0].graphhopper)
   if (path !== '/v1/loops') return send(response, 404, { error: 'Not found.' })
   if (request.method !== 'POST') return send(response, 405, { error: 'Method not allowed.' })
 
@@ -66,6 +73,8 @@ async function handle(
     if (error instanceof ValidationError) return send(response, 400, { error: error.message })
     throw error
   }
+  const regionalGraph = graphForLocation(regionalGraphs, parsed.start)
+  if (!regionalGraph) return send(response, 400, { error: UNSUPPORTED_LOCATION })
 
   // One clock for the whole request. When it runs out every routing call still
   // in flight is cancelled rather than left running against the engine.
@@ -82,13 +91,15 @@ async function handle(
       signal: controller.signal,
       onDiagnostics: value => { diagnostics = value },
       route: (points, customModel) =>
-        graphhopper.route(points as LngLat[], { customModel, signal: controller.signal, timeoutMs: config.legTimeoutMs }),
+        regionalGraph.graphhopper.route(points as LngLat[], { customModel, signal: controller.signal, timeoutMs: config.legTimeoutMs }),
     })
     log('info', 'loops', {
       mode: parsed.mode,
+      activity: parsed.activity ?? 'walking',
       km: parsed.distanceKm,
       minutes: parsed.durationMinutes,
       near: coarseLocation(parsed.start.lng, parsed.start.lat),
+      region: regionalGraph.id,
       ms: Date.now() - startedAt,
       ...diagnostics,
     })

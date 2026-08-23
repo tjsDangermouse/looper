@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       proxy: {
         '/v1': {
-          target: env.LOOPER_API_URL || `http://localhost:${env.ROUTE_SERVICE_PORT || 8080}`,
+          target: env.LOOPER_API_URL || `http://localhost:${env.ROUTE_SERVICE_PORT || 8988}`,
           changeOrigin: true,
         },
       },

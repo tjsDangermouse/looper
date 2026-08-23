@@ -21,8 +21,37 @@ struct LoopRequestBody: Encodable {
     let distanceKm: Double?
     let durationMinutes: Double?
     let units: Unit
+    let activity: Activity?
+    let walkingPaceMinutes: Double?
+    let walkingPaceUnit: Unit?
     let variation: Int
     let exclude: [[Point]]?
+
+    enum CodingKeys: String, CodingKey {
+        case start, mode, distanceKm, durationMinutes, units, activity, walkingPaceMinutes, walkingPaceUnit, variation, exclude
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(start, forKey: .start)
+        try container.encode(mode, forKey: .mode)
+        try container.encodeIfPresent(distanceKm, forKey: .distanceKm)
+        try container.encodeIfPresent(durationMinutes, forKey: .durationMinutes)
+        try container.encode(units, forKey: .units)
+        try container.encodeIfPresent(activity, forKey: .activity)
+        try container.encodeIfPresent(walkingPaceMinutes, forKey: .walkingPaceMinutes)
+        try container.encodeIfPresent(walkingPaceUnit, forKey: .walkingPaceUnit)
+        try container.encode(variation, forKey: .variation)
+        try container.encodeIfPresent(exclude, forKey: .exclude)
+    }
+}
+
+private let exclusionPointLimit = 120
+private func compactRoute(_ coordinates: [Point]) -> [Point] {
+    guard coordinates.count > exclusionPointLimit else { return coordinates }
+    return (0..<exclusionPointLimit).map { index in
+        coordinates[Int((Double(index) * Double(coordinates.count - 1) / Double(exclusionPointLimit - 1)).rounded())]
+    }
 }
 
 private struct LoopsResponseBody: Decodable {
@@ -81,6 +110,9 @@ public func requestLoops(
     distanceKm: Double? = nil,
     durationMinutes: Double? = nil,
     unit: Unit,
+    activity: Activity? = nil,
+    walkingPaceMinutes: Double? = nil,
+    walkingPaceUnit: Unit? = nil,
     variation: Int,
     excludeRoutes: [Route] = [],
     apiBase: String,
@@ -95,8 +127,11 @@ public func requestLoops(
         distanceKm: mode == .distance ? distanceKm : nil,
         durationMinutes: mode == .time ? durationMinutes : nil,
         units: unit,
+        activity: activity,
+        walkingPaceMinutes: walkingPaceMinutes,
+        walkingPaceUnit: walkingPaceUnit,
         variation: variation,
-        exclude: excludeRoutes.isEmpty ? nil : excludeRoutes.map { $0.geometry.coordinates }
+        exclude: excludeRoutes.isEmpty ? nil : excludeRoutes.map { compactRoute($0.geometry.coordinates) }
     )
     let encoded = try JSONEncoder().encode(body)
     let (data, statusCode) = try await client.post(url: url, body: encoded)

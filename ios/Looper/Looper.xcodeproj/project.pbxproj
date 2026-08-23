@@ -13,7 +13,6 @@
 		17889B2B605D69E81470DB00 /* OSMStyle.json in Resources */ = {isa = PBXBuildFile; fileRef = F015977723BD5A6F2CCB72A2 /* OSMStyle.json */; };
 		2563DCC062E820C93E6AC2E7 /* PlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F28839314B865C4E18231BB6 /* PlannerView.swift */; };
 		267EC0DD96D33B90EB61AC7D /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76C573F04AE577081F1C8592 /* Theme.swift */; };
-		84DC849B6C4942F794208415 /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 216B375884034C66A69E80F0 /* ButtonStyles.swift */; };
 		2C208F6420CC464DCF526295 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835921102A17FB5FBC535EFB /* SettingsView.swift */; };
 		2C35E76BDDB8B07250F08902 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5B8DAB14ACD3F6921BB9CD /* LocationManager.swift */; };
 		463B58E0CF7C44C0F1A8E884 /* MapLibreMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB2F9FAA54BF127F37C20269 /* MapLibreMapView.swift */; };
@@ -25,6 +24,7 @@
 		7670F51ECA82598B7A20723D /* ChoicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26CD672EEBDFF7271B57A496 /* ChoicesView.swift */; };
 		78366D7C49444B9622139744 /* WalkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7136A25E84DADF2A77C4090 /* WalkView.swift */; };
 		78E943275448589AD91D93CB /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FBBE075EF8B5A79E9F071ED /* AppModel.swift */; };
+		84DC849B6C4942F794208415 /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 216B375884034C66A69E80F0 /* ButtonStyles.swift */; };
 		8C1DC94E932F1B44170B6CD7 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D444B508C666D16B306A4E3F /* WelcomeView.swift */; };
 		9CCE7933DBE629887D74E012 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 986111AC049E77ECF9B75E10 /* MapLibre */; };
 		AFC1ABFB4C32069753C8AEF3 /* BrandBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99C168511C6016603309E018 /* BrandBadge.swift */; };
@@ -38,6 +38,7 @@
 /* Begin PBXFileReference section */
 		0260C72DA86CF4538286A4A7 /* SpeechManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechManager.swift; sourceTree = "<group>"; };
 		1A64D791F4AECBFEFC9B0213 /* LooperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LooperApp.swift; sourceTree = "<group>"; };
+		216B375884034C66A69E80F0 /* ButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonStyles.swift; sourceTree = "<group>"; };
 		26CD672EEBDFF7271B57A496 /* ChoicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChoicesView.swift; sourceTree = "<group>"; };
 		2A5B8DAB14ACD3F6921BB9CD /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		31362405C36C54394AB91A8A /* LooperKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LooperKit; path = ../LooperKit; sourceTree = SOURCE_ROOT; };
@@ -47,7 +48,6 @@
 		54A22A4CA8E73EB5ADC2C935 /* AppVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVersion.swift; sourceTree = "<group>"; };
 		70AF98D958501DA02250650E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		76C573F04AE577081F1C8592 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
-		216B375884034C66A69E80F0 /* ButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonStyles.swift; sourceTree = "<group>"; };
 		835921102A17FB5FBC535EFB /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		892C896BBE805E15C40FF985 /* RouteTileCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteTileCache.swift; sourceTree = "<group>"; };
 		898B18622C0F724237790CC4 /* VoiceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSettingsView.swift; sourceTree = "<group>"; };
@@ -345,7 +345,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = DDY2K7746M;
 				INFOPLIST_FILE = Looper/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -354,7 +354,7 @@
 					"@executable_path/Frameworks",
 				);
 				LOOPER_API_BASE = "https://www.woollams.com/looper_router";
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.woollams.Looper;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -432,7 +432,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = DDY2K7746M;
 				INFOPLIST_FILE = Looper/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -441,7 +441,7 @@
 					"@executable_path/Frameworks",
 				);
 				LOOPER_API_BASE = "https://www.woollams.com/looper_router";
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.woollams.Looper;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;

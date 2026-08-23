@@ -33,22 +33,23 @@ provider and no routing API key anywhere in this repository.
 ```bash
 cp .env.example .env          # nothing secret in it; no API keys exist here
 docker compose up --build     # GraphHopper + route service
-npm install && npm run dev    # the PWA on :5173, proxying /v1 to :8080
+npm install && npm run dev    # the PWA on :5173, proxying /v1 to :8988
 ```
 
-The first `docker compose up` imports the OpenStreetMap extract before GraphHopper will
-answer. On the Isle of Man that takes well under a minute; the container reports healthy
-once `/info` responds. Later starts reuse the imported graph and come up in seconds.
+The first `docker compose up` imports both OpenStreetMap extracts before the route service
+will answer. The Isle of Man import is quick; England takes longer and needs substantially
+more memory. Each container reports healthy once `/info` responds. Later starts reuse the
+imported graphs and come up in seconds.
 
 Check the stack is alive:
 
 ```bash
-curl localhost:8080/health
-curl -X POST localhost:8080/v1/loops -H 'content-type: application/json' \
+curl localhost:8988/health
+curl -X POST localhost:8988/v1/loops -H 'content-type: application/json' \
   -d '{"start":{"lng":-4.4816,"lat":54.1506},"mode":"distance","distanceKm":5,"units":"km"}'
 ```
 
-Vite proxies `/v1` to `http://localhost:8080`, so in development the browser sees a single
+Vite proxies `/v1` to `http://localhost:8988`, so in development the browser sees a single
 origin and no CORS. Set `LOOPER_API_URL` in `.env` if the route service is somewhere else.
 
 ### Running the route service without Docker
@@ -61,40 +62,51 @@ GRAPHHOPPER_URL=http://localhost:8989 npm run dev
 
 ## Importing OpenStreetMap data
 
-The Isle of Man is the default region. Nothing in the stack is specific to it — any
-Geofabrik (or other) `.osm.pbf` extract works.
+The stack currently serves Isle of Man and England from separate GraphHopper graphs. The
+route service selects a graph from the requested starting location; a location outside
+those supported areas receives a clear availability message.
 
 The importer accepts a local file or a download URL, in that order of preference:
 
 ```bash
 # .env
-OSM_PBF_PATH=isle-of-man-latest.osm.pbf                                  # looked for in ./data
-OSM_PBF_URL=https://download.geofabrik.de/europe/isle-of-man-latest.osm.pbf
+OSM_PBF_IOM_PATH=isle-of-man-latest.osm.pbf                              # looked for in ./data
+OSM_PBF_IOM_URL=https://download.geofabrik.de/europe/isle-of-man-latest.osm.pbf
+OSM_PBF_ENGLAND_PATH=england-latest.osm.pbf
+OSM_PBF_ENGLAND_URL=https://download.geofabrik.de/europe/united-kingdom/england-latest.osm.pbf
 ```
 
 If the file named by `OSM_PBF_PATH` is not there, the URL is downloaded once into the
 volume and reused. Data is never re-downloaded or re-imported on an ordinary restart.
 
-### Switching region
+### Downloading PBF backups on a Windows Docker host
 
-```bash
-# e.g. Greater Manchester instead
-OSM_PBF_URL=https://download.geofabrik.de/europe/great-britain/england/greater-manchester-latest.osm.pbf
-OSM_PBF_PATH=greater-manchester-latest.osm.pbf
+Keep the raw extracts in the project's `data/` folder so a graph can be rebuilt without
+downloading them again. The commands below download through the same Docker mount that
+GraphHopper uses, write atomically via a `.part` file, and do not rebuild a running graph.
+They assume the Compose project is named `looper_router`; change the value after `-p` if
+your Docker project has a different name.
+
+```powershell
+# Isle of Man
+docker compose -p looper_router run --rm --no-deps graphhopper-iom sh -c 'curl -fL --retry 5 --connect-timeout 30 --speed-time 60 --speed-limit 1024 -o /data/osm/isle-of-man-latest.osm.pbf.part https://download.geofabrik.de/europe/isle-of-man-latest.osm.pbf && mv /data/osm/isle-of-man-latest.osm.pbf.part /data/osm/isle-of-man-latest.osm.pbf'
+
+# England
+docker compose -p looper_router run --rm --no-deps graphhopper-england sh -c 'curl -fL --retry 5 --connect-timeout 30 --speed-time 60 --speed-limit 1024 -o /data/osm/england-latest.osm.pbf.part https://download.geofabrik.de/europe/united-kingdom/england-latest.osm.pbf && mv /data/osm/england-latest.osm.pbf.part /data/osm/england-latest.osm.pbf'
 ```
 
-Then rebuild the graph (below). Larger extracts need more memory for the import — raise
-`GH_HEAP` to roughly 2–4 GB per country-sized extract.
+The completed files appear on the Windows host as `data/isle-of-man-latest.osm.pbf` and
+`data/england-latest.osm.pbf`. Do not delete a `.part` file unless you intentionally want
+to discard an interrupted download.
 
 ### Rebuilding the graph after an OSM update
 
 The graph is only built when there isn't one. To replace it deliberately:
 
 ```bash
-docker compose run --rm graphhopper import                       # uses OSM_PBF_PATH / OSM_PBF_URL
-docker compose run --rm graphhopper import /data/osm/some.pbf    # or an explicit file
-docker compose run --rm graphhopper import https://example.com/region.osm.pbf
-docker compose up -d graphhopper
+docker compose run --rm graphhopper-iom import                    # uses the IOM variables
+docker compose run --rm graphhopper-england import                 # uses the England variables
+docker compose up -d graphhopper-iom graphhopper-england
 ```
 
 `import` wipes the graph cache and rebuilds from scratch, so GraphHopper is unavailable
@@ -131,9 +143,19 @@ CORS_ORIGINS=https://looper.example.com docker compose -f docker-compose.prod.ym
 Set `CORS_ORIGINS` to the PWA's exact origin. It defaults to `*`, which is convenient
 locally and wrong in production.
 
-Sizing: the Isle of Man graph runs comfortably in 512 MB. Import is the memory-hungry
-phase — give the machine at least `GH_HEAP` plus 512 MB during the first boot. The graph
-volume must be persistent, or every restart pays for a fresh import.
+### Updating only the route service
+
+On a Windows host using the `looper_router` Compose project, rebuild and replace only the
+route service without interrupting either GraphHopper container or an in-progress PBF
+download:
+
+```powershell
+docker compose -p looper_router up -d --build --no-deps --force-recreate route-service
+```
+
+Sizing: the Isle of Man graph runs comfortably in 512 MB. England's first import is the
+memory-hungry phase — use at least 8 GB available RAM with the default 6 GB England heap.
+The graph volumes must be persistent, or every restart pays for a fresh import.
 
 ## How a loop is generated
 
@@ -186,6 +208,19 @@ cd services/route-service && npm run lint && npm run typecheck && npm test
   backgrounded or locked.
 - **Geolocation needs HTTPS.** Test on a phone against the deployed URL, not a LAN
   address.
+
+## Possible future work
+
+- **Offline map-area downloads.** Let a walker download tiles for a chosen area ahead
+  of time, for use with no signal. `RouteTileCache.swift` already does this per-route
+  automatically via MapLibre's `MLNOfflineStorage` / `MLNTilePyramidOfflineRegion`, but
+  ties the pack to a single walk and releases it when the walk ends. A user-facing
+  version would reuse the same API with a persistent (not auto-released) pack: let the
+  walker pick an area (e.g. the current map viewport), show download progress via the
+  pack's KVO progress updates, and add a small list in Settings to view/delete saved
+  areas since they'd no longer expire on their own. Tile storage grows fast at high
+  zoom (the walk cache already goes to zoom 18), so a manual download would likely want
+  a capped zoom range and an estimated-size prompt before starting.
 
 ## Attribution
 

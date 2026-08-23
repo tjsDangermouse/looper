@@ -40,7 +40,7 @@ describe('asking Looper for loops',()=>{
  })
  it('excludes the loops already offered when refreshing',async()=>{
   const calls=answer({routes:[]})
-  await requestLoops({start,mode:'distance',distanceKm:4,unit:'km',variation:3,excludeRoutes:[route]})
+  await requestLoops({start,mode:'distance',distanceKm:4,unit:'km',variation:3,excludeRoutes:[route as unknown as Route]})
   expect(calls[0].body.exclude).toEqual([[[0,0],[.001,0]]])
  })
  it('names each loop for the walker',async()=>{

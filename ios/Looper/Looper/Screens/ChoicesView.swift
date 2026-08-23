@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ChoicesView: View {
     @ObservedObject var model: AppModel
+    @State private var refreshPulse = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,6 +24,17 @@ struct ChoicesView: View {
                             Image(systemName: "arrow.triangle.2.circlepath")
                         }
                         .buttonStyle(IconButtonStyle(background: .looperRaised, bordered: true))
+                        .foregroundStyle(model.busy ? Color.looperAccent : .white)
+                        .scaleEffect(refreshPulse ? 1.12 : 1)
+                        .animation(
+                            model.busy
+                                ? .easeInOut(duration: 0.6).repeatForever(autoreverses: true)
+                                : .easeOut(duration: 0.2),
+                            value: refreshPulse
+                        )
+                        .onChange(of: model.busy) { _, busy in
+                            refreshPulse = busy
+                        }
                         .disabled(model.busy)
                         Button {
                             model.toggleReversed()
@@ -45,16 +57,18 @@ struct ChoicesView: View {
                     }
 
                     ForEach(Array(model.shownRoutes.enumerated()), id: \.element.id) { index, route in
-                        Button {
-                            model.selected = route
-                        } label: {
+                        HStack(spacing: 0) {
+                            Button {
+                                model.selected = route
+                                model.showsRouteOverlay = true
+                            } label: {
                             HStack(spacing: 12) {
                                 Circle()
                                     .fill(Color(hex: routeColours[index % routeColours.count]))
                                     .frame(width: 12, height: 12)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(route.name).font(.headline)
-                                    Text("\(formatDistance(route.distanceMeters, unit: model.unit)) · \(formatTime(route.durationSeconds)) · \(abs(Int(route.targetDifferencePercent)))% \(route.targetDifferencePercent < 0 ? "shorter" : "longer")")
+                                    Text("\(formatDistance(route.distanceMeters, unit: model.unit)) · \(formatTime(secondsForDistance(route.distanceMeters, paceMinutesPerKm: model.activePaceMinutesPerKm))) · \(abs(Int(route.targetDifferencePercent)))% \(route.targetDifferencePercent < 0 ? "shorter" : "longer")")
                                         .font(.footnote)
                                         .foregroundStyle(.secondary)
                                 }
@@ -64,16 +78,29 @@ struct ChoicesView: View {
                                         .foregroundStyle(Color(hex: "9cc36b"))
                                 }
                             }
-                            .padding(12)
-                            .frame(minHeight: 64)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(model.selected?.id == route.id ? Color.white.opacity(0.08) : Color.clear)
-                            )
+                            .padding(.leading, 12)
+                            .padding(.vertical, 12)
                             .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                model.toggleFavorite(route)
+                            } label: {
+                                Image(systemName: model.isFavorite(route) ? "heart.fill" : "heart")
+                                    .font(.title3)
+                                    .foregroundStyle(model.isFavorite(route) ? Color.looperAccent : .secondary)
+                                    .frame(width: 44, height: 44)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(model.isFavorite(route) ? "Remove \(route.name) from saved routes" : "Save \(route.name) for later")
                         }
-                        .buttonStyle(.plain)
+                        .frame(minHeight: 64)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(model.selected?.id == route.id ? Color.white.opacity(0.08) : Color.clear)
+                        )
                     }
                 }
             }

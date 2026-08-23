@@ -7,17 +7,33 @@
 name: looper
 
 services:
-  graphhopper:
+  graphhopper-iom:
     build:
       context: ./graphhopper
       args:
         GRAPHHOPPER_VERSION: ${GRAPHHOPPER_VERSION:-11.0}
     environment:
-      OSM_PBF_PATH: ${OSM_PBF_PATH:-isle-of-man-latest.osm.pbf}
-      OSM_PBF_URL: ${OSM_PBF_URL:-https://download.geofabrik.de/europe/isle-of-man-latest.osm.pbf}
-      GH_HEAP: ${GH_HEAP:-2g}
+      OSM_PBF_PATH: ${OSM_PBF_IOM_PATH:-isle-of-man-latest.osm.pbf}
+      OSM_PBF_URL: ${OSM_PBF_IOM_URL:-https://download.geofabrik.de/europe/isle-of-man-latest.osm.pbf}
+      GH_HEAP: ${GH_IOM_HEAP:-2g}
     volumes:
-      - graph-cache:/data/graph-cache
+      - graph-cache-iom:/data/graph-cache
+      - osm-data:/data/osm
+    expose:
+      - "8989"
+    restart: unless-stopped
+
+  graphhopper-england:
+    build:
+      context: ./graphhopper
+      args:
+        GRAPHHOPPER_VERSION: ${GRAPHHOPPER_VERSION:-11.0}
+    environment:
+      OSM_PBF_PATH: ${OSM_PBF_ENGLAND_PATH:-england-latest.osm.pbf}
+      OSM_PBF_URL: ${OSM_PBF_ENGLAND_URL:-https://download.geofabrik.de/europe/united-kingdom/england-latest.osm.pbf}
+      GH_HEAP: ${GH_ENGLAND_HEAP:-6g}
+    volumes:
+      - graph-cache-england:/data/graph-cache
       - osm-data:/data/osm
     expose:
       - "8989"
@@ -28,7 +44,8 @@ services:
       context: ./services/route-service
     environment:
       PORT: 8080
-      GRAPHHOPPER_URL: http://graphhopper:8989
+      GRAPHHOPPER_IOM_URL: http://graphhopper-iom:8989
+      GRAPHHOPPER_ENGLAND_URL: http://graphhopper-england:8989
       GRAPHHOPPER_PROFILE: ${GRAPHHOPPER_PROFILE:-foot}
       # Set this to the PWA's origin in production, e.g. https://looper.example.
       CORS_ORIGINS: ${CORS_ORIGINS}
@@ -39,10 +56,13 @@ services:
       # Nginx is the public HTTPS entry point; keep the service local to this host.
       - "127.0.0.1:${ROUTE_SERVICE_PORT:-8988}:8080"
     depends_on:
-      graphhopper:
+      graphhopper-iom:
+        condition: service_healthy
+      graphhopper-england:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
-  graph-cache:
+  graph-cache-iom:
+  graph-cache-england:
   osm-data:

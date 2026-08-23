@@ -4,7 +4,7 @@ import { createApp } from './server.js'
 
 const server = createApp()
 server.listen(config.port, () => {
-  log('info', 'listening', { port: config.port, engine: config.graphhopperUrl, profile: config.graphhopperProfile })
+  log('info', 'listening', { port: config.port, regions: ['isle-of-man', 'england'], profile: config.graphhopperProfile })
 })
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {

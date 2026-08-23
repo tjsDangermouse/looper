@@ -16,6 +16,15 @@ describe('input validation', () => {
     expect(parsed.mode).toBe('time')
     expect(parsed.durationMinutes).toBe(45)
   })
+  it('normalises a walking pace in miles to minutes per kilometre', () => {
+    const parsed = parseLoopRequest({ ...valid, walkingPaceMinutes: 16, walkingPaceUnit: 'mi' })
+    expect(parsed.walkingPaceMinutesPerKm).toBeCloseTo(25.75, 2)
+  })
+  it('accepts a running request and its quicker pace', () => {
+    const parsed = parseLoopRequest({ ...valid, activity: 'running', walkingPaceMinutes: 3, walkingPaceUnit: 'km' })
+    expect(parsed.activity).toBe('running')
+    expect(parsed.walkingPaceMinutesPerKm).toBe(3)
+  })
   it('defaults the variation to zero', () => expect(parseLoopRequest(valid).variation).toBe(0))
   it('keeps a variation it is given', () => expect(parseLoopRequest({ ...valid, variation: 3 }).variation).toBe(3))
   it('keeps previously offered routes out of a refresh', () => {

@@ -8,9 +8,14 @@ struct WalkView: View {
         VStack {
             HStack(spacing: 10) {
                 Button(action: model.endWalk) {
-                    Image(systemName: "xmark")
+                    Text("End")
                 }
-                .buttonStyle(IconButtonStyle())
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.looperAccent)
+                .padding(.horizontal, 16)
+                .frame(height: 38)
+                .background(Color.looperSheet, in: Capsule())
+                .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
 
                 Button(action: model.returnHome) {
                     Image(systemName: "house.fill")
@@ -82,7 +87,7 @@ struct WalkView: View {
                                 .foregroundStyle(.secondary)
                             Text(turn?.instruction ?? "You’re back where you started.")
                                 .font(.title3.bold())
-                            Text("\(formatDistance(model.remaining, unit: model.unit)) remaining · about \(formatTime(model.remaining / selected.distanceMeters * selected.durationSeconds))")
+                            Text("\(formatDistance(model.remaining, unit: model.unit)) remaining · about \(formatTime(secondsForDistance(model.remaining, paceMinutesPerKm: model.activePaceMinutesPerKm)))")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
