@@ -57,6 +57,7 @@ export function parseLoopRequest(body: unknown): LoopRequest {
   if (!Number.isFinite(rawVariation) || rawVariation < 0 || rawVariation > MAX_VARIATION) {
     throw new ValidationError('Ask for a different set of loops.', 'variation')
   }
+  const exclude = parseExcludedRoutes(input.exclude)
 
   return {
     start: { lng, lat },
@@ -65,8 +66,21 @@ export function parseLoopRequest(body: unknown): LoopRequest {
     durationMinutes,
     units,
     variation: Math.trunc(rawVariation),
+    ...(exclude ? { exclude } : {}),
     overrides: parseOverrides(input.overrides),
   }
+}
+
+function parseExcludedRoutes(value: unknown): [number, number][][] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length > 3) throw new ValidationError('Send valid previous loops.', 'exclude')
+  return value.map(route => {
+    if (!Array.isArray(route) || route.length < 2 || route.length > 2_000) throw new ValidationError('Send valid previous loops.', 'exclude')
+    return route.map(point => {
+      if (!Array.isArray(point) || point.length !== 2 || !point.every(Number.isFinite)) throw new ValidationError('Send valid previous loops.', 'exclude')
+      return [point[0], point[1]] as [number, number]
+    })
+  })
 }
 
 /**

@@ -18,6 +18,12 @@ describe('input validation', () => {
   })
   it('defaults the variation to zero', () => expect(parseLoopRequest(valid).variation).toBe(0))
   it('keeps a variation it is given', () => expect(parseLoopRequest({ ...valid, variation: 3 }).variation).toBe(3))
+  it('keeps previously offered routes out of a refresh', () => {
+    expect(parseLoopRequest({ ...valid, exclude: [[[0, 0], [0.001, 0]]] }).exclude).toEqual([[[0, 0], [0.001, 0]]])
+  })
+  it('refuses malformed previous routes', () => {
+    expect(() => parseLoopRequest({ ...valid, exclude: [[['no', 'route']]] })).toThrow(ValidationError)
+  })
   it('refuses a start point off the globe', () => {
     expect(() => parseLoopRequest({ ...valid, start: { lng: 400, lat: 0 } })).toThrow(ValidationError)
     expect(() => parseLoopRequest({ ...valid, start: undefined })).toThrow(ValidationError)

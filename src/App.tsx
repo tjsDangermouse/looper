@@ -6,6 +6,10 @@ import { compassAvailable, requestCompass, watchHeading, routeColours, estimateK
 // every one, which takes a few seconds. Saying what is being done beats a
 // spinner that could mean anything.
 const FINDING=['Building clean loops around you…','Checking for overlaps and detours…']
+// The service explores up to three adjacent variations for one search. Leave
+// that space between requests so refresh begins with genuinely new bearings.
+const VARIATION_STRIDE=3
+const freshVariation = () => Math.floor(Math.random()*300)*VARIATION_STRIDE
 type Screen='welcome'|'planner'|'choices'|'walk'
 const DEFAULT:Point=[-4.517837412123816,54.15767997688426] // Home
 export function LooperApp(){const [screen,setScreen]=useState<Screen>('welcome'),[start,setStart]=useState<Point>(DEFAULT),[position,setPosition]=useState<Point>(),[locationState,setLocationState]=useState(''),[mode,setMode]=useState<'distance'|'time'>('distance'),[unit,setUnit]=useState<'km'|'mi'>('km'),[amount,setAmount]=useState('4'),[routes,setRoutes]=useState<Route[]>([]),[selected,setSelected]=useState<Route>(),[busy,setBusy]=useState(false),[error,setError]=useState(''),[muted,setMuted]=useState(false),[offRoute,setOffRoute]=useState(false),[progress,setProgress]=useState(0),[following,setFollowing]=useState(false),[courseUp,setCourseUp]=useState(false),[heading,setHeading]=useState<number>(),[reversed,setReversed]=useState(false),[sheetOpen,setSheetOpen]=useState(true),[padding,setPadding]=useState({bottom:0,right:0}),[stage,setStage]=useState(0)
@@ -16,9 +20,9 @@ export function LooperApp(){const [screen,setScreen]=useState<Screen>('welcome')
  // The sheet covers part of the map, so measure it and hand the map the padding
  // that keeps the start marker centred in the *visible* strip, not the viewport.
   const spoken=useRef(''), walked=useRef(0), voice=useMemo(speechAvailable,[]), compass=useMemo(compassAvailable,[])
- // Asking again for exactly the same walk means "show me different ones", so
- // the request carries a variation that moves the service's candidate set.
- const lastAsk=useRef({key:'',variation:0})
+ // Discovery favours variety.  A new app session starts from a fresh candidate
+ // set, while refresh skips the variations the previous request explored.
+ const lastAsk=useRef({key:'',variation:freshVariation()})
  useEffect(()=>{if(!busy){setStage(0);return}const timer=setTimeout(()=>setStage(1),2500);return()=>clearTimeout(timer)},[busy])
  const sheetRef=useCallback((el:HTMLElement|null)=>{if(!el){setPadding({bottom:0,right:0});return}
   const measure=()=>{const box=el.getBoundingClientRect();const side=box.height>=window.innerHeight*.9
@@ -33,18 +37,17 @@ export function LooperApp(){const [screen,setScreen]=useState<Screen>('welcome')
  // from the fetched routes rather than asked of the router again.
  const shown=useMemo(()=>reversed?routes.map(reverseRoute):routes,[routes,reversed])
  const toggleReversed=()=>{setReversed(r=>!r);setSelected(s=>s&&reverseRoute(s))}
- // A slider changing the thresholds should re-judge the same candidates, not
- // ask for a fresh random set — otherwise a better result could mean "the
- // knob helped" or just "this was a luckier draw", and there is no telling
- // which. Only the ordinary "Find my loops" tap counts as asking for new ones.
+ // Every ordinary search asks the discovery engine for a fresh set. The
+ // variation is still stable throughout one request, so its internal quality
+ // decisions remain reproducible while the next search explores elsewhere.
  async function findRoutes(){if(!valid){setError(mode==='time'?'Choose 15 minutes to 4 hours.':'Choose a loop between 1 and 20 km.');return}if(!navigator.onLine){setError('You’re offline. Route generation needs a connection; saved walks are still available.');return}
   const key=`${start[0].toFixed(5)},${start[1].toFixed(5)}|${mode}|${amount}|${unit}`
   const sameSpot=lastAsk.current.key===key
-  const variation=sameSpot?lastAsk.current.variation+1:0
+  const variation=sameSpot?(lastAsk.current.variation+VARIATION_STRIDE)%900:freshVariation()
   lastAsk.current={key,variation}
   const seq=++requestSeq.current
   setBusy(true);setStage(0);setError('');setReversed(false)
-  try{const {routes:choices,warning}=await requestLoops({start,mode,distanceKm:mode==='distance'?distanceKm:undefined,durationMinutes:mode==='time'?Number(amount):undefined,unit,variation})
+  try{const {routes:choices,warning}=await requestLoops({start,mode,distanceKm:mode==='distance'?distanceKm:undefined,durationMinutes:mode==='time'?Number(amount):undefined,unit,variation,excludeRoutes:sameSpot?routes:undefined})
    if(seq!==requestSeq.current)return // a later request already started; its result is the one that counts
    if(!choices.length)throw new Error(warning||'We couldn’t find a clean loop of that length from here. Try a different distance or move the start point.')
    setRoutes(choices);setSelected(choices[0]);setScreen('choices')

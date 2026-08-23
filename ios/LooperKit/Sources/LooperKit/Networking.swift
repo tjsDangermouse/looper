@@ -22,6 +22,7 @@ struct LoopRequestBody: Encodable {
     let durationMinutes: Double?
     let units: Unit
     let variation: Int
+    let exclude: [[Point]]?
 }
 
 private struct LoopsResponseBody: Decodable {
@@ -81,6 +82,7 @@ public func requestLoops(
     durationMinutes: Double? = nil,
     unit: Unit,
     variation: Int,
+    excludeRoutes: [Route] = [],
     apiBase: String,
     client: LoopsHTTPClient
 ) async throws -> LoopsResult {
@@ -93,7 +95,8 @@ public func requestLoops(
         distanceKm: mode == .distance ? distanceKm : nil,
         durationMinutes: mode == .time ? durationMinutes : nil,
         units: unit,
-        variation: variation
+        variation: variation,
+        exclude: excludeRoutes.isEmpty ? nil : excludeRoutes.map { $0.geometry.coordinates }
     )
     let encoded = try JSONEncoder().encode(body)
     let (data, statusCode) = try await client.post(url: url, body: encoded)

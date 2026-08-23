@@ -2,7 +2,7 @@ export type Point = [number, number]
 export type LoopMode = 'distance'|'time'
 export type Unit = 'km'|'mi'
 
-export type Step = { instruction: string; distanceMeters: number; durationSeconds: number; startIndex?: number; endIndex?: number; maneuver?: string|number; road?: string }
+export type Step = { instruction: string; distanceMeters: number; durationSeconds: number; startIndex?: number; endIndex?: number; maneuver?: string|number; road?: string; roadClass?: string }
 export type Route = { id: string; name: string; distanceMeters: number; durationSeconds: number; targetDifferencePercent: number; geometry: {type:'LineString'; coordinates: Point[]}; steps: Step[]; reversed?: boolean }
 // One palette for both the drawn lines and the swatch on each route card, so
 // a colour on the map names the same loop in the list.
@@ -106,6 +106,46 @@ export function tidySteps(steps:Step[]):Step[] {
   return out
 }
 
+// The router can call a turn where a footpath continues almost straight across
+// a road.  The joined route shape tells us what the walker sees, while
+// road_class lets the wording describe the road-to-path transition clearly.
+const STRAIGHT_AHEAD_DEGREES = 32
+const PATH_CLASSES = new Set(['bridleway','cycleway','footway','path','pedestrian','steps','track'])
+const bearing = (from:Point,to:Point) => {
+  const rad=Math.PI/180, dLng=(to[0]-from[0])*rad
+  const y=Math.cos(from[1]*rad)*Math.sin(dLng)
+  const x=Math.cos(from[1]*rad)*Math.sin(to[1]*rad)-Math.sin(from[1]*rad)*Math.cos(to[1]*rad)*Math.cos(dLng)
+  return (Math.atan2(y,x)*180/Math.PI+360)%360
+}
+const bearingGap = (a:number,b:number) => Math.abs(((b-a+540)%360)-180)
+function routeBearing(coords:Point[], pivot:number, before:boolean):number|undefined {
+  if(pivot<0||pivot>=coords.length) return undefined
+  let index=pivot, travelled=0
+  while(before?index>0:index<coords.length-1){
+    const next=before?index-1:index+1
+    travelled+=haversine(coords[index],coords[next]); index=next
+    if(travelled>=12) break
+  }
+  return index===pivot?undefined:before?bearing(coords[index],coords[pivot]):bearing(coords[pivot],coords[index])
+}
+const isPath = (roadClass?:string) => !!roadClass&&PATH_CLASSES.has(roadClass.toLowerCase())
+const roadLabel = (road?:string) => road||'the road'
+export function normaliseWalkingSteps(route:Route):Route {
+  const steps=route.steps.map(step=>({...step}))
+  for(let index=1;index<steps.length;index++){
+    const step=steps[index], previous=steps[index-1]
+    if(step.startIndex===undefined) continue
+    const incoming=routeBearing(route.geometry.coordinates,step.startIndex,true)
+    const outgoing=routeBearing(route.geometry.coordinates,step.startIndex,false)
+    if(incoming===undefined||outgoing===undefined||bearingGap(incoming,outgoing)>STRAIGHT_AHEAD_DEGREES) continue
+    const ontoPath=!isPath(previous.roadClass)&&isPath(step.roadClass)
+    const ontoRoad=isPath(previous.roadClass)&&!isPath(step.roadClass)
+    if(ontoPath){ step.maneuver='continue'; step.instruction=`Carry on across ${roadLabel(previous.road)} onto the pathway` }
+    else if(ontoRoad){ step.maneuver='continue'; step.instruction=`Carry on from the pathway onto ${roadLabel(step.road)}` }
+  }
+  return {...route,steps:tidySteps(steps)}
+}
+
 // Walking the loop the other way round. The same roads come in the opposite
 // order, so each reversed step walks the road its forward counterpart walked
 // and is introduced by the *next* forward turn, mirrored: a right off Main
@@ -123,7 +163,7 @@ export function reverseRoute(route:Route):Route {
     return { ...road, maneuver: mirrorTurn(turnKind(joins)), instruction: onto(mirror(joins.instruction), road.road) }
   })
   steps.push({ instruction:'Arrive at your starting point', maneuver:'arrive', distanceMeters:0, durationSeconds:0 })
-  return { ...route, reversed:!route.reversed, steps:tidySteps(steps), geometry:{...route.geometry, coordinates:[...route.geometry.coordinates].reverse()} }
+  return normaliseWalkingSteps({ ...route, reversed:!route.reversed, steps:tidySteps(steps), geometry:{...route.geometry, coordinates:[...route.geometry.coordinates].reverse()} })
 }
 // ---- Looper route service ----------------------------------------------
 // The app talks to Looper's own API and to nothing else. Where that API lives
@@ -134,7 +174,7 @@ export const apiBase = (import.meta.env?.VITE_LOOPER_API_BASE ?? '').replace(/\/
 type LoopRouteResponse = Omit<Route,'name'> & { label:string }
 
 /** Ask for loops. Errors carry a sentence a walker can act on, nothing more. */
-export async function requestLoops(input:{ start:Point; mode:LoopMode; distanceKm?:number; durationMinutes?:number; unit:Unit; variation:number }):Promise<{ routes:Route[]; warning?:string }> {
+export async function requestLoops(input:{ start:Point; mode:LoopMode; distanceKm?:number; durationMinutes?:number; unit:Unit; variation:number; excludeRoutes?:Route[] }):Promise<{ routes:Route[]; warning?:string }> {
   const response = await fetch(`${apiBase}/v1/loops`, {
     method:'POST', headers:{ 'Content-Type':'application/json' },
     body: JSON.stringify({
@@ -144,20 +184,21 @@ export async function requestLoops(input:{ start:Point; mode:LoopMode; distanceK
       durationMinutes: input.mode==='time' ? input.durationMinutes : undefined,
       units: input.unit,
       variation: input.variation,
+      exclude: input.excludeRoutes?.map(route=>route.geometry.coordinates),
     }),
   })
   const data = await response.json().catch(()=>({}))
   if (!response.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'Routes are unavailable right now.')
   // The service names a loop for the way it heads; the app has always called
   // that a route's name.
-  const routes = (data.routes ?? []).map((route:LoopRouteResponse)=>({ ...route, name: route.label }))
+  const routes = (data.routes ?? []).map((route:LoopRouteResponse)=>normaliseWalkingSteps({ ...route, name: route.label }))
   return { routes, warning: typeof data?.warning === 'string' ? data.warning : undefined }
 }
 
 // Voice guidance. A turn is announced at most once per band, so walking through
-// 400 m → 100 m → the corner itself gives three prompts and no repetition.
+// 150 m → 50 m → the corner itself gives three prompts and no repetition.
 export type Band='soon'|'near'|'now'
-export const turnBand = (metresAway:number):Band|undefined => metresAway<30?'now':metresAway<120?'near':metresAway<450?'soon':undefined
+export const turnBand = (metresAway:number):Band|undefined => metresAway<5?'now':metresAway<50?'near':metresAway<150?'soon':undefined
 // Say the distance that is actually left. The bands decide *when* to speak;
 // they used to decide what was spoken too, so a turn first picked up part way
 // into a band — right after the turn before it — was called out at the band's

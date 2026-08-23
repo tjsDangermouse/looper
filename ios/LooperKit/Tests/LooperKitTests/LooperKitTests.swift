@@ -244,6 +244,14 @@ final class AskingLooperForLoopsTests: XCTestCase {
         XCTAssertEqual(body["units"] as? String, "mi")
     }
 
+    func testSendsDisplayedLoopsAsRefreshExclusions() async throws {
+        let client = MockLoopsHTTPClient(responseJSON: ["routes": []])
+        let route = Route(id: "r1", name: "North loop", distanceMeters: 100, durationSeconds: 60, targetDifferencePercent: 0, geometry: LineGeometry(coordinates: [Point(0, 0), Point(0.001, 0)]), steps: [])
+        _ = try await requestLoops(start: start, mode: .distance, distanceKm: 4, unit: .km, variation: 3, excludeRoutes: [route], apiBase: "", client: client)
+        let excluded = client.lastBody["exclude"] as? [[[Double]]]
+        XCTAssertEqual(excluded, [[[0, 0], [0.001, 0]]])
+    }
+
     func testNamesEachLoopForTheWalker() async throws {
         let route: [String: Any] = [
             "id": "r1", "label": "North loop", "distanceMeters": 4000, "durationSeconds": 2880,

@@ -3,7 +3,7 @@ import type { LineString } from 'geojson'
 import { DEFAULT_ATTEMPT_COUNT, generateLoopAttempts } from './candidates.js'
 import { MAX_SHARED_FRACTION, initialBearing as bearingOf, labelRoutes, selectDiverseRoutes } from './diversity.js'
 import type { LngLat } from './geo.js'
-import { analyseRouteQuality, type QualityReport, type QualityThresholds } from './quality.js'
+import { analyseRouteQuality, sharedCorridorMetres, type QualityReport, type QualityThresholds } from './quality.js'
 import { LEG_BUDGET_SHARE, buildLoopIncrementally, type LegRouter, type RoutedCandidate } from './routing.js'
 import { seedFor } from './random.js'
 import { targetMetresFor, targetSecondsFor, type LoopMode } from './units.js'
@@ -25,6 +25,8 @@ import { targetMetresFor, targetSecondsFor, type LoopMode } from './units.js'
  */
 /** Corner counts tried, simplest first, before an attempt gives up on a bearing. */
 const CORNER_COUNTS_TO_TRY = [1, 2, 3, 4]
+/** Fresh candidate batches tried before we honestly return fewer than three loops. */
+const MAX_DISCOVERY_BATCHES = 3
 
 export const NO_CLEAN_LOOP_WARNING =
   'We couldn’t find a clean loop of that length from here. Try a different distance or move the start point.'
@@ -46,6 +48,8 @@ export type LoopRequest = {
   durationMinutes?: number
   units: 'km' | 'mi'
   variation?: number
+  /** Loops already shown to the walker, excluded from a refresh. */
+  exclude?: LngLat[][]
   overrides?: LoopOverrides
 }
 
@@ -73,6 +77,7 @@ export type LoopStep = {
   maneuver?: string
   /** Extras the walk screen uses; harmless to ignore. */
   road?: string
+  roadClass?: string
   startIndex?: number
   endIndex?: number
 }
@@ -137,12 +142,13 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
   const candidateCount = overrides?.candidateCount ?? options.candidateCount ?? DEFAULT_ATTEMPT_COUNT
 
   const rejections: Record<string, number> = {}
-  const first = await attempt(firstTarget, firstTarget)
+  const first = await attempt(firstTarget, firstTarget, variation)
 
   let passing = first.passing
   let extra: Analysed[] = []
   let retry: Retry = 'none'
   let targetMetres = firstTarget
+  let candidateBatches = 1
 
   // Each attempt already self-corrects against the budget as it builds, so
   // this retry is now a last resort rather than the main way a candidate ever
@@ -158,7 +164,8 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
       // wrong for this terrain, so re-aim the distance from what was measured.
       const observed = median(durationMisses.map(entry => entry.candidate.durationSeconds))
       targetMetres = firstTarget * clampScale(targetSeconds / observed)
-      const second = await attempt(targetMetres, targetMetres)
+      const second = await attempt(targetMetres, targetMetres, variation)
+      candidateBatches++
       retry = 'duration'
       extra = second.analysed
       passing = merge(passing, second.passing)
@@ -172,7 +179,8 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
       const observed = median(first.analysed.map(entry => entry.candidate.distanceMeters))
       const scale = clampScale(firstTarget / observed)
       if (Math.abs(scale - 1) > 0.05) {
-        const second = await attempt(firstTarget * scale, firstTarget)
+        const second = await attempt(firstTarget * scale, firstTarget, variation)
+        candidateBatches++
         retry = 'radius'
         extra = second.analysed
         passing = merge(passing, second.passing)
@@ -183,16 +191,35 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
   // Clean loops first. Only if there are none at all does Looper fall back to
   // walks of the right length that double back — never as a top-up alongside a
   // clean loop, which would quietly mix two different kinds of answer.
-  const analysed = merge(first.analysed, extra)
-  const retracing = passing.length === 0
-  const offerable = retracing ? analysed.filter(entry => entry.report.passesEssentials) : passing
+  let analysed = merge(first.analysed, extra)
+  const choose = () => {
+    const retracing = passing.length === 0
+    const offerable = retracing ? analysed.filter(entry => entry.report.passesEssentials) : passing
+    const maxShared = overrides?.maxSharedFraction ?? MAX_SHARED_FRACTION
+    const fresh = request.exclude?.length
+      ? offerable.filter(entry => request.exclude!.every(previous => sharedCorridorMetres(entry.coordinates, previous).fraction <= maxShared))
+      : offerable
+    return selectDiverseRoutes(fresh.map(toSelectable), 3, maxShared)
+  }
+  let chosen = choose()
 
-  const chosen = selectDiverseRoutes(offerable.map(toSelectable), 3, overrides?.maxSharedFraction ?? MAX_SHARED_FRACTION)
+  // One heuristic batch can miss perfectly good loops on a dense or uneven
+  // network. Keep sampling fresh bearings until the walker has three distinct
+  // choices, rather than making them press refresh to discover them.
+  for (let batch = 1; chosen.length < 3 && batch < MAX_DISCOVERY_BATCHES; batch++) {
+    const next = await attempt(targetMetres, targetMetres, variation + batch)
+    candidateBatches++
+    analysed = merge(analysed, next.analysed)
+    passing = merge(passing, next.passing)
+    chosen = choose()
+  }
+
+  const retracing = passing.length === 0
   const labels = labelRoutes(chosen.map(entry => ({ bearing: entry.bearing, distanceMeters: entry.source.candidate.distanceMeters })))
 
   const diagnostics: Diagnostics = {
-    candidates: candidateCount,
-    routed: first.analysed.length,
+    candidates: candidateCount * candidateBatches,
+    routed: analysed.length,
     passed: passing.length,
     offered: chosen.length,
     rejections,
@@ -222,6 +249,7 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
           durationSeconds: Math.round(step.durationSeconds),
           maneuver: step.maneuver,
           road: step.road,
+          roadClass: step.roadClass,
           startIndex: step.startIndex,
           endIndex: step.endIndex,
         })),
@@ -236,8 +264,8 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
    * rare radius retry below, where the build is re-aimed but the walker's
    * actual request is not.
    */
-  async function attempt(constructionTarget: number, qualityTarget: number): Promise<{ analysed: Analysed[]; passing: Analysed[] }> {
-    const seed = seedFor([start[0], start[1]], qualityTarget, variation)
+  async function attempt(constructionTarget: number, qualityTarget: number, candidateVariation: number): Promise<{ analysed: Analysed[]; passing: Analysed[] }> {
+    const seed = seedFor([start[0], start[1]], qualityTarget, candidateVariation)
     const attempts = generateLoopAttempts(seed, candidateCount)
     const routed = await mapWithConcurrency(attempts, options.concurrency ?? 6, async loopAttempt => {
       let best: Analysed | undefined

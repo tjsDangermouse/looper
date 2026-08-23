@@ -73,7 +73,7 @@ describe('reading the engine’s answer', () => {
         { text: 'Turn left onto Quay Road', distance: 800, time: 600000, sign: -2, street_name: 'Quay Road', interval: [0, 1] },
         { text: 'Arrive at destination', distance: 0, time: 0, sign: 4, street_name: '', interval: [1, 1] },
       ],
-      details: { street_name: [[0, 1, 'Quay Road']] },
+      details: { street_name: [[0, 1, 'Quay Road']], road_class: [[0, 1, 'residential']] },
     }],
   }
   it('reads distance, duration and geometry', () => {
@@ -84,6 +84,9 @@ describe('reading the engine’s answer', () => {
   })
   it('keeps the street name the walk screen reads aloud', () => {
     expect(parseLeg(payload).steps[0].road).toBe('Quay Road')
+  })
+  it('keeps the road class used to distinguish paths from roads', () => {
+    expect(parseLeg(payload).steps[0].roadClass).toBe('residential')
   })
   it('names the manoeuvre without exposing the engine’s numbering', () => {
     expect(maneuverName(-2)).toBe('turn-left')

@@ -57,6 +57,16 @@ describe('generating loops', () => {
     expect(second.routes[0].geometry).not.toEqual(first.routes[0].geometry)
   })
 
+  it('explores fresh batches when the first candidate set cannot fill three choices', async () => {
+    let calls = 0
+    const counting = async (points: LngLat[]) => { calls++; return fakeEngine()(points) }
+    const result = await generateLoops(request(), { route: counting, candidateCount: 2 })
+    // Two candidates take four legs each. More calls prove the generator did
+    // not make the walker press refresh after the first under-filled batch.
+    expect(calls).toBeGreaterThan(8)
+    expect(result.routes).toHaveLength(3)
+  })
+
   it('returns a walk the app can draw and follow', async () => {
     const [route] = (await generateLoops(request(), { route: fakeEngine() })).routes
     expect(route.geometry.type).toBe('LineString')

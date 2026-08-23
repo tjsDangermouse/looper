@@ -46,8 +46,9 @@ final class AppModel: ObservableObject {
     private let routeStore: RouteStore
     private let routeTileCache: RouteTileCache
 
+    private static let variationStride = 3
     private var requestSeq = 0
-    private var lastAsk: (key: String, variation: Int) = ("", 0)
+    private var lastAsk: (key: String, variation: Int) = ("", Int.random(in: 0..<300) * AppModel.variationStride)
     private var spoken = ""
     private var walked = 0.0
     private var badFixes = 0
@@ -167,11 +168,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    // Asking again for exactly the same walk means "show me different ones", so
-    // the request carries a variation that moves the service's candidate set.
-    // A slider changing thresholds should re-judge the same candidates, not ask
-    // for a fresh random set — only this ordinary "Find my loops" tap counts as
-    // asking for new ones.
+    // Discovery starts from fresh bearings. Refresh skips the variations the
+    // service explored for the displayed routes, and excludes those routes by
+    // geometry so it deliberately finds different walks.
     func findRoutes() {
         guard valid else {
             error = mode == .time ? "Choose 15 minutes to 4 hours." : "Choose a loop between 1 and 20 km."
@@ -179,7 +178,9 @@ final class AppModel: ObservableObject {
         }
         let key = "\(String(format: "%.5f", start.lng)),\(String(format: "%.5f", start.lat))|\(mode.rawValue)|\(amount)|\(unit.rawValue)"
         let sameSpot = lastAsk.key == key
-        let variation = sameSpot ? lastAsk.variation + 1 : 0
+        let variation = sameSpot
+            ? (lastAsk.variation + AppModel.variationStride) % 900
+            : Int.random(in: 0..<300) * AppModel.variationStride
         lastAsk = (key, variation)
 
         requestSeq += 1
@@ -199,6 +200,7 @@ final class AppModel: ObservableObject {
                     durationMinutes: mode == .time ? Double(amount) : nil,
                     unit: unit,
                     variation: variation,
+                    excludeRoutes: sameSpot ? routes : [],
                     apiBase: apiBase,
                     client: httpClient
                 )

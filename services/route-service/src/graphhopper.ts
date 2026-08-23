@@ -18,6 +18,7 @@ export type GraphHopperStep = {
   sign?: number
   maneuver?: string
   road?: string
+  roadClass?: string
   startIndex?: number
   endIndex?: number
 }
@@ -163,6 +164,7 @@ export function parseLeg(payload: any): GraphHopperLeg {
     throw new GraphHopperError('Routing engine returned no path.', undefined, 'unreachable')
   }
   const streets: Array<[number, number, string]> = path?.details?.street_name ?? []
+  const roadClasses: Array<[number, number, string]> = path?.details?.road_class ?? []
   const steps: GraphHopperStep[] = (path.instructions ?? []).map((instruction: any) => ({
     instruction: String(instruction?.text ?? ''),
     distanceMeters: Number(instruction?.distance ?? 0),
@@ -170,6 +172,7 @@ export function parseLeg(payload: any): GraphHopperLeg {
     sign: typeof instruction?.sign === 'number' ? instruction.sign : undefined,
     maneuver: maneuverName(instruction?.sign),
     road: roadNameFor(instruction, streets),
+    roadClass: detailFor(instruction, roadClasses),
     startIndex: instruction?.interval?.[0],
     endIndex: instruction?.interval?.[1],
   }))
@@ -181,6 +184,12 @@ export function parseLeg(payload: any): GraphHopperLeg {
   }
 }
 
+function detailFor(instruction: any, details: Array<[number, number, string]>): string | undefined {
+  const from = instruction?.interval?.[0]
+  if (typeof from !== 'number') return undefined
+  return details.find(([start, end]) => from >= start && from < end)?.[2] || undefined
+}
+
 /**
  * `street_name` on the instruction is the road being turned *onto*, which is
  * what the walk screen reads out. Path details are the fallback when the
@@ -189,8 +198,5 @@ export function parseLeg(payload: any): GraphHopperLeg {
 function roadNameFor(instruction: any, streets: Array<[number, number, string]>): string | undefined {
   const direct = instruction?.street_name
   if (typeof direct === 'string' && direct && direct !== '-') return direct
-  const from = instruction?.interval?.[0]
-  if (typeof from !== 'number') return undefined
-  const match = streets.find(([start, end]) => from >= start && from < end)
-  return match?.[2] || undefined
+  return detailFor(instruction, streets)
 }
