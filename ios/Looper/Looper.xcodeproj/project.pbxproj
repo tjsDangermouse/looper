@@ -24,6 +24,7 @@
 		78E943275448589AD91D93CB /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FBBE075EF8B5A79E9F071ED /* AppModel.swift */; };
 		8C1DC94E932F1B44170B6CD7 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D444B508C666D16B306A4E3F /* WelcomeView.swift */; };
 		9CCE7933DBE629887D74E012 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 986111AC049E77ECF9B75E10 /* MapLibre */; };
+		AFC1ABFB4C32069753C8AEF3 /* BrandBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99C168511C6016603309E018 /* BrandBadge.swift */; };
 		B176A7380FD731F6AC1BF0E0 /* RouteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5BC29876B8514C886B3BB7 /* RouteStore.swift */; };
 		C08051705770F95DD9E3F92B /* Icons.swift in Sources */ = {isa = PBXBuildFile; fileRef = D96BFD021638C638473CB574 /* Icons.swift */; };
 		C411CA3A8A7B47B01F8B7584 /* LooperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A64D791F4AECBFEFC9B0213 /* LooperApp.swift */; };
@@ -40,6 +41,7 @@
 		4FBBE075EF8B5A79E9F071ED /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		70AF98D958501DA02250650E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		76C573F04AE577081F1C8592 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		99C168511C6016603309E018 /* BrandBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandBadge.swift; sourceTree = "<group>"; };
 		9DE956B03DA628600F29CCD3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A78E96C2488C44CE3C073DF0 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		AC3E198A79AE243A62878670 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -108,6 +110,7 @@
 			isa = PBXGroup;
 			children = (
 				4BEB8FC47D50871EE61F9B9C /* BottomSheet.swift */,
+				99C168511C6016603309E018 /* BrandBadge.swift */,
 				26CD672EEBDFF7271B57A496 /* ChoicesView.swift */,
 				F28839314B865C4E18231BB6 /* PlannerView.swift */,
 				D7136A25E84DADF2A77C4090 /* WalkView.swift */,
@@ -237,6 +240,7 @@
 			files = (
 				78E943275448589AD91D93CB /* AppModel.swift in Sources */,
 				10E81493FCA756139A76F79F /* BottomSheet.swift in Sources */,
+				AFC1ABFB4C32069753C8AEF3 /* BrandBadge.swift in Sources */,
 				7670F51ECA82598B7A20723D /* ChoicesView.swift in Sources */,
 				59F29D241514EEB34645916E /* Config.swift in Sources */,
 				6E7CFD890E9B7EC5DD954642 /* ContentView.swift in Sources */,

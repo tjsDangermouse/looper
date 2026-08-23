@@ -38,6 +38,13 @@ struct ContentView: View {
                         WalkView(model: model)
                     }
                 }
+                .overlay(alignment: .topLeading) {
+                    if model.screen != .walk {
+                        BrandBadge()
+                            .padding(.top, 8)
+                            .padding(.leading, 14)
+                    }
+                }
                 .onPreferenceChange(SheetHeightKey.self) { height in
                     model.padding = (bottom: height, right: 0)
                 }
