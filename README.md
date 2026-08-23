@@ -33,7 +33,7 @@ provider and no routing API key anywhere in this repository.
 ```bash
 cp .env.example .env          # nothing secret in it; no API keys exist here
 docker compose up --build     # GraphHopper + route service
-npm install && npm run dev    # the PWA on :5173, proxying /v1 to :8080
+npm install && npm run dev    # the PWA on :5173, proxying /v1 to :8988
 ```
 
 The first `docker compose up` imports both OpenStreetMap extracts before the route service
@@ -44,12 +44,12 @@ imported graphs and come up in seconds.
 Check the stack is alive:
 
 ```bash
-curl localhost:8080/health
-curl -X POST localhost:8080/v1/loops -H 'content-type: application/json' \
+curl localhost:8988/health
+curl -X POST localhost:8988/v1/loops -H 'content-type: application/json' \
   -d '{"start":{"lng":-4.4816,"lat":54.1506},"mode":"distance","distanceKm":5,"units":"km"}'
 ```
 
-Vite proxies `/v1` to `http://localhost:8080`, so in development the browser sees a single
+Vite proxies `/v1` to `http://localhost:8988`, so in development the browser sees a single
 origin and no CORS. Set `LOOPER_API_URL` in `.env` if the route service is somewhere else.
 
 ### Running the route service without Docker
