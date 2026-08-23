@@ -275,9 +275,11 @@ struct MapLibreMapView: UIViewRepresentable {
         // MLNMapView's own edgePadding-based fit goes badly wrong once one
         // side's padding approaches the container size (as the sheet's does
         // on a phone screen) — it collapses to a much lower zoom than the
-        // space actually requires. So the fit is done by hand: fit to a
-        // small fixed margin alone, then shrink and shift by exactly what
-        // the sheet's corner of the screen costs.
+        // space actually requires. So the fit is computed by hand, in
+        // Mercator space: the tightest zoom that still holds the whole loop
+        // within the *visible* area (the screen minus the sheet), plus a
+        // small margin, then shifted so the loop sits centred within that
+        // visible area rather than the full screen.
         @discardableResult
         private func fit(_ routes: [Route], mapView: MLNMapView) -> Bool {
             var minLat = 90.0, maxLat = -90.0, minLng = 180.0, maxLng = -180.0
@@ -295,23 +297,17 @@ struct MapLibreMapView: UIViewRepresentable {
 
             let w = Double(mapView.bounds.width), h = Double(mapView.bounds.height)
             guard w > 120, h > 120 else { return false }
-            let margin = 60.0
+            let margin = 40.0
             let bottomPad = Double(parent.padding.bottom), rightPad = Double(parent.padding.right)
 
-            // Fit within a small fixed margin, computed by hand in Mercator
-            // space rather than via MLNMapView's own bounds-fitting API, so
-            // there's no dependency on reading the camera back synchronously
-            // after setting it.
             let x0 = mercatorX(bounds.sw.longitude), x1 = mercatorX(bounds.ne.longitude)
             let y0 = mercatorY(bounds.ne.latitude), y1 = mercatorY(bounds.sw.latitude) // y increases southward
             let spanX = max(x1 - x0, 1e-9)
             let spanY = max(y1 - y0, 1e-9)
-            let availW = max(w - 2 * margin, 1)
-            let availH = max(h - 2 * margin, 1)
-            let fittedZoom = min(log2(availW / (512 * spanX)), log2(availH / (512 * spanY)), walkZoom)
 
-            let shrink = max(0.05, min(1, (w - 120 - rightPad) / (w - 120), (h - 120 - bottomPad) / (h - 120)))
-            let zoom = min(walkZoom, fittedZoom + log2(shrink))
+            let availW = max(w - rightPad - 2 * margin, 1)
+            let availH = max(h - bottomPad - 2 * margin, 1)
+            let zoom = min(log2(availW / (512 * spanX)), log2(availH / (512 * spanY)), walkZoom)
 
             let worldSize = 512 * pow(2, zoom)
             let x = (x0 + x1) / 2 + rightPad / 2 / worldSize
