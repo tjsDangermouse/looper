@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreLocation
 import Foundation
 import LooperKit
@@ -29,6 +30,8 @@ final class AppModel: ObservableObject {
     @Published var progress: Double = 0
     @Published var following = false
     @Published var courseUp = false
+    @Published var showingVoiceSettings = false
+    @Published private(set) var selectedVoiceIdentifier: String?
     @Published var reversed = false
     @Published var findingStage = 0
     @Published var padding: (bottom: CGFloat, right: CGFloat) = (0, 0)
@@ -62,6 +65,7 @@ final class AppModel: ObservableObject {
         self.speechManager = speechManager
         self.httpClient = httpClient
         self.routeStore = routeStore
+        self.selectedVoiceIdentifier = speechManager.selectedVoiceIdentifier
         #if DEBUG
         seedPreviewStateIfRequested()
         #endif
@@ -241,6 +245,27 @@ final class AppModel: ObservableObject {
         speechManager.stop()
     }
 
+    /// Leaves planning or an active walk and returns to the first screen.
+    /// Cancelling the tasks here prevents route updates and spoken prompts from
+    /// continuing after the user has gone home.
+    func returnHome() {
+        requestSeq += 1
+        busy = false
+        findingStageTask?.cancel()
+        findingStageTask = nil
+        stopWalkWatch()
+        stopHeadingWatch()
+        speechManager.stop()
+        following = false
+        courseUp = false
+        offRoute = false
+        progress = 0
+        locationState = ""
+        error = ""
+        showingVoiceSettings = false
+        screen = .welcome
+    }
+
     private func startWalkWatch() {
         badFixes = 0
         stopWalkWatch()
@@ -287,6 +312,25 @@ final class AppModel: ObservableObject {
     func toggleMute() {
         muted.toggle()
         if muted { speechManager.stop() } else { speechManager.prime(); spoken = "" }
+    }
+
+    var englishVoices: [AVSpeechSynthesisVoice] { speechManager.englishVoices }
+    var hasPremiumEnglishVoice: Bool { speechManager.hasPremiumEnglishVoice }
+
+    func voiceQualityName(for voice: AVSpeechSynthesisVoice) -> String {
+        speechManager.qualityName(for: voice)
+    }
+
+    func selectVoice(_ voice: AVSpeechSynthesisVoice) {
+        speechManager.selectVoice(identifier: voice.identifier)
+        selectedVoiceIdentifier = voice.identifier
+    }
+
+    func previewVoice(_ voice: AVSpeechSynthesisVoice) {
+        speechManager.selectVoice(identifier: voice.identifier)
+        selectedVoiceIdentifier = voice.identifier
+        speechManager.prime()
+        speechManager.speak("In 100 metres, turn left. Your walk is ready.")
     }
 
     // The compass is only read while it is being used.

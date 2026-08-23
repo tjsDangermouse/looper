@@ -10,6 +10,10 @@ struct WalkView: View {
                 Button(action: model.endWalk) {
                     Image(systemName: "xmark")
                 }
+                Button(action: model.returnHome) {
+                    Image(systemName: "house.fill")
+                }
+                .accessibilityLabel("Home")
                 Spacer()
                 Button {
                     model.following = true

@@ -45,11 +45,37 @@ struct ContentView: View {
                             .padding(.leading, 14)
                     }
                 }
+                .overlay(alignment: .topTrailing) {
+                    if model.screen != .walk {
+                        HStack(spacing: 8) {
+                            Button(action: model.returnHome) {
+                                Image(systemName: "house.fill")
+                                    .padding(10)
+                                    .background(.ultraThinMaterial, in: Circle())
+                            }
+                            .accessibilityLabel("Home")
+
+                            Button {
+                                model.showingVoiceSettings = true
+                            } label: {
+                                Image(systemName: "gearshape.fill")
+                                    .padding(10)
+                                    .background(.ultraThinMaterial, in: Circle())
+                            }
+                            .accessibilityLabel("Settings")
+                        }
+                        .padding(.top, 8)
+                        .padding(.trailing, 14)
+                    }
+                }
                 .onPreferenceChange(SheetHeightKey.self) { height in
                     model.padding = (bottom: height, right: 0)
                 }
             }
         }
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $model.showingVoiceSettings) {
+            VoiceSettingsView(model: model)
+        }
     }
 }
