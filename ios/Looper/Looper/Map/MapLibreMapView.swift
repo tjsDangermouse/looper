@@ -48,7 +48,11 @@ struct MapLibreMapView: UIViewRepresentable {
         mapView.addGestureRecognizer(pinch)
 
         context.coordinator.mapView = mapView
-        context.coordinator.lastStart = start
+        // lastStart is deliberately left unset: this initial placement is a
+        // rough, padding-unaware guess (the view has no laid-out size yet to
+        // do the padding math against), so the first real sync() still needs
+        // to see start as "changed" and correct it once the sheet's height
+        // is known.
         return mapView
     }
 
