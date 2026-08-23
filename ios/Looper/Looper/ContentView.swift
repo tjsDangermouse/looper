@@ -12,7 +12,7 @@ struct ContentView: View {
                 ZStack(alignment: .bottom) {
                     MapLibreMapView(
                         start: model.start,
-                        routes: model.shownRoutes,
+                        routes: model.screen == .choices || model.screen == .walk ? model.mapRoutes : [],
                         selectedRouteID: model.selected?.id,
                         position: model.position,
                         follow: model.following && model.screen == .walk,

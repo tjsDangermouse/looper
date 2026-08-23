@@ -3,6 +3,9 @@ import Foundation
 public func kmToMiles(_ km: Double) -> Double { km * 0.621371 }
 public func milesToKm(_ mi: Double) -> Double { mi / 0.621371 }
 public func estimateKmFromMinutes(_ minutes: Double) -> Double { minutes / 12 }
+public func secondsForDistance(_ meters: Double, paceMinutesPerKm: Double) -> Double {
+    meters / 1000 * paceMinutesPerKm * 60
+}
 
 public func formatDistance(_ meters: Double, unit: Unit = .km) -> String {
     if unit == .km { return String(format: "%.1f km", meters / 1000) }

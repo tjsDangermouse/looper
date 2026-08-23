@@ -11,7 +11,7 @@ struct PlannerView: View {
         BottomSheet {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top) {
-                    Text("How far shall we walk?")
+                    Text("How far shall we Loop?")
                         .font(.title2.bold())
                     Spacer()
                     Button(action: model.requestLocation) {
@@ -21,11 +21,29 @@ struct PlannerView: View {
                     .accessibilityLabel("Use my location")
                 }
 
-                Picker("Mode", selection: $model.mode) {
-                    Label("Distance", systemImage: "figure.walk").tag(LoopMode.distance)
-                    Label("Time", systemImage: "clock").tag(LoopMode.time)
+                HStack(spacing: 12) {
+                    Picker("Activity", selection: $model.activity) {
+                        Label("Walk", systemImage: "figure.walk")
+                            .labelStyle(.iconOnly)
+                            .tag(Activity.walking)
+                        Label("Run", systemImage: "figure.run")
+                            .labelStyle(.iconOnly)
+                            .tag(Activity.running)
+                    }
+                    .pickerStyle(.segmented)
+                    .controlSize(.large)
+
+                    Picker("Plan by", selection: $model.mode) {
+                        Label("Distance", systemImage: "ruler")
+                            .labelStyle(.iconOnly)
+                            .tag(LoopMode.distance)
+                        Label("Time", systemImage: "clock")
+                            .labelStyle(.iconOnly)
+                            .tag(LoopMode.time)
+                    }
+                    .pickerStyle(.segmented)
+                    .controlSize(.large)
                 }
-                .pickerStyle(.segmented)
 
                 Text(model.mode == .distance ? "Your distance" : "Your time")
                     .font(.caption)

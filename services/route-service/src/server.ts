@@ -95,6 +95,7 @@ async function handle(
     })
     log('info', 'loops', {
       mode: parsed.mode,
+      activity: parsed.activity ?? 'walking',
       km: parsed.distanceKm,
       minutes: parsed.durationMinutes,
       near: coarseLocation(parsed.start.lng, parsed.start.lat),

@@ -36,6 +36,11 @@ public enum Unit: String, Codable, Hashable {
     case mi
 }
 
+public enum Activity: String, Codable, Hashable {
+    case walking
+    case running
+}
+
 /// A step's maneuver comes back as either GraphHopper/ORS's numeric code or
 /// the loop service's own named string — both routers describe the same turn
 /// differently, so this holds either.

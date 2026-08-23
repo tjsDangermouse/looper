@@ -12,15 +12,19 @@ export const kmToMetres = (km: number) => km * 1000
  * app shows and what the time-mode tolerance is judged against.
  */
 export const ESTIMATED_WALKING_SPEED_KMH = 5
+export const DEFAULT_WALKING_PACE_MINUTES_PER_KM = 12
 
 export const minutesToMetres = (minutes: number, speedKmh = ESTIMATED_WALKING_SPEED_KMH) =>
   (minutes / 60) * speedKmh * 1000
 
+export const metresForPace = (minutes: number, paceMinutesPerKm = DEFAULT_WALKING_PACE_MINUTES_PER_KM) =>
+  (minutes / paceMinutesPerKm) * 1000
+
 export type LoopMode = 'distance' | 'time'
 
 /** The distance the candidate rings are sized for. */
-export function targetMetresFor(input: { mode: LoopMode; distanceKm?: number; durationMinutes?: number }): number {
-  if (input.mode === 'time') return minutesToMetres(input.durationMinutes ?? 0)
+export function targetMetresFor(input: { mode: LoopMode; distanceKm?: number; durationMinutes?: number; walkingPaceMinutesPerKm?: number }): number {
+  if (input.mode === 'time') return metresForPace(input.durationMinutes ?? 0, input.walkingPaceMinutesPerKm)
   return kmToMetres(input.distanceKm ?? 0)
 }
 

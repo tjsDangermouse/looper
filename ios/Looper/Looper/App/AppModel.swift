@@ -21,8 +21,22 @@ final class AppModel: ObservableObject {
     @Published var mode: LoopMode = .distance
     @Published var unit: LooperKit.Unit = .km
     @Published var amount = "4"
+    @Published var activity: Activity = .walking
+    @Published var walkingPaceMinutes = UserDefaults.standard.object(forKey: "walking-pace-minutes") as? Double ?? 12 {
+        didSet { UserDefaults.standard.set(walkingPaceMinutes, forKey: "walking-pace-minutes") }
+    }
+    @Published var walkingPaceUnit = LooperKit.Unit(rawValue: UserDefaults.standard.string(forKey: "walking-pace-unit") ?? "km") ?? .km {
+        didSet { UserDefaults.standard.set(walkingPaceUnit.rawValue, forKey: "walking-pace-unit") }
+    }
+    @Published var runningPaceMinutes = UserDefaults.standard.object(forKey: "running-pace-minutes") as? Double ?? 6 {
+        didSet { UserDefaults.standard.set(runningPaceMinutes, forKey: "running-pace-minutes") }
+    }
+    @Published var runningPaceUnit = LooperKit.Unit(rawValue: UserDefaults.standard.string(forKey: "running-pace-unit") ?? "km") ?? .km {
+        didSet { UserDefaults.standard.set(runningPaceUnit.rawValue, forKey: "running-pace-unit") }
+    }
     @Published var routes: [Route] = []
     @Published var selected: Route?
+    @Published var showsRouteOverlay = true
     @Published var busy = false
     @Published var error = ""
     @Published var muted = false
@@ -142,6 +156,18 @@ final class AppModel: ObservableObject {
     // Either way round the loop is the same streets, so a reversal is derived
     // from the fetched routes rather than asked of the router again.
     var shownRoutes: [Route] { reversed ? routes.map(reverseRoute) : routes }
+    var mapRoutes: [Route] { showsRouteOverlay ? shownRoutes : [] }
+    var walkingPaceMinutesPerKm: Double {
+        let pace = walkingPaceUnit == .km ? walkingPaceMinutes : walkingPaceMinutes / 0.621371
+        return min(max(pace, 4), 30)
+    }
+    var runningPaceMinutesPerKm: Double {
+        let pace = runningPaceUnit == .km ? runningPaceMinutes : runningPaceMinutes / 0.621371
+        return min(max(pace, 2), 30)
+    }
+    var activePaceMinutes: Double { activity == .walking ? walkingPaceMinutes : runningPaceMinutes }
+    var activePaceUnit: LooperKit.Unit { activity == .walking ? walkingPaceUnit : runningPaceUnit }
+    var activePaceMinutesPerKm: Double { activity == .walking ? walkingPaceMinutesPerKm : runningPaceMinutesPerKm }
 
     var turn: TurnHit? { selected.flatMap { nextTurn($0, progress) } }
     var remaining: Double { selected.map { max(0, $0.distanceMeters - progress) } ?? 0 }
@@ -149,6 +175,20 @@ final class AppModel: ObservableObject {
     func toggleReversed() {
         reversed.toggle()
         selected = selected.map(reverseRoute)
+    }
+
+    func setWalkingPaceUnit(_ newUnit: LooperKit.Unit) {
+        guard newUnit != walkingPaceUnit else { return }
+        let pacePerKm = walkingPaceMinutesPerKm
+        walkingPaceUnit = newUnit
+        walkingPaceMinutes = newUnit == .km ? pacePerKm : pacePerKm / 0.621371
+    }
+
+    func setRunningPaceUnit(_ newUnit: LooperKit.Unit) {
+        guard newUnit != runningPaceUnit else { return }
+        let pacePerKm = runningPaceMinutesPerKm
+        runningPaceUnit = newUnit
+        runningPaceMinutes = newUnit == .km ? pacePerKm : pacePerKm / 0.621371
     }
 
     func requestLocation() {
@@ -199,6 +239,9 @@ final class AppModel: ObservableObject {
                     distanceKm: mode == .distance ? distanceKm : nil,
                     durationMinutes: mode == .time ? Double(amount) : nil,
                     unit: unit,
+                    activity: activity,
+                    walkingPaceMinutes: activePaceMinutes,
+                    walkingPaceUnit: activePaceUnit,
                     variation: variation,
                     excludeRoutes: sameSpot ? routes : [],
                     apiBase: apiBase,
@@ -210,6 +253,7 @@ final class AppModel: ObservableObject {
                 }
                 routes = result.routes
                 selected = result.routes.first
+                showsRouteOverlay = true
                 screen = .choices
                 error = result.warning ?? ""
             } catch {
@@ -237,6 +281,7 @@ final class AppModel: ObservableObject {
         progress = 0
         following = true
         selected = route
+        showsRouteOverlay = true
         hasActiveWalk = true
         screen = .walk
         routeStore.save(route)
@@ -248,6 +293,7 @@ final class AppModel: ObservableObject {
         hasActiveWalk = false
         following = false
         courseUp = false
+        showsRouteOverlay = false
         screen = .choices
         stopWalkWatch()
         stopHeadingWatch()

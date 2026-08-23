@@ -47,6 +47,10 @@ export type LoopRequest = {
   distanceKm?: number
   durationMinutes?: number
   units: 'km' | 'mi'
+  /** Activity selected by newer clients. Both currently use foot-accessible paths. */
+  activity?: 'walking' | 'running'
+  /** Personal average pace, normalised during request validation. */
+  walkingPaceMinutesPerKm?: number
   variation?: number
   /** Loops already shown to the walker, excluded from a refresh. */
   exclude?: LngLat[][]
@@ -162,7 +166,7 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
     if (request.mode === 'time' && targetSeconds && durationMisses.length) {
       // Clean loops that took the wrong amount of time: the 5 km/h estimate was
       // wrong for this terrain, so re-aim the distance from what was measured.
-      const observed = median(durationMisses.map(entry => entry.candidate.durationSeconds))
+      const observed = median(durationMisses.map(entry => durationFor(entry.candidate)))
       targetMetres = firstTarget * clampScale(targetSeconds / observed)
       const second = await attempt(targetMetres, targetMetres, variation)
       candidateBatches++
@@ -236,17 +240,18 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
     diagnostics,
     routes: chosen.map((entry, position) => {
       const { candidate, quality } = entry.source
+      const durationSeconds = durationFor(candidate)
       return {
         id: randomUUID(),
         label: labels[position],
         distanceMeters: Math.round(candidate.distanceMeters),
-        durationSeconds: Math.round(candidate.durationSeconds),
+        durationSeconds: Math.round(durationSeconds),
         targetDifferencePercent: Math.round((candidate.distanceMeters / targetMetres - 1) * 100),
         geometry: { type: 'LineString', coordinates: candidate.coordinates } as LineString,
         steps: candidate.steps.map(step => ({
           instruction: step.instruction,
           distanceMeters: Math.round(step.distanceMeters),
-          durationSeconds: Math.round(step.durationSeconds),
+          durationSeconds: Math.round(candidate.distanceMeters > 0 ? step.distanceMeters / candidate.distanceMeters * durationSeconds : step.durationSeconds),
           maneuver: step.maneuver,
           road: step.road,
           roadClass: step.roadClass,
@@ -285,7 +290,7 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
           coordinates: candidate.coordinates,
           start,
           distanceMeters: candidate.distanceMeters,
-          durationSeconds: candidate.durationSeconds,
+          durationSeconds: durationFor(candidate),
           targetMetres: qualityTarget,
           targetSeconds,
           legDistances: candidate.legDistances,
@@ -308,6 +313,15 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
     })
     const analysed = routed.filter((entry): entry is Analysed => entry !== undefined)
     return { analysed, passing: analysed.filter(entry => entry.report.pass) }
+  }
+
+  /// The router decides where a person may walk; their saved pace decides how
+  /// long that distance will take. Keep the router's own duration only for
+  /// older clients that do not send a pace.
+  function durationFor(candidate: RoutedCandidate): number {
+    return request.walkingPaceMinutesPerKm === undefined
+      ? candidate.durationSeconds
+      : candidate.distanceMeters / 1000 * request.walkingPaceMinutesPerKm * 60
   }
 }
 

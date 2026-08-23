@@ -59,6 +59,7 @@ struct ChoicesView: View {
                     ForEach(Array(model.shownRoutes.enumerated()), id: \.element.id) { index, route in
                         Button {
                             model.selected = route
+                            model.showsRouteOverlay = true
                         } label: {
                             HStack(spacing: 12) {
                                 Circle()
@@ -66,7 +67,7 @@ struct ChoicesView: View {
                                     .frame(width: 12, height: 12)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(route.name).font(.headline)
-                                    Text("\(formatDistance(route.distanceMeters, unit: model.unit)) · \(formatTime(route.durationSeconds)) · \(abs(Int(route.targetDifferencePercent)))% \(route.targetDifferencePercent < 0 ? "shorter" : "longer")")
+                                    Text("\(formatDistance(route.distanceMeters, unit: model.unit)) · \(formatTime(secondsForDistance(route.distanceMeters, paceMinutesPerKm: model.activePaceMinutesPerKm))) · \(abs(Int(route.targetDifferencePercent)))% \(route.targetDifferencePercent < 0 ? "shorter" : "longer")")
                                         .font(.footnote)
                                         .foregroundStyle(.secondary)
                                 }

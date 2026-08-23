@@ -12,12 +12,12 @@ struct WelcomeView: View {
                 .foregroundStyle(Color(hex: "9cc36b"))
 
             VStack(spacing: 6) {
-                Text("a walk with a way back")
+                Text("a route with a way back")
                     .font(.caption.smallCaps())
                     .foregroundStyle(.secondary)
                 Text("Looper")
                     .font(.system(size: 44, weight: .bold))
-                Text("Find a walk that brings you back.")
+                Text("Find your route. Make it loop.")
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
