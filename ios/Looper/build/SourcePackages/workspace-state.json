@@ -1,0 +1,49 @@
+{
+  "object" : {
+    "artifacts" : [
+      {
+        "kind" : {
+          "xcframework" : {
+
+          }
+        },
+        "packageRef" : {
+          "identity" : "maplibre-gl-native-distribution",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/maplibre/maplibre-gl-native-distribution",
+          "name" : "MapLibre Native"
+        },
+        "path" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/SourcePackages/artifacts/maplibre-gl-native-distribution/MapLibre/MapLibre.xcframework",
+        "source" : {
+          "checksum" : "72c20a6d4ed3a35fcb5c824c43b048c4281183d189fd1244ef56600d4d6588e2",
+          "type" : "remote",
+          "url" : "https://github.com/maplibre/maplibre-native/releases/download/ios-v6.28.0/MapLibre.dynamic.xcframework.zip"
+        },
+        "targetName" : "MapLibre"
+      }
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "maplibre-gl-native-distribution",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/maplibre/maplibre-gl-native-distribution",
+          "name" : "MapLibre Native"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "5ee345ca5d65238a6fce29bba87816204be7df20",
+            "version" : "6.28.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "maplibre-gl-native-distribution"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}

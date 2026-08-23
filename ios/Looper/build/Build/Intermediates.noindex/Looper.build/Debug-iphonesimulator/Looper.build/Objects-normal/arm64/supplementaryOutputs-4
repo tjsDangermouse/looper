@@ -1,0 +1,23 @@
+{
+  "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/Looper/Map/MapLibreMapView.swift" : {
+    "const-values" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/MapLibreMapView.swiftconstvalues",
+    "dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/MapLibreMapView.d",
+    "diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/MapLibreMapView.dia",
+    "object" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/MapLibreMapView.o",
+    "swift-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/MapLibreMapView.swiftdeps"
+  },
+  "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/Looper/Screens/PlannerView.swift" : {
+    "const-values" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/PlannerView.swiftconstvalues",
+    "dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/PlannerView.d",
+    "diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/PlannerView.dia",
+    "object" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/PlannerView.o",
+    "swift-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/PlannerView.swiftdeps"
+  },
+  "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/Looper/Support/RouteStore.swift" : {
+    "const-values" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/RouteStore.swiftconstvalues",
+    "dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/RouteStore.d",
+    "diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/RouteStore.dia",
+    "object" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/RouteStore.o",
+    "swift-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/RouteStore.swiftdeps"
+  }
+}

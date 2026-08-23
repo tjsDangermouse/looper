@@ -23,6 +23,15 @@ struct WelcomeView: View {
             }
 
             VStack(spacing: 12) {
+                if model.hasActiveWalk {
+                    Button(action: model.continueWalk) {
+                        Label("Continue loop", systemImage: "figure.walk")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(hex: "9cc36b"))
+                }
+
                 Button(action: model.requestLocation) {
                     Label("Use my location", systemImage: "location.fill")
                         .frame(maxWidth: .infinity)

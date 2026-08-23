@@ -50,8 +50,10 @@ struct ContentView: View {
                         HStack(spacing: 8) {
                             Button(action: model.returnHome) {
                                 Image(systemName: "house.fill")
+                                    .foregroundStyle(.white)
                                     .padding(10)
-                                    .background(.ultraThinMaterial, in: Circle())
+                                    .background(Color.looperSheet, in: Circle())
+                                    .shadow(color: .black.opacity(0.25), radius: 10, y: 6)
                             }
                             .accessibilityLabel("Home")
 
@@ -59,8 +61,10 @@ struct ContentView: View {
                                 model.showingVoiceSettings = true
                             } label: {
                                 Image(systemName: "gearshape.fill")
+                                    .foregroundStyle(.white)
                                     .padding(10)
-                                    .background(.ultraThinMaterial, in: Circle())
+                                    .background(Color.looperSheet, in: Circle())
+                                    .shadow(color: .black.opacity(0.25), radius: 10, y: 6)
                             }
                             .accessibilityLabel("Settings")
                         }
@@ -75,7 +79,7 @@ struct ContentView: View {
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $model.showingVoiceSettings) {
-            VoiceSettingsView(model: model)
+            SettingsView(model: model)
         }
     }
 }

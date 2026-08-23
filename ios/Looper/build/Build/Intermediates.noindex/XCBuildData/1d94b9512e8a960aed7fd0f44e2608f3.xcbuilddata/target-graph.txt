@@ -1,0 +1,8 @@
+Target dependency graph (4 targets)
+Target 'Looper' in project 'Looper'
+➜ Explicit dependency on target 'MapLibre' in project 'MapLibre Native'
+➜ Explicit dependency on target 'LooperKit' in project 'LooperKit'
+Target 'LooperKit' in project 'LooperKit'
+➜ Explicit dependency on target 'LooperKit' in project 'LooperKit'
+Target 'LooperKit' in project 'LooperKit' (no dependencies)
+Target 'MapLibre' in project 'MapLibre Native' (no dependencies)

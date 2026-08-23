@@ -1,7 +1,7 @@
 import AVFoundation
 import SwiftUI
 
-struct VoiceSettingsView: View {
+struct VoiceGuidanceSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var model: AppModel
 
@@ -62,7 +62,7 @@ struct VoiceSettingsView: View {
                     }
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle("Voice guidance")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }

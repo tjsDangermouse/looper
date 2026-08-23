@@ -26,6 +26,7 @@ final class AppModel: ObservableObject {
     @Published var busy = false
     @Published var error = ""
     @Published var muted = false
+    @Published private(set) var hasActiveWalk = false
     @Published var offRoute = false
     @Published var progress: Double = 0
     @Published var following = false
@@ -43,6 +44,7 @@ final class AppModel: ObservableObject {
     private let locationManager: LocationManager
     private let speechManager: SpeechManager
     private let routeStore: RouteStore
+    private let routeTileCache: RouteTileCache
 
     private var requestSeq = 0
     private var lastAsk: (key: String, variation: Int) = ("", 0)
@@ -58,13 +60,15 @@ final class AppModel: ObservableObject {
         locationManager: LocationManager = LocationManager(),
         speechManager: SpeechManager = SpeechManager(),
         httpClient: LoopsHTTPClient = URLSessionLoopsHTTPClient(),
-        routeStore: RouteStore = RouteStore()
+        routeStore: RouteStore = RouteStore(),
+        routeTileCache: RouteTileCache = RouteTileCache()
     ) {
         self.apiBase = apiBase
         self.locationManager = locationManager
         self.speechManager = speechManager
         self.httpClient = httpClient
         self.routeStore = routeStore
+        self.routeTileCache = routeTileCache
         self.selectedVoiceIdentifier = speechManager.selectedVoiceIdentifier
         #if DEBUG
         seedPreviewStateIfRequested()
@@ -231,24 +235,32 @@ final class AppModel: ObservableObject {
         progress = 0
         following = true
         selected = route
+        hasActiveWalk = true
         screen = .walk
         routeStore.save(route)
+        routeTileCache.cache(route)
         startWalkWatch()
     }
 
     func endWalk() {
+        hasActiveWalk = false
         following = false
         courseUp = false
         screen = .choices
         stopWalkWatch()
         stopHeadingWatch()
         speechManager.stop()
+        routeTileCache.release()
     }
 
-    /// Leaves planning or an active walk and returns to the first screen.
-    /// Cancelling the tasks here prevents route updates and spoken prompts from
-    /// continuing after the user has gone home.
+    /// Returns to the first screen without ending an active walk. The location
+    /// watcher retains the walk state so it can be resumed from the landing page.
     func returnHome() {
+        if hasActiveWalk {
+            screen = .welcome
+            return
+        }
+
         requestSeq += 1
         busy = false
         findingStageTask?.cancel()
@@ -264,6 +276,12 @@ final class AppModel: ObservableObject {
         error = ""
         showingVoiceSettings = false
         screen = .welcome
+    }
+
+    func continueWalk() {
+        guard hasActiveWalk else { return }
+        following = true
+        screen = .walk
     }
 
     private func startWalkWatch() {

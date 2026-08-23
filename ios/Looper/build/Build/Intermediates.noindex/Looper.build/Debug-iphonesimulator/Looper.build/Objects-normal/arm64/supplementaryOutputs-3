@@ -1,0 +1,23 @@
+{
+  "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/Looper/LooperApp.swift" : {
+    "const-values" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/LooperApp.swiftconstvalues",
+    "dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/LooperApp.d",
+    "diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/LooperApp.dia",
+    "object" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/LooperApp.o",
+    "swift-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/LooperApp.swiftdeps"
+  },
+  "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/Looper/Support/Icons.swift" : {
+    "const-values" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/Icons.swiftconstvalues",
+    "dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/Icons.d",
+    "diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/Icons.dia",
+    "object" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/Icons.o",
+    "swift-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/Icons.swiftdeps"
+  },
+  "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/Looper/Support/LocationManager.swift" : {
+    "const-values" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/LocationManager.swiftconstvalues",
+    "dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/LocationManager.d",
+    "diagnostics" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/LocationManager.dia",
+    "object" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/LocationManager.o",
+    "swift-dependencies" : "/Users/simonwoollams/GitHub/Walkabout/ios/Looper/build/Build/Intermediates.noindex/Looper.build/Debug-iphonesimulator/Looper.build/Objects-normal/arm64/LocationManager.swiftdeps"
+  }
+}
