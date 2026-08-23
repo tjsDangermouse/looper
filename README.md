@@ -79,6 +79,26 @@ OSM_PBF_ENGLAND_URL=https://download.geofabrik.de/europe/united-kingdom/england-
 If the file named by `OSM_PBF_PATH` is not there, the URL is downloaded once into the
 volume and reused. Data is never re-downloaded or re-imported on an ordinary restart.
 
+### Downloading PBF backups on a Windows Docker host
+
+Keep the raw extracts in the project's `data/` folder so a graph can be rebuilt without
+downloading them again. The commands below download through the same Docker mount that
+GraphHopper uses, write atomically via a `.part` file, and do not rebuild a running graph.
+They assume the Compose project is named `looper_router`; change the value after `-p` if
+your Docker project has a different name.
+
+```powershell
+# Isle of Man
+docker compose -p looper_router run --rm --no-deps graphhopper-iom sh -c 'curl -fL --retry 5 --connect-timeout 30 --speed-time 60 --speed-limit 1024 -o /data/osm/isle-of-man-latest.osm.pbf.part https://download.geofabrik.de/europe/isle-of-man-latest.osm.pbf && mv /data/osm/isle-of-man-latest.osm.pbf.part /data/osm/isle-of-man-latest.osm.pbf'
+
+# England
+docker compose -p looper_router run --rm --no-deps graphhopper-england sh -c 'curl -fL --retry 5 --connect-timeout 30 --speed-time 60 --speed-limit 1024 -o /data/osm/england-latest.osm.pbf.part https://download.geofabrik.de/europe/united-kingdom/england-latest.osm.pbf && mv /data/osm/england-latest.osm.pbf.part /data/osm/england-latest.osm.pbf'
+```
+
+The completed files appear on the Windows host as `data/isle-of-man-latest.osm.pbf` and
+`data/england-latest.osm.pbf`. Do not delete a `.part` file unless you intentionally want
+to discard an interrupted download.
+
 ### Rebuilding the graph after an OSM update
 
 The graph is only built when there isn't one. To replace it deliberately:
