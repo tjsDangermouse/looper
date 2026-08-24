@@ -23,7 +23,11 @@ struct ResultView: View {
                         Row(label: "Avg heart rate", value: "\(Int(heart.rounded())) bpm")
                     }
 
-                    Button("Done", action: model.dismissResult)
+                    Button(action: model.dismissResult) {
+                        Text("Done")
+                    }
+                        .frame(maxWidth: .infinity)
+                        .buttonStyle(.borderedProminent)
                         .tint(Color.looperAccent)
                         .foregroundStyle(Color.looperOnAccent)
                         .font(.headline)

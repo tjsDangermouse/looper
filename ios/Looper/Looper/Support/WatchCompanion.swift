@@ -101,6 +101,15 @@ final class WatchCompanion: NSObject, ObservableObject {
         link.send(.plan(plan), delivery: .latest)
     }
 
+    /// The phone has left the loop-choosing screen with nothing started. The
+    /// Watch is told to stop offering the loop it was last shown, rather than
+    /// sitting on a Start button for a route no longer on screen.
+    func clearPrepared() {
+        currentSessionID = nil
+        guard link.reach.canPreload else { return }
+        link.send(.clearPlan(at: Date()), delivery: .latest)
+    }
+
     /// Asks the Watch to start its workout, and waits — briefly — for it to
     /// say it has. Returns whether the Watch owns this outing's workout.
     ///
@@ -238,8 +247,8 @@ final class WatchCompanion: NSObject, ObservableObject {
                 finishStart(false)
             }
             onWorkoutStatus?(status)
-        case .plan, .state, .result:
-            // The phone is the source of all three; anything coming back is
+        case .plan, .state, .result, .clearPlan:
+            // The phone is the source of all four; anything coming back is
             // an echo and is ignored.
             break
         }

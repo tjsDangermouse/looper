@@ -844,6 +844,17 @@ final class AppModel: ObservableObject {
         watch.prepare(plan)
     }
 
+    /// The loop-choosing screen has gone — dismissed, or left for a walk
+    /// already under way — so the Watch should stop offering the loop it was
+    /// last shown rather than sit on a Start button for a route no longer on
+    /// screen. Left alone while a walk is starting or running: that plan is
+    /// still the one in progress.
+    func clearWatch() {
+        guard !hasActiveWalk, !startingWalk else { return }
+        preparedPlan = nil
+        watch.clearPrepared()
+    }
+
     private func handleWatchCommand(_ command: WatchCommandPayload) {
         switch command.kind {
         case .start:

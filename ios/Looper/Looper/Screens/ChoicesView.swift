@@ -135,5 +135,6 @@ struct ChoicesView: View {
         .onChange(of: model.selected?.id) { _, _ in
             if let selected = model.selected { model.prepareWatch(for: selected) }
         }
+        .onDisappear { model.clearWatch() }
     }
 }

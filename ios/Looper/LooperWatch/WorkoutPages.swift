@@ -34,22 +34,25 @@ private struct ControlsPage: View {
             if model.workout.phase == .paused {
                 Button(action: model.resume) {
                     Label("Resume", systemImage: "play.fill")
-                        .frame(maxWidth: .infinity)
                 }
+                .frame(maxWidth: .infinity)
+                .buttonStyle(.borderedProminent)
                 .tint(Color.looperAccent)
                 .foregroundStyle(Color.looperOnAccent)
             } else {
                 Button(action: model.pause) {
                     Label("Pause", systemImage: "pause.fill")
-                        .frame(maxWidth: .infinity)
                 }
+                .frame(maxWidth: .infinity)
+                .buttonStyle(.borderedProminent)
                 .tint(Color.looperRaised)
             }
 
             Button(role: .destructive, action: model.end) {
                 Label("End", systemImage: "stop.fill")
-                    .frame(maxWidth: .infinity)
             }
+            .frame(maxWidth: .infinity)
+            .buttonStyle(.borderedProminent)
         }
         .font(.headline)
         .padding(.horizontal, 4)

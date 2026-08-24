@@ -278,6 +278,11 @@ public enum WatchMessage: Codable, Equatable, Sendable {
     case result(WorkoutResultPayload)
     case command(WatchCommandPayload)
     case workoutStatus(WatchWorkoutStatusPayload)
+    /// The phone has left the loop-choosing screen with nothing started —
+    /// the Watch should stop offering the loop it was last shown. Carries a
+    /// timestamp for the same reason `LoopPlanPayload.preparedAt` does: one
+    /// that arrives after a newer plan was already shown must not wipe it.
+    case clearPlan(at: Date)
 }
 
 public enum WatchLinkError: LocalizedError, Equatable {

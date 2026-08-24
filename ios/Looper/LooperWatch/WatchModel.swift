@@ -182,6 +182,14 @@ final class WatchModel: ObservableObject {
             plan = incoming
             storePlan(incoming)
             haptics.reset(for: incoming.activity)
+        case .clearPlan(let clearedAt):
+            // The phone left the loop-choosing screen with nothing started.
+            // A clear that predates the plan on screen is stale and ignored,
+            // the same way an old plan would be.
+            guard !workout.isRunning else { return }
+            guard let plan, plan.preparedAt <= clearedAt else { return }
+            self.plan = nil
+            clearStoredPlan()
         case .state(let incoming):
             // A state for an outing this Watch has never heard of means the
             // plan didn't reach us — most likely the phone chose a different
@@ -275,6 +283,10 @@ final class WatchModel: ObservableObject {
     private func storePlan(_ plan: LoopPlanPayload) {
         guard let data = try? JSONEncoder().encode(plan) else { return }
         defaults.set(data, forKey: Self.planKey)
+    }
+
+    private func clearStoredPlan() {
+        defaults.removeObject(forKey: Self.planKey)
     }
 
     /// A Watch app opened cold, out of range of the phone, still shows the

@@ -31,13 +31,13 @@ struct StartLoopView: View {
                     Button(action: model.startFromWatch) {
                         if model.starting {
                             ProgressView()
-                                .frame(maxWidth: .infinity)
                         } else {
                             Text("Start")
                                 .font(.headline)
-                                .frame(maxWidth: .infinity)
                         }
                     }
+                    .frame(maxWidth: .infinity)
+                    .buttonStyle(.borderedProminent)
                     .tint(Color.looperAccent)
                     .foregroundStyle(Color.looperOnAccent)
                     .disabled(model.starting)
