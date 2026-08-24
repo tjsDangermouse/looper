@@ -72,10 +72,16 @@ final class WatchWorkout: NSObject, ObservableObject {
     /// Everything this app writes, and the one thing it reads. Heart rate is
     /// read so it can be shown live on the wrist; no step counts are written,
     /// and nothing else is read.
+    ///
+    /// Active energy is included so the session's own live builder can save
+    /// the active-energy samples watchOS already computes from the wrist's
+    /// sensors and the wearer's Health body metrics — Looper never estimates
+    /// this itself, only asks to keep what the system worked out.
     private var shareTypes: Set<HKSampleType> {
         var types: Set<HKSampleType> = [HKObjectType.workoutType(), HKSeriesType.workoutRoute()]
         if let distance = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning) { types.insert(distance) }
         if let heart = HKObjectType.quantityType(forIdentifier: .heartRate) { types.insert(heart) }
+        if let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) { types.insert(energy) }
         return types
     }
 
