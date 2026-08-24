@@ -77,5 +77,19 @@ struct ContentView: View {
         .sheet(isPresented: $model.showingVoiceSettings) {
             SettingsView(model: model)
         }
+        // Presented off the model's own summary rather than a view-local
+        // flag, so a summary restored after the app was killed mid-walk still
+        // appears, and dismissing it is what marks the loop as seen. Bound by
+        // presentation rather than by item so the Apple Health row keeps
+        // updating while the sheet is open.
+        .sheet(isPresented: Binding(
+            get: { model.summary != nil },
+            set: { if !$0 { model.dismissSummary() } }
+        )) {
+            if let summary = model.summary {
+                LoopSummaryView(model: model, summary: summary)
+                    .interactiveDismissDisabled()
+            }
+        }
     }
 }

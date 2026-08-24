@@ -107,14 +107,33 @@ struct ChoicesView: View {
         }
         .safeAreaInset(edge: .bottom) {
             if let selected = model.selected {
-                Button {
-                    model.beginWalk(selected)
-                } label: {
-                    Label("Start walk", systemImage: "figure.walk")
+                VStack(spacing: 6) {
+                    Button {
+                        model.beginWalk(selected)
+                    } label: {
+                        Label("Start walk", systemImage: "figure.walk")
+                    }
+                    .buttonStyle(PillButtonStyle())
+                    .disabled(!model.startupNotice.isEmpty)
+
+                    // Only ever on screen for the few seconds the Watch is
+                    // given to bring its workout up.
+                    if !model.startupNotice.isEmpty {
+                        Text(model.startupNotice)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .transition(.opacity)
+                    }
                 }
-                .buttonStyle(PillButtonStyle())
                 .padding(.bottom, 8)
+                .animation(.easeOut(duration: 0.2), value: model.startupNotice)
             }
+        }
+        // The Watch is shown whichever loop is chosen here, so Start on the
+        // wrist knows what it is starting before a walk begins.
+        .onAppear { if let selected = model.selected { model.prepareWatch(for: selected) } }
+        .onChange(of: model.selected?.id) { _, _ in
+            if let selected = model.selected { model.prepareWatch(for: selected) }
         }
     }
 }

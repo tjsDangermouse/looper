@@ -32,7 +32,11 @@ struct SecondaryButtonStyle: ButtonStyle {
             .font(.system(size: 16, weight: .bold))
             .foregroundStyle(.white)
             .padding(.horizontal, 16)
-            .frame(minHeight: height)
+            .frame(maxWidth: .infinity, minHeight: height)
+            // A button's decorative border is not automatically its hit area.
+            // Make the entire outlined rectangle tappable, including the space
+            // either side of labels such as “Choose on map”.
+            .contentShape(Rectangle())
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(Color.looperLine, lineWidth: 1.5)

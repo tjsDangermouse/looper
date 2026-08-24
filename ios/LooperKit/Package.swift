@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "LooperKit",
-    platforms: [.iOS(.v16), .macOS(.v13)],
+    platforms: [.iOS(.v16), .watchOS(.v10), .macOS(.v13)],
     products: [
         .library(name: "LooperKit", targets: ["LooperKit"]),
     ],

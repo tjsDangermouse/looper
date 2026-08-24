@@ -26,17 +26,17 @@ extension Point: Codable {
     }
 }
 
-public enum LoopMode: String, Codable, Hashable {
+public enum LoopMode: String, Codable, Hashable, Sendable {
     case distance
     case time
 }
 
-public enum Unit: String, Codable, Hashable {
+public enum Unit: String, Codable, Hashable, Sendable {
     case km
     case mi
 }
 
-public enum Activity: String, Codable, Hashable {
+public enum Activity: String, Codable, Hashable, Sendable {
     case walking
     case running
 }

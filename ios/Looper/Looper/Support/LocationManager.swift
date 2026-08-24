@@ -9,6 +9,10 @@ final class LocationManager: NSObject {
     struct PositionUpdate {
         var point: Point
         var accuracy: Double
+        /// The fix as CoreLocation gave it — kept whole so a walk can be
+        /// recorded as a real track (altitude, speed, course, timing) for the
+        /// Loop Summary and the Apple Health route, not just as a coordinate.
+        var location: CLLocation
     }
 
     static var headingAvailable: Bool { CLLocationManager.headingAvailable() }
@@ -72,7 +76,9 @@ extension LocationManager: CLLocationManagerDelegate {
             oneShotContinuation = nil
             continuation.resume(returning: point)
         }
-        positionContinuation?.yield(PositionUpdate(point: point, accuracy: location.horizontalAccuracy))
+        positionContinuation?.yield(
+            PositionUpdate(point: point, accuracy: location.horizontalAccuracy, location: location)
+        )
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

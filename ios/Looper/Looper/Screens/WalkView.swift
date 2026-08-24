@@ -3,6 +3,14 @@ import SwiftUI
 
 struct WalkView: View {
     @ObservedObject var model: AppModel
+    /// Observed separately so the Watch indicator redraws when the
+    /// connection changes without the whole model having to publish it.
+    @ObservedObject private var watch: WatchCompanion
+
+    init(model: AppModel) {
+        self.model = model
+        self.watch = model.watch
+    }
 
     var body: some View {
         VStack {
@@ -17,6 +25,15 @@ struct WalkView: View {
                 .background(Color.looperSheet, in: Capsule())
                 .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
 
+                Button {
+                    model.isPaused ? model.resumeWalk() : model.pauseWalk()
+                } label: {
+                    Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
+                }
+                .buttonStyle(IconButtonStyle())
+                .foregroundStyle(model.isPaused ? Color.looperAccent : .white)
+                .accessibilityLabel(model.isPaused ? "Resume walk" : "Pause walk")
+
                 Button(action: model.returnHome) {
                     Image(systemName: "house.fill")
                 }
@@ -24,6 +41,20 @@ struct WalkView: View {
                 .accessibilityLabel("Home")
 
                 Spacer()
+
+                // Only ever shown while a Watch is actually carrying the
+                // workout — a walker without one sees nothing new here.
+                if watch.connection.isRunningOnWatch {
+                    Image(systemName: "applewatch")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(watch.connection == .live ? Color.looperAccent : .orange)
+                        .frame(width: 38, height: 38)
+                        .accessibilityLabel(
+                            watch.connection == .live
+                                ? "Recording on your Apple Watch"
+                                : "Apple Watch connection lost. Still recording on your Watch."
+                        )
+                }
 
                 Button {
                     model.following = true
@@ -51,6 +82,13 @@ struct WalkView: View {
             .padding(.horizontal)
             .padding(.top, 8)
 
+            if model.isPaused {
+                Text("Paused")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color.looperAccent)
+                    .padding(.top, 8)
+            }
+
             if !model.locationState.isEmpty {
                 Text(model.locationState)
                     .font(.footnote)
@@ -73,7 +111,7 @@ struct WalkView: View {
                         Button("End walk", action: model.endWalk)
                             .buttonStyle(TextLinkButtonStyle())
                     }
-                } else if let selected = model.selected {
+                } else if model.selected != nil {
                     let turn = model.turn
                     HStack(spacing: 16) {
                         Image(systemName: turnSymbolName(turnKind(turn?.step)))

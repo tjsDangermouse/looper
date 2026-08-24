@@ -29,6 +29,13 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    AppleHealthRow(health: model.health)
+                    AppleWatchRow(watch: model.watch)
+                } header: {
+                    Text("Integrations")
+                }
+
+                Section {
                     TextField("Pace", value: $model.walkingPaceMinutes, format: .number.precision(.fractionLength(0...1)))
                         .keyboardType(.decimalPad)
                     Picker("Unit", selection: Binding(
@@ -61,6 +68,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .task { await model.health.refreshAvailability() }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
@@ -107,5 +115,109 @@ private struct FavoriteRoutesView: View {
             }
         }
         .navigationTitle("Saved routes")
+    }
+}
+
+
+/// The Apple Watch line. Read-only: there is nothing to switch on, because
+/// the Watch app is either installed or it isn't, and permission is asked on
+/// the wrist at the moment it's needed rather than here.
+private struct AppleWatchRow: View {
+    @ObservedObject var watch: WatchCompanion
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Apple Watch", systemImage: "applewatch")
+                    .font(.body.weight(.semibold))
+                Spacer()
+                Text(watch.isPairedWithApp ? "Ready" : "Not installed")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Text(subtitle)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Apple Watch. \(subtitle)")
+    }
+
+    private var subtitle: String {
+        watch.isPairedWithApp
+            ? "Start a loop and your Watch records it, with your heart rate. Looper saves one workout, not two."
+            : "Install Looper on your Apple Watch to record loops from your wrist."
+    }
+}
+
+/// Apple Health in the Integrations list. The explanation sits above the
+/// switch, so the reason for the system permission sheet is clear before it
+/// appears — and the naming stays plain, without dressing the app up as
+/// something Apple made.
+private struct AppleHealthRow: View {
+    @ObservedObject var health: HealthIntegration
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Apple Health", systemImage: "heart.text.square")
+                    .font(.body.weight(.semibold))
+                Spacer()
+                control
+            }
+            Text(subtitle)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Apple Health. \(subtitle)")
+    }
+
+    @ViewBuilder
+    private var control: some View {
+        switch health.availability {
+        case .unavailable:
+            Text("Unavailable")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        case .denied:
+            Button("Open Settings") { health.openSystemSettings() }
+                .buttonStyle(.borderless)
+                .font(.footnote.weight(.semibold))
+        case .notDetermined, .authorized:
+            if health.isRequesting {
+                ProgressView()
+            } else {
+                Toggle("Apple Health", isOn: Binding(
+                    get: { health.isEnabled },
+                    set: { wanted in
+                        if wanted {
+                            Task { await health.enable() }
+                        } else {
+                            health.disable()
+                        }
+                    }
+                ))
+                .labelsHidden()
+                .tint(Color.looperAccent)
+            }
+        }
+    }
+
+    private var subtitle: String {
+        switch health.availability {
+        case .unavailable:
+            return "Apple Health isn’t available on this device."
+        case .denied:
+            return "Looper was declined permission to add workouts. You can allow it under Privacy & Security in Settings."
+        case .notDetermined, .authorized:
+            return health.isEnabled
+                ? "Completed loops are saved to Apple Health"
+                : "Save completed walks and runs to Apple Health"
+        }
     }
 }

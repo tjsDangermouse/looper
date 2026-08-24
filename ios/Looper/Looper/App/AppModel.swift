@@ -51,8 +51,26 @@ final class AppModel: ObservableObject {
     @Published var reversed = false
     @Published var findingStage = 0
     @Published var padding: (bottom: CGFloat, right: CGFloat) = (0, 0)
+    /// The outing being recorded, or the last one finished. Persisted, so the
+    /// summary and the Health save survive the app being killed behind a walk.
+    @Published private(set) var session: LoopSessionRecord?
+    /// Non-nil while the Loop Summary is on screen.
+    @Published var summary: LoopSummary?
+    /// Set while a walk is being started — the Apple Watch is given a few
+    /// seconds to bring its workout up before navigation begins. Shown as a
+    /// line on the Start button rather than a spinner over the map.
+    @Published private(set) var startupNotice = ""
+    /// Whether the outing is paused. Paused time is not walked time: no
+    /// fixes are recorded, progress doesn't move, nothing is announced, and
+    /// the elapsed clock stops.
+    @Published private(set) var isPaused = false
 
     let compassAvailable = LocationManager.headingAvailable
+    let health: HealthIntegration
+    /// The Apple Watch, if there is one. Always present as an object; it
+    /// reports `.unavailable` when there is no Watch to talk to, and every
+    /// path through this model works with it in that state.
+    let watch = WatchCompanion()
 
     private let apiBase: String
     private let httpClient: LoopsHTTPClient
@@ -61,6 +79,7 @@ final class AppModel: ObservableObject {
     private let routeStore: RouteStore
     private let favoritesStore: FavoritesStore
     private let routeTileCache: RouteTileCache
+    private let sessionStore: SessionStore
 
     private static let variationStride = 3
     private var requestSeq = 0
@@ -71,6 +90,13 @@ final class AppModel: ObservableObject {
     private var findingStageTask: Task<Void, Never>?
     private var walkWatchTask: Task<Void, Never>?
     private var headingWatchTask: Task<Void, Never>?
+    private var watchStateTask: Task<Void, Never>?
+    /// A loop preloaded to the Watch but not yet started. Its id becomes the
+    /// session record's id, so the plan on the wrist and the record on the
+    /// phone are the same outing from the moment Start is tapped.
+    private var preparedPlan: LoopPlanPayload?
+    private var startingWalk = false
+    private var pausedAt: Date?
 
     init(
         apiBase: String,
@@ -79,7 +105,9 @@ final class AppModel: ObservableObject {
         httpClient: LoopsHTTPClient = URLSessionLoopsHTTPClient(),
         routeStore: RouteStore = RouteStore(),
         favoritesStore: FavoritesStore = FavoritesStore(),
-        routeTileCache: RouteTileCache = RouteTileCache()
+        routeTileCache: RouteTileCache = RouteTileCache(),
+        sessionStore: SessionStore = SessionStore(),
+        health: HealthIntegration? = nil
     ) {
         self.apiBase = apiBase
         self.locationManager = locationManager
@@ -88,8 +116,12 @@ final class AppModel: ObservableObject {
         self.routeStore = routeStore
         self.favoritesStore = favoritesStore
         self.routeTileCache = routeTileCache
+        self.sessionStore = sessionStore
+        self.health = health ?? HealthIntegration()
         self.favoriteRoutes = favoritesStore.load()
         self.selectedVoiceIdentifier = speechManager.selectedVoiceIdentifier
+        restoreSession()
+        connectWatch()
         #if DEBUG
         seedPreviewStateIfRequested()
         #endif
@@ -109,6 +141,10 @@ final class AppModel: ObservableObject {
         }
         if target == "locate" {
             requestLocation()
+            return
+        }
+        if target == "settings" {
+            showingVoiceSettings = true
             return
         }
         func sampleRoute(id: String, name: String) -> Route {
@@ -137,8 +173,53 @@ final class AppModel: ObservableObject {
             screen = .walk
             progress = 200
             following = true
+        case "summary", "summary-partial":
+            seedPreviewSummary(previewRoutes[0], completed: target == "summary")
         default: break
         }
+    }
+
+    /// Puts a finished outing in front of the Loop Summary so its states can
+    /// be worked through without walking a real loop. Debug builds only, and
+    /// only when LOOPER_PREVIEW asks for it.
+    private func seedPreviewSummary(_ route: Route, completed: Bool) {
+        // Stay on the landing screen: the summary is what's under test here,
+        // and the live map behind it would ask for location it doesn't need.
+        screen = .welcome
+        let walked = completed ? route.distanceMeters : route.distanceMeters * 0.35
+        let started = Date().addingTimeInterval(-2_700)
+        let steps = 120
+        let coordinates = route.geometry.coordinates
+        let track = (0...steps).map { index -> TrackPoint in
+            let position = Double(index) / Double(steps) * (completed ? 1 : 0.35)
+            let along = position * Double(coordinates.count - 1)
+            let lower = coordinates[min(Int(along), coordinates.count - 1)]
+            let upper = coordinates[min(Int(along) + 1, coordinates.count - 1)]
+            let blend = along - along.rounded(.down)
+            return TrackPoint(
+                lng: lower.lng + (upper.lng - lower.lng) * blend,
+                lat: lower.lat + (upper.lat - lower.lat) * blend,
+                altitude: 30 + Double(index) * 0.4,
+                horizontalAccuracy: 6,
+                verticalAccuracy: 4,
+                timestamp: started.addingTimeInterval(Double(index) / Double(steps) * 2_700)
+            )
+        }
+        var record = LoopSessionRecord(
+            activity: activity, mode: mode, targetAmount: Double(amount) ?? 4,
+            targetUnit: unit, displayUnit: unit,
+            routeID: route.id, routeName: route.name,
+            plannedDistanceMeters: route.distanceMeters,
+            plannedDurationSeconds: route.durationSeconds,
+            plannedGeometry: coordinates,
+            startedAt: started
+        )
+        record.endedAt = Date()
+        record.progressMeters = walked
+        if completed { record.arrivedAt = record.endedAt }
+        record.track = track
+        session = record
+        presentSummary(for: record)
     }
     #endif
 
@@ -303,31 +384,298 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Starts the loop. The Apple Watch, when there is one, gets a few
+    /// seconds to bring its workout session up first — heart rate and the
+    /// canonical Health workout both depend on it — and navigation then
+    /// begins either way. A Watch that is missing, uninstalled, refused
+    /// permission or simply slow costs the walker those few seconds and
+    /// nothing else.
     func beginWalk(_ route: Route) {
+        guard !startingWalk, !hasActiveWalk else { return }
+        startingWalk = true
+        Task { await startWalk(route) }
+    }
+
+    /// The Watch has already started its own workout and is asking the phone
+    /// to navigate. Skips asking the Watch to start a second time.
+    private func beginWalkFromWatch(_ route: Route, sessionID: String) {
+        guard !startingWalk, !hasActiveWalk else { return }
+        startingWalk = true
+        Task { await startWalk(route, watchSessionID: sessionID) }
+    }
+
+    private func startWalk(_ route: Route, watchSessionID: String? = nil) async {
+        defer { startingWalk = false }
+        selected = route
+        var plan = preparedLoopPlan(for: route)
+        if let watchSessionID { plan.sessionID = watchSessionID }
+
+        var owner: HealthWorkoutOwner = .phone
+        if watchSessionID != nil {
+            // Started on the wrist: the Watch's workout is already running,
+            // so it owns the Health record without being asked.
+            owner = .watch
+        } else if watch.isPairedWithApp {
+            startupNotice = "Starting on your Apple Watch…"
+            owner = await watch.startWorkout(for: plan) ? .watch : .phone
+        }
+        startupNotice = ""
+        preparedPlan = nil
+
         if !muted { speechManager.prime() }
         spoken = ""
         walked = 0
         progress = 0
+        isPaused = false
+        pausedAt = nil
+        offRoute = false
         following = true
-        selected = route
         showsRouteOverlay = true
         hasActiveWalk = true
         screen = .walk
         routeStore.save(route)
         routeTileCache.cache(route)
+        startRecording(route, id: plan.sessionID, owner: owner)
         startWalkWatch()
+        startWatchStateFeed()
     }
 
+    /// Finishes the outing, once. Both devices can ask for this — a tap on
+    /// the phone, a tap on the wrist, or a duplicate of either arriving late
+    /// — and every one of them lands here, where the already-finished record
+    /// is what makes the second call a no-op.
     func endWalk() {
+        guard hasActiveWalk || session?.isFinished == false else { return }
+        let finished = finishRecording()
         hasActiveWalk = false
         following = false
         courseUp = false
         showsRouteOverlay = false
+        isPaused = false
+        pausedAt = nil
         screen = .choices
         stopWalkWatch()
         stopHeadingWatch()
+        stopWatchStateFeed()
         speechManager.stop()
         routeTileCache.release()
+        if let finished {
+            // Tells the Watch to close its own workout, and gives it the
+            // phone's verdict on the loop to show. The Watch fills in its own
+            // heart-rate average; the phone has none to offer.
+            watch.send(command: .end, sessionID: finished.id)
+            watch.send(result: makeWorkoutResult(makeLoopSummary(finished)))
+            presentSummary(for: finished)
+        }
+        watch.release()
+    }
+
+    // MARK: Pausing
+
+    func pauseWalk() {
+        guard hasActiveWalk, !isPaused else { return }
+        isPaused = true
+        pausedAt = Date()
+        speechManager.stop()
+        watch.send(command: .pause, sessionID: session?.id)
+        pushWatchState(force: true)
+    }
+
+    func resumeWalk() {
+        guard hasActiveWalk, isPaused else { return }
+        if let pausedAt, var record = session {
+            record.pausedSeconds = (record.pausedSeconds ?? 0) + Date().timeIntervalSince(pausedAt)
+            session = record
+            sessionStore.save(record, immediately: true)
+        }
+        pausedAt = nil
+        isPaused = false
+        // The next fix decides what to say; nothing is repeated from before
+        // the pause just because the walker stood still for a while.
+        spoken = ""
+        if !muted { speechManager.prime() }
+        watch.send(command: .resume, sessionID: session?.id)
+        pushWatchState(force: true)
+    }
+
+    // MARK: Recording the outing
+
+    /// Opens a fresh record for this walk. Any previous outing's record is
+    /// replaced — its summary has been seen, or the walker has moved on
+    /// regardless.
+    private func startRecording(_ route: Route, id: String, owner: HealthWorkoutOwner) {
+        let record = LoopSessionRecord(
+            id: id,
+            activity: activity,
+            mode: mode,
+            targetAmount: Double(amount) ?? 0,
+            targetUnit: unit,
+            displayUnit: unit,
+            routeID: route.id,
+            routeName: route.name,
+            plannedDistanceMeters: route.distanceMeters,
+            plannedDurationSeconds: route.durationSeconds,
+            plannedGeometry: route.geometry.coordinates,
+            startedAt: Date(),
+            healthOwner: owner
+        )
+        session = record
+        sessionStore.save(record, immediately: true)
+    }
+
+    private func record(_ update: LocationManager.PositionUpdate, on route: Route) {
+        guard var record = session, !record.isFinished else { return }
+        let location = update.location
+        record.track.append(
+            TrackPoint(
+                lng: location.coordinate.longitude,
+                lat: location.coordinate.latitude,
+                altitude: location.verticalAccuracy > 0 ? location.altitude : nil,
+                horizontalAccuracy: location.horizontalAccuracy,
+                verticalAccuracy: location.verticalAccuracy,
+                speed: location.speed >= 0 ? location.speed : nil,
+                course: location.course >= 0 ? location.course : nil,
+                timestamp: location.timestamp
+            )
+        )
+        record.progressMeters = progress
+        record.endedOffRoute = offRoute
+        // Latched here, on the location watch, rather than alongside the
+        // spoken "you're back where you started" — that announcement is
+        // silenced by mute and by leaving the walk screen, and finishing the
+        // loop is a fact about the outing either way.
+        var justArrived = false
+        if record.arrivedAt == nil, hasArrived(route, progressMeters: progress) {
+            record.arrivedAt = location.timestamp
+            justArrived = true
+        }
+        session = record
+        // Finishing the loop is a one-off fact worth writing straight away,
+        // rather than waiting on the track's usual throttled flush.
+        sessionStore.save(record, immediately: justArrived)
+    }
+
+    /// Closes the record off. Returns nil if there was nothing being
+    /// recorded, and returns the already-finished record unchanged if this
+    /// runs twice — the same guard that stops a second Health workout.
+    @discardableResult
+    private func finishRecording() -> LoopSessionRecord? {
+        guard var record = session else { return nil }
+        guard !record.isFinished else { return record }
+        record.endedAt = Date()
+        record.progressMeters = progress
+        record.endedOffRoute = offRoute
+        if record.arrivedAt == nil, let route = selected, hasArrived(route, progressMeters: progress) {
+            record.arrivedAt = record.endedAt
+        }
+        session = record
+        sessionStore.save(record, immediately: true)
+        return record
+    }
+
+    /// Brings back a record left behind by a previous run. A walk that was
+    /// killed mid-outing is closed off at its last recorded fix rather than
+    /// discarded — the walking really happened, and the summary can still be
+    /// shown for it.
+    private func restoreSession() {
+        guard var record = sessionStore.load() else { return }
+        if !record.isFinished {
+            record.endedAt = record.track.last?.timestamp ?? record.startedAt
+            sessionStore.save(record, immediately: true)
+        }
+        session = record
+        guard !record.summaryAcknowledged else { return }
+        summary = makeLoopSummary(record)
+        // One attempt for an outing that never got as far as trying. A save
+        // that already failed waits for the walker to tap Try again, so
+        // nothing retries itself over and over in the background.
+        if case .notAttempted = record.health {
+            Task { await saveToHealth() }
+        }
+    }
+
+    // MARK: Loop Summary
+
+    private func presentSummary(for record: LoopSessionRecord) {
+        summary = makeLoopSummary(record)
+        // Deliberately not awaited: the summary appears straight away and the
+        // Health row fills itself in behind it.
+        Task { await saveToHealth() }
+    }
+
+    /// Rebuilds the on-screen summary from the record, so the Health row
+    /// tracks the save without any other figure being recalculated elsewhere.
+    private func refreshSummary() {
+        guard summary != nil, let record = session else { return }
+        summary = makeLoopSummary(record)
+    }
+
+    func dismissSummary() {
+        summary = nil
+        guard var record = session else { return }
+        record.summaryAcknowledged = true
+        session = record
+        sessionStore.save(record, immediately: true)
+    }
+
+    // MARK: Apple Health
+
+    private func setHealthState(_ state: HealthSaveState) {
+        guard var record = session else { return }
+        record.health = state
+        session = record
+        sessionStore.save(record, immediately: true)
+        refreshSummary()
+    }
+
+    /// The single entry point for writing a loop to Apple Health. Every path
+    /// into it — finishing a walk, restoring one, connecting from the
+    /// summary, tapping Try again — goes through `canAttemptHealthSave`, and
+    /// the check and the move to `.saving` happen together on the main actor,
+    /// so two overlapping calls can never both get through.
+    func saveToHealth() async {
+        guard let record = session, record.isFinished else { return }
+        // The one rule that keeps a Watch-recorded outing from becoming two
+        // workouts in Apple Health. The Watch's HKWorkoutSession *is* the
+        // workout; the phone records the same walk for its own summary and
+        // writes nothing. The workout's UUID arrives separately, if the Watch
+        // manages to send it.
+        if record.workoutOwner == .watch {
+            if case .savedOnWatch = record.health {} else { setHealthState(.savedOnWatch(workoutID: nil)) }
+            return
+        }
+        guard health.isEnabled else { return } // the summary offers to connect instead
+        await health.refreshAvailability()
+        guard let current = session, current.canAttemptHealthSave else { return }
+
+        switch health.availability {
+        case .unavailable:
+            setHealthState(.skipped(reason: "Apple Health isn’t available on this device."))
+            return
+        case .denied, .notDetermined:
+            setHealthState(.skipped(reason: "Looper doesn’t have permission to add workouts."))
+            return
+        case .authorized:
+            break
+        }
+
+        setHealthState(.saving)
+        do {
+            let workoutID = try await health.saver.save(current)
+            setHealthState(.saved(workoutID: workoutID))
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? "The workout couldn’t be saved."
+            setHealthState(.failed(message: message))
+        }
+    }
+
+    /// Turns the integration on from the summary and saves this loop with it.
+    func connectHealthAndSave() async {
+        guard await health.enable() else {
+            refreshSummary()
+            return
+        }
+        await saveToHealth()
     }
 
     /// Returns to the first screen without ending an active walk. The location
@@ -367,6 +715,10 @@ final class AppModel: ObservableObject {
         walkWatchTask = Task {
             for await update in locationManager.positionUpdates() {
                 guard let selected else { continue }
+                // A paused outing isn't being walked: the fix is neither
+                // recorded nor allowed to move progress, so standing still
+                // with the phone in a pocket can't drift the loop along.
+                if isPaused { continue }
                 if update.accuracy > 100 {
                     locationState = "Waiting for a more accurate location…"
                     continue
@@ -378,6 +730,7 @@ final class AppModel: ObservableObject {
                 progress = match.distanceAlong
                 badFixes = match.distanceToRoute > 55 ? badFixes + 1 : 0
                 offRoute = badFixes >= 3
+                record(update, on: selected)
                 announceIfNeeded()
             }
         }
@@ -391,7 +744,7 @@ final class AppModel: ObservableObject {
     // Speak each turn once per distance band, plus one warning when the walk
     // strays off the loop. Falls silent on mute or on leaving the walk screen.
     private func announceIfNeeded() {
-        guard screen == .walk, !muted else { return }
+        guard screen == .walk, !muted, !isPaused else { return }
         if offRoute {
             if spoken != "off" { spoken = "off"; speechManager.speak("You are off the planned loop. Head back to the route.") }
             return
@@ -453,4 +806,118 @@ final class AppModel: ObservableObject {
         headingWatchTask?.cancel()
         headingWatchTask = nil
     }
+
+    // MARK: The Apple Watch
+
+    private func connectWatch() {
+        watch.onCommand = { [weak self] command in self?.handleWatchCommand(command) }
+        watch.onWorkoutStatus = { [weak self] status in self?.handleWatchWorkoutStatus(status) }
+        watch.activate()
+    }
+
+    /// The plan for a loop, reusing the one already preloaded to the Watch
+    /// when it is for the same route — so the id on the wrist and the id in
+    /// the session record are the same outing.
+    private func preparedLoopPlan(for route: Route) -> LoopPlanPayload {
+        if let preparedPlan, preparedPlan.routeID == route.id { return preparedPlan }
+        return LoopPlanPayload(
+            sessionID: UUID().uuidString,
+            routeID: route.id,
+            routeName: route.name,
+            activity: activity,
+            mode: mode,
+            targetAmount: Double(amount) ?? 0,
+            targetUnit: unit,
+            displayUnit: unit,
+            plannedDistanceMeters: route.distanceMeters,
+            plannedDurationSeconds: route.durationSeconds
+        )
+    }
+
+    /// Sends the chosen loop to the Watch ahead of time, so Start on the
+    /// wrist knows what it is starting. Called whenever the choice on screen
+    /// changes; the Watch keeps only the most recent one.
+    func prepareWatch(for route: Route) {
+        guard !hasActiveWalk, !startingWalk else { return }
+        let plan = preparedLoopPlan(for: route)
+        preparedPlan = plan
+        watch.prepare(plan)
+    }
+
+    private func handleWatchCommand(_ command: WatchCommandPayload) {
+        switch command.kind {
+        case .start:
+            // Start from the wrist. The route is whichever loop is chosen on
+            // the phone — the Watch was shown that same plan, and it has no
+            // route of its own to offer.
+            guard let route = selected ?? routes.first else { return }
+            guard let sessionID = command.sessionID else { return }
+            beginWalkFromWatch(route, sessionID: sessionID)
+        case .pause:
+            pauseWalk()
+        case .resume:
+            resumeWalk()
+        case .end:
+            endWalk()
+        case .requestPlan:
+            if let plan = preparedPlan ?? selected.map({ preparedLoopPlan(for: $0) }) {
+                preparedPlan = plan
+                watch.prepare(plan)
+            }
+            pushWatchState(force: true)
+        }
+    }
+
+    private func handleWatchWorkoutStatus(_ status: WatchWorkoutStatusPayload) {
+        guard var record = session, record.id == status.sessionID else { return }
+        switch status.state {
+        case .running:
+            // Written the moment the Watch confirms it: a phone killed
+            // mid-walk must come back knowing the Watch owns the workout.
+            guard record.workoutOwner != .watch else { return }
+            record.healthOwner = .watch
+        case .saved:
+            record.healthOwner = .watch
+            record.health = .savedOnWatch(workoutID: status.workoutID)
+        case .failed:
+            // The Watch got nothing into Health, so the phone takes the
+            // workout back — one outing still means exactly one workout.
+            record.healthOwner = .phone
+            if case .savedOnWatch = record.health { record.health = .notAttempted }
+        }
+        session = record
+        sessionStore.save(record, immediately: true)
+        refreshSummary()
+        if status.state == .failed, record.isFinished {
+            Task { await saveToHealth() }
+        }
+    }
+
+    /// Feeds the Watch the phone's navigation state on a steady clock rather
+    /// than on every GPS fix — the wrist wants a readable number, not every
+    /// twitch of the track, and the mirrored channel has a byte budget.
+    private func startWatchStateFeed() {
+        stopWatchStateFeed()
+        watchStateTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await MainActor.run { self?.pushWatchState() }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+        }
+    }
+
+    private func stopWatchStateFeed() {
+        watchStateTask?.cancel()
+        watchStateTask = nil
+    }
+
+    private func pushWatchState(force: Bool = false) {
+        guard let record = session, !record.isFinished else { return }
+        let phase: WorkoutPhase = isPaused ? .paused : .active
+        watch.send(
+            makeWorkoutState(record: record, route: selected, phase: phase, offRoute: offRoute),
+            force: force
+        )
+    }
+
 }

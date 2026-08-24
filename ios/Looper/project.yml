@@ -10,6 +10,11 @@ settings:
   base:
     SWIFT_VERSION: "5.9"
     CODE_SIGN_STYLE: Automatic
+    # Without this, every `xcodegen generate` produces a project with no team
+    # and signing falls back to whatever profile happens to match the bundle
+    # id — which is how the Watch app ended up signed with an iOS-only
+    # profile that didn't name the Watch.
+    DEVELOPMENT_TEAM: DDY2K7746M
     CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]: NO
     CODE_SIGNING_REQUIRED[sdk=iphonesimulator*]: NO
 packages:
@@ -25,9 +30,22 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: Looper
+      # WatchConnectivity plumbing is identical on both devices, so the one
+      # file is compiled into both apps rather than kept in two versions.
+      - path: ../Shared
     dependencies:
       - package: MapLibre
       - package: LooperKit
+      # The same shape Xcode's own "Embed Watch Content" phase uses. Signing
+      # on copy is the part that matters: an embedded Watch app copied in
+      # unsigned is rejected by the device at install time, which looks
+      # exactly like the Watch refusing the app for no reason.
+      - target: LooperWatch
+        embed: true
+        codeSign: true
+        copy:
+          destination: productsDirectory
+          subpath: "$(CONTENTS_FOLDER_PATH)/Watch"
     info:
       path: Looper/Info.plist
       properties:
@@ -41,16 +59,70 @@ targets:
         UIBackgroundModes:
           - location
           - audio
+        NSHealthUpdateUsageDescription: "Looper saves your completed walks and runs to Apple Health, with their distance and the route you took, so they sit alongside the rest of your activity."
+        NSHealthShareUsageDescription: "Looper reads nothing from Apple Health on your iPhone. This permission only lets your Apple Watch's workout appear here as the one record of your walk or run."
         ITSAppUsesNonExemptEncryption: false
         LooperAPIBase: $(LOOPER_API_BASE)
+    entitlements:
+      path: Looper/Looper.entitlements
+      properties:
+        com.apple.developer.healthkit: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.woollams.Looper
         MARKETING_VERSION: "1.0.1"
-        CURRENT_PROJECT_VERSION: "5"
+        CURRENT_PROJECT_VERSION: "6"
         TARGETED_DEVICE_FAMILY: "1"
       configs:
         Debug:
           LOOPER_API_BASE: "https://www.woollams.com/looper_router"
         Release:
           LOOPER_API_BASE: "https://www.woollams.com/looper_router"
+
+  LooperWatch:
+    type: application
+    platform: watchOS
+    # Workout-session mirroring — the Watch keeping the phone in step over
+    # HealthKit's own channel — arrived in watchOS 10.
+    deploymentTarget: "10.0"
+    sources:
+      - path: LooperWatch
+      - path: ../Shared
+    dependencies:
+      - package: LooperKit
+    info:
+      path: LooperWatch/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # The bundle is LooperWatch; what the wearer reads on the watch face
+        # and in the Watch app's list is Looper.
+        CFBundleDisplayName: Looper
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: com.woollams.Looper
+        WKRunsIndependentlyOfCompanionApp: false
+        # Lets the workout session keep running, and keep collecting heart
+        # rate, with the screen down and the wrist swinging.
+        WKBackgroundModes:
+          - workout-processing
+          # Needed before CoreLocation will let the app claim background
+          # location updates, which is what keeps the route recording with
+          # the wrist down mid-run.
+          - location
+        NSHealthUpdateUsageDescription: "Looper records your walk or run on your Watch as a workout in Apple Health, with its distance and the route you took."
+        NSHealthShareUsageDescription: "Looper reads your heart rate from this workout so it can show it on your wrist while you walk or run."
+        NSLocationWhenInUseUsageDescription: "Looper uses your Watch's location to record the route of your walk or run."
+    entitlements:
+      path: LooperWatch/LooperWatch.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.woollams.Looper.watchkitapp
+        MARKETING_VERSION: "1.0.1"
+        CURRENT_PROJECT_VERSION: "6"
+        TARGETED_DEVICE_FAMILY: "4"
+        # watchOS refuses to install an app with no icon, so this is load
+        # bearing rather than decoration.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor

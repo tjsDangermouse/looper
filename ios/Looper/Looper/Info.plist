@@ -22,6 +22,10 @@
 	<false/>
 	<key>LooperAPIBase</key>
 	<string>$(LOOPER_API_BASE)</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Looper reads nothing from Apple Health on your iPhone. This permission only lets your Apple Watch's workout appear here as the one record of your walk or run.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Looper saves your completed walks and runs to Apple Health, with their distance and the route you took, so they sit alongside the rest of your activity.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Looper can keep giving turn-by-turn guidance while your phone is locked, if you allow location access at all times.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

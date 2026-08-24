@@ -4,7 +4,7 @@ import Foundation
 /// routers disagree on how to say it — ORS numbers its instruction types, the
 /// loop service names them — and a walk saved by an older build carries no
 /// maneuver at all, so the wording is read as a last resort.
-public enum Turn: String, Equatable {
+public enum Turn: String, Equatable, Sendable {
     case left
     case slightLeft = "slight-left"
     case sharpLeft = "sharp-left"

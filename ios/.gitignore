@@ -2,5 +2,6 @@
 .swiftpm/
 DerivedData/
 build/
+build-dev/
 xcuserdata/
 *.xcworkspace/xcuserdata/

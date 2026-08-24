@@ -8,61 +8,130 @@
 
 /* Begin PBXBuildFile section */
 		0586441257CB066BE1FDD673 /* VoiceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 898B18622C0F724237790CC4 /* VoiceSettingsView.swift */; };
+		0EA530B6D39F9FCAD4E9281E /* LooperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9E464C30A96FFB196493C847 /* LooperKit */; };
 		10E81493FCA756139A76F79F /* BottomSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BEB8FC47D50871EE61F9B9C /* BottomSheet.swift */; };
 		10F4FF7E51B3E465A5B6321B /* SheetHeightKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3AE51BA2538D9799ADF9AEF /* SheetHeightKey.swift */; };
 		17889B2B605D69E81470DB00 /* OSMStyle.json in Resources */ = {isa = PBXBuildFile; fileRef = F015977723BD5A6F2CCB72A2 /* OSMStyle.json */; };
+		19515570A2C23010B2E65CCA /* HealthKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE795470AA6E8611DA7750F8 /* HealthKitService.swift */; };
+		19DBD97869493F1BF17B140F /* ResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D11D25EB1EDAB1EFF5EC303B /* ResultView.swift */; };
 		2563DCC062E820C93E6AC2E7 /* PlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F28839314B865C4E18231BB6 /* PlannerView.swift */; };
 		267EC0DD96D33B90EB61AC7D /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76C573F04AE577081F1C8592 /* Theme.swift */; };
 		2C208F6420CC464DCF526295 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835921102A17FB5FBC535EFB /* SettingsView.swift */; };
 		2C35E76BDDB8B07250F08902 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5B8DAB14ACD3F6921BB9CD /* LocationManager.swift */; };
+		2ED675CCFEE341FBCE066DB9 /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFAD54A7A444A7595D665964 /* ButtonStyles.swift */; };
+		3036A9FFD9162CD2233B0A2E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 301AF123C350EBB83850D361 /* Assets.xcassets */; };
+		39D738AFA344FA25C911A879 /* LoopSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4EFEE7F69F2500EB056CBCA /* LoopSummaryView.swift */; };
 		463B58E0CF7C44C0F1A8E884 /* MapLibreMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB2F9FAA54BF127F37C20269 /* MapLibreMapView.swift */; };
 		4794FE92FB128D33D42282AD /* LooperKit in Frameworks */ = {isa = PBXBuildFile; productRef = C3BFB291A79BB42386011E39 /* LooperKit */; };
+		5351B5A62E18DC491790C3F7 /* WatchWorkout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A9E4BEBE9CDEC940B61292F /* WatchWorkout.swift */; };
 		53BB37518F558723D75E005F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9DE956B03DA628600F29CCD3 /* Assets.xcassets */; };
 		59F29D241514EEB34645916E /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = A78E96C2488C44CE3C073DF0 /* Config.swift */; };
 		6A8D9973AD54CF9EB3A196E3 /* SpeechManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0260C72DA86CF4538286A4A7 /* SpeechManager.swift */; };
 		6E7CFD890E9B7EC5DD954642 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC3E198A79AE243A62878670 /* ContentView.swift */; };
+		740A7D8DDE6F31A3D963D72B /* StartLoopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2F3A850A72119C86556B656 /* StartLoopView.swift */; };
 		7670F51ECA82598B7A20723D /* ChoicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26CD672EEBDFF7271B57A496 /* ChoicesView.swift */; };
 		78366D7C49444B9622139744 /* WalkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7136A25E84DADF2A77C4090 /* WalkView.swift */; };
 		78E943275448589AD91D93CB /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FBBE075EF8B5A79E9F071ED /* AppModel.swift */; };
-		84DC849B6C4942F794208415 /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 216B375884034C66A69E80F0 /* ButtonStyles.swift */; };
+		7F26F682AB9F9066ECA76208 /* WatchRouteRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFDF60A77781F72C22A20150 /* WatchRouteRecorder.swift */; };
+		83E301CC909C5762942DCF55 /* LoopSummaryMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D8F1D18F1F7CE624322F6A /* LoopSummaryMapView.swift */; };
 		8C1DC94E932F1B44170B6CD7 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D444B508C666D16B306A4E3F /* WelcomeView.swift */; };
+		8DA2A063159C93DEBE5FAD7D /* LooperWatch.app in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = 387C345294ED61BA0C2BA4C5 /* LooperWatch.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		913AA603168068264EB0E333 /* WatchCompanion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31E1A8120B08CA7DED381693 /* WatchCompanion.swift */; };
+		926D1DF491CF4720A776CA0E /* WatchLinkSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35198FC815755AEB4575E048 /* WatchLinkSession.swift */; };
+		985980F093B13CDD3100F14A /* WorkoutPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = E81BC85DFABD7D24AECB98EF /* WorkoutPages.swift */; };
 		9CCE7933DBE629887D74E012 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 986111AC049E77ECF9B75E10 /* MapLibre */; };
 		AFC1ABFB4C32069753C8AEF3 /* BrandBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99C168511C6016603309E018 /* BrandBadge.swift */; };
 		B176A7380FD731F6AC1BF0E0 /* RouteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5BC29876B8514C886B3BB7 /* RouteStore.swift */; };
+		B2DED604EB22D54E8F1F559D /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BE92C8BC17D92224E09728C /* SessionStore.swift */; };
+		B50B2E274849A81CFCB00B3E /* LooperWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D620E133A1F320C92754B2 /* LooperWatchApp.swift */; };
 		BC7589E1419BCAB24E8651D3 /* AppVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54A22A4CA8E73EB5ADC2C935 /* AppVersion.swift */; };
 		C08051705770F95DD9E3F92B /* Icons.swift in Sources */ = {isa = PBXBuildFile; fileRef = D96BFD021638C638473CB574 /* Icons.swift */; };
 		C411CA3A8A7B47B01F8B7584 /* LooperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A64D791F4AECBFEFC9B0213 /* LooperApp.swift */; };
+		C9A3449A63B42278C81FCA9B /* WatchLinkSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35198FC815755AEB4575E048 /* WatchLinkSession.swift */; };
+		D1AB71CC6AD8E33E5D664EA5 /* WatchTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E33785FF60ED31E1654AE6 /* WatchTheme.swift */; };
 		DB4CC7575D4A1E08A04356AE /* RouteTileCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 892C896BBE805E15C40FF985 /* RouteTileCache.swift */; };
+		DCDD0185C9E9410E447D827D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6851BB396678CA888E4FFC3E /* RootView.swift */; };
+		E1521CFE6A911B2363BAA7FA /* HealthIntegration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B385CB79083C3932DD717C0 /* HealthIntegration.swift */; };
+		E2F9D134C92F3EC7730A72C3 /* WatchModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B723E2A8859EC2D70D5BF786 /* WatchModel.swift */; };
+		F0185C7C7D8BBB0BD9CDD1E2 /* GuidancePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF36AA8F3EB3485E6E73217F /* GuidancePage.swift */; };
+		F7A2A461C46C3AF95508BC54 /* WatchHapticPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD7E139CE785165EC60CD60C /* WatchHapticPlayer.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		CDD3B29EDC1D722BE90B30C4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 24813CE819DB35D8199BADCD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 166DD396CF53787BFA49E688;
+			remoteInfo = LooperWatch;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B52BE0D70DD08E73CFA9D725 /* Embed Dependencies */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				8DA2A063159C93DEBE5FAD7D /* LooperWatch.app in Embed Dependencies */,
+			);
+			name = "Embed Dependencies";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0260C72DA86CF4538286A4A7 /* SpeechManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechManager.swift; sourceTree = "<group>"; };
 		1A64D791F4AECBFEFC9B0213 /* LooperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LooperApp.swift; sourceTree = "<group>"; };
-		216B375884034C66A69E80F0 /* ButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonStyles.swift; sourceTree = "<group>"; };
+		1F0674DB03F3533231684C80 /* Looper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Looper.entitlements; sourceTree = "<group>"; };
 		26CD672EEBDFF7271B57A496 /* ChoicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChoicesView.swift; sourceTree = "<group>"; };
 		2A5B8DAB14ACD3F6921BB9CD /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
+		2B385CB79083C3932DD717C0 /* HealthIntegration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthIntegration.swift; sourceTree = "<group>"; };
+		301AF123C350EBB83850D361 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		31362405C36C54394AB91A8A /* LooperKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LooperKit; path = ../LooperKit; sourceTree = SOURCE_ROOT; };
-		3BC1ED53DCBFED602B8A689C /* Looper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Looper.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		31E1A8120B08CA7DED381693 /* WatchCompanion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchCompanion.swift; sourceTree = "<group>"; };
+		35198FC815755AEB4575E048 /* WatchLinkSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLinkSession.swift; sourceTree = "<group>"; };
+		387C345294ED61BA0C2BA4C5 /* LooperWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LooperWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3BC1ED53DCBFED602B8A689C /* Looper.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Looper.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		44D8F1D18F1F7CE624322F6A /* LoopSummaryMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopSummaryMapView.swift; sourceTree = "<group>"; };
 		4BEB8FC47D50871EE61F9B9C /* BottomSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BottomSheet.swift; sourceTree = "<group>"; };
 		4FBBE075EF8B5A79E9F071ED /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		54A22A4CA8E73EB5ADC2C935 /* AppVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVersion.swift; sourceTree = "<group>"; };
+		6851BB396678CA888E4FFC3E /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		6BE92C8BC17D92224E09728C /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
 		70AF98D958501DA02250650E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		73E33785FF60ED31E1654AE6 /* WatchTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTheme.swift; sourceTree = "<group>"; };
 		76C573F04AE577081F1C8592 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		7A9E4BEBE9CDEC940B61292F /* WatchWorkout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchWorkout.swift; sourceTree = "<group>"; };
 		835921102A17FB5FBC535EFB /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		892C896BBE805E15C40FF985 /* RouteTileCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteTileCache.swift; sourceTree = "<group>"; };
 		898B18622C0F724237790CC4 /* VoiceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSettingsView.swift; sourceTree = "<group>"; };
+		8E038413F7A07635B1FBA8BF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		99C168511C6016603309E018 /* BrandBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandBadge.swift; sourceTree = "<group>"; };
 		9DE956B03DA628600F29CCD3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A78E96C2488C44CE3C073DF0 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		AC3E198A79AE243A62878670 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		AFAD54A7A444A7595D665964 /* ButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonStyles.swift; sourceTree = "<group>"; };
 		B3AE51BA2538D9799ADF9AEF /* SheetHeightKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetHeightKey.swift; sourceTree = "<group>"; };
+		B723E2A8859EC2D70D5BF786 /* WatchModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchModel.swift; sourceTree = "<group>"; };
 		CA5BC29876B8514C886B3BB7 /* RouteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteStore.swift; sourceTree = "<group>"; };
+		CD7E139CE785165EC60CD60C /* WatchHapticPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchHapticPlayer.swift; sourceTree = "<group>"; };
+		D11D25EB1EDAB1EFF5EC303B /* ResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultView.swift; sourceTree = "<group>"; };
+		D2F3A850A72119C86556B656 /* StartLoopView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartLoopView.swift; sourceTree = "<group>"; };
 		D444B508C666D16B306A4E3F /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		D4EFEE7F69F2500EB056CBCA /* LoopSummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopSummaryView.swift; sourceTree = "<group>"; };
+		D6D620E133A1F320C92754B2 /* LooperWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LooperWatchApp.swift; sourceTree = "<group>"; };
 		D7136A25E84DADF2A77C4090 /* WalkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkView.swift; sourceTree = "<group>"; };
 		D96BFD021638C638473CB574 /* Icons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Icons.swift; sourceTree = "<group>"; };
+		DF36AA8F3EB3485E6E73217F /* GuidancePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidancePage.swift; sourceTree = "<group>"; };
+		DFDF60A77781F72C22A20150 /* WatchRouteRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRouteRecorder.swift; sourceTree = "<group>"; };
+		E81BC85DFABD7D24AECB98EF /* WorkoutPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutPages.swift; sourceTree = "<group>"; };
 		EB2F9FAA54BF127F37C20269 /* MapLibreMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLibreMapView.swift; sourceTree = "<group>"; };
+		EE795470AA6E8611DA7750F8 /* HealthKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitService.swift; sourceTree = "<group>"; };
 		F015977723BD5A6F2CCB72A2 /* OSMStyle.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = OSMStyle.json; sourceTree = "<group>"; };
 		F28839314B865C4E18231BB6 /* PlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlannerView.swift; sourceTree = "<group>"; };
+		F3DA003A20133F2BA81D5DB9 /* LooperWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LooperWatch.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,9 +144,38 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A41FB4A523EAF1E45EEEE285 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0EA530B6D39F9FCAD4E9281E /* LooperKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		6E68A91FC6551FE2ACDC15AE /* LooperWatch */ = {
+			isa = PBXGroup;
+			children = (
+				301AF123C350EBB83850D361 /* Assets.xcassets */,
+				DF36AA8F3EB3485E6E73217F /* GuidancePage.swift */,
+				8E038413F7A07635B1FBA8BF /* Info.plist */,
+				F3DA003A20133F2BA81D5DB9 /* LooperWatch.entitlements */,
+				D6D620E133A1F320C92754B2 /* LooperWatchApp.swift */,
+				D11D25EB1EDAB1EFF5EC303B /* ResultView.swift */,
+				6851BB396678CA888E4FFC3E /* RootView.swift */,
+				D2F3A850A72119C86556B656 /* StartLoopView.swift */,
+				CD7E139CE785165EC60CD60C /* WatchHapticPlayer.swift */,
+				B723E2A8859EC2D70D5BF786 /* WatchModel.swift */,
+				DFDF60A77781F72C22A20150 /* WatchRouteRecorder.swift */,
+				73E33785FF60ED31E1654AE6 /* WatchTheme.swift */,
+				7A9E4BEBE9CDEC940B61292F /* WatchWorkout.swift */,
+				E81BC85DFABD7D24AECB98EF /* WorkoutPages.swift */,
+			);
+			path = LooperWatch;
+			sourceTree = "<group>";
+		};
 		71E877E605B005A1CF6EE2EF /* App */ = {
 			isa = PBXGroup;
 			children = (
@@ -98,6 +196,7 @@
 			isa = PBXGroup;
 			children = (
 				3BC1ED53DCBFED602B8A689C /* Looper.app */,
+				387C345294ED61BA0C2BA4C5 /* LooperWatch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -106,15 +205,19 @@
 			isa = PBXGroup;
 			children = (
 				54A22A4CA8E73EB5ADC2C935 /* AppVersion.swift */,
+				AFAD54A7A444A7595D665964 /* ButtonStyles.swift */,
 				A78E96C2488C44CE3C073DF0 /* Config.swift */,
+				2B385CB79083C3932DD717C0 /* HealthIntegration.swift */,
+				EE795470AA6E8611DA7750F8 /* HealthKitService.swift */,
 				D96BFD021638C638473CB574 /* Icons.swift */,
 				2A5B8DAB14ACD3F6921BB9CD /* LocationManager.swift */,
 				CA5BC29876B8514C886B3BB7 /* RouteStore.swift */,
 				892C896BBE805E15C40FF985 /* RouteTileCache.swift */,
+				6BE92C8BC17D92224E09728C /* SessionStore.swift */,
 				B3AE51BA2538D9799ADF9AEF /* SheetHeightKey.swift */,
 				0260C72DA86CF4538286A4A7 /* SpeechManager.swift */,
-				216B375884034C66A69E80F0 /* ButtonStyles.swift */,
 				76C573F04AE577081F1C8592 /* Theme.swift */,
+				31E1A8120B08CA7DED381693 /* WatchCompanion.swift */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -125,6 +228,7 @@
 				4BEB8FC47D50871EE61F9B9C /* BottomSheet.swift */,
 				99C168511C6016603309E018 /* BrandBadge.swift */,
 				26CD672EEBDFF7271B57A496 /* ChoicesView.swift */,
+				D4EFEE7F69F2500EB056CBCA /* LoopSummaryView.swift */,
 				F28839314B865C4E18231BB6 /* PlannerView.swift */,
 				835921102A17FB5FBC535EFB /* SettingsView.swift */,
 				898B18622C0F724237790CC4 /* VoiceSettingsView.swift */,
@@ -142,11 +246,22 @@
 			name = Packages;
 			sourceTree = "<group>";
 		};
+		C80BE4C112343902008403E1 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				35198FC815755AEB4575E048 /* WatchLinkSession.swift */,
+			);
+			name = Shared;
+			path = ../Shared;
+			sourceTree = "<group>";
+		};
 		D42A68CBFD4F2D4C505C16BC = {
 			isa = PBXGroup;
 			children = (
 				F2893E4B30EF7401150D3C92 /* Looper */,
+				6E68A91FC6551FE2ACDC15AE /* LooperWatch */,
 				C5A47BF5716535AFC13098F2 /* Packages */,
+				C80BE4C112343902008403E1 /* Shared */,
 				949B7A65594765935D2C7EEF /* Products */,
 			);
 			sourceTree = "<group>";
@@ -154,6 +269,7 @@
 		DC9FE6E6808C5598CDDBA134 /* Map */ = {
 			isa = PBXGroup;
 			children = (
+				44D8F1D18F1F7CE624322F6A /* LoopSummaryMapView.swift */,
 				EB2F9FAA54BF127F37C20269 /* MapLibreMapView.swift */,
 			);
 			path = Map;
@@ -165,6 +281,7 @@
 				9DE956B03DA628600F29CCD3 /* Assets.xcassets */,
 				AC3E198A79AE243A62878670 /* ContentView.swift */,
 				70AF98D958501DA02250650E /* Info.plist */,
+				1F0674DB03F3533231684C80 /* Looper.entitlements */,
 				1A64D791F4AECBFEFC9B0213 /* LooperApp.swift */,
 				71E877E605B005A1CF6EE2EF /* App */,
 				DC9FE6E6808C5598CDDBA134 /* Map */,
@@ -178,6 +295,26 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		166DD396CF53787BFA49E688 /* LooperWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5732F583C02BFF404F372454 /* Build configuration list for PBXNativeTarget "LooperWatch" */;
+			buildPhases = (
+				AA28DC0709F56F93C206C3D7 /* Sources */,
+				C71BD0E4197D739FFE318E81 /* Resources */,
+				A41FB4A523EAF1E45EEEE285 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LooperWatch;
+			packageProductDependencies = (
+				9E464C30A96FFB196493C847 /* LooperKit */,
+			);
+			productName = LooperWatch;
+			productReference = 387C345294ED61BA0C2BA4C5 /* LooperWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
 		C69EBA81E431F003C5A450FD /* Looper */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2DB0BD1B6AA420A2825C09B4 /* Build configuration list for PBXNativeTarget "Looper" */;
@@ -185,10 +322,12 @@
 				532844F1EFD7FFD0D66048C5 /* Sources */,
 				C2E0BF9B1B11D14557E93485 /* Resources */,
 				5B000689EA0F919BBEC0F2C5 /* Frameworks */,
+				B52BE0D70DD08E73CFA9D725 /* Embed Dependencies */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				4557837914B7F3B27C41ECDE /* PBXTargetDependency */,
 			);
 			name = Looper;
 			packageProductDependencies = (
@@ -208,7 +347,12 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					166DD396CF53787BFA49E688 = {
+						DevelopmentTeam = DDY2K7746M;
+						ProvisioningStyle = Automatic;
+					};
 					C69EBA81E431F003C5A450FD = {
+						DevelopmentTeam = DDY2K7746M;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -232,6 +376,7 @@
 			projectRoot = "";
 			targets = (
 				C69EBA81E431F003C5A450FD /* Looper */,
+				166DD396CF53787BFA49E688 /* LooperWatch */,
 			);
 		};
 /* End PBXProject section */
@@ -246,6 +391,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C71BD0E4197D739FFE318E81 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3036A9FFD9162CD2233B0A2E /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -257,30 +410,81 @@
 				BC7589E1419BCAB24E8651D3 /* AppVersion.swift in Sources */,
 				10E81493FCA756139A76F79F /* BottomSheet.swift in Sources */,
 				AFC1ABFB4C32069753C8AEF3 /* BrandBadge.swift in Sources */,
+				2ED675CCFEE341FBCE066DB9 /* ButtonStyles.swift in Sources */,
 				7670F51ECA82598B7A20723D /* ChoicesView.swift in Sources */,
 				59F29D241514EEB34645916E /* Config.swift in Sources */,
 				6E7CFD890E9B7EC5DD954642 /* ContentView.swift in Sources */,
+				E1521CFE6A911B2363BAA7FA /* HealthIntegration.swift in Sources */,
+				19515570A2C23010B2E65CCA /* HealthKitService.swift in Sources */,
 				C08051705770F95DD9E3F92B /* Icons.swift in Sources */,
 				2C35E76BDDB8B07250F08902 /* LocationManager.swift in Sources */,
+				83E301CC909C5762942DCF55 /* LoopSummaryMapView.swift in Sources */,
+				39D738AFA344FA25C911A879 /* LoopSummaryView.swift in Sources */,
 				C411CA3A8A7B47B01F8B7584 /* LooperApp.swift in Sources */,
 				463B58E0CF7C44C0F1A8E884 /* MapLibreMapView.swift in Sources */,
 				2563DCC062E820C93E6AC2E7 /* PlannerView.swift in Sources */,
 				B176A7380FD731F6AC1BF0E0 /* RouteStore.swift in Sources */,
 				DB4CC7575D4A1E08A04356AE /* RouteTileCache.swift in Sources */,
+				B2DED604EB22D54E8F1F559D /* SessionStore.swift in Sources */,
 				2C208F6420CC464DCF526295 /* SettingsView.swift in Sources */,
 				10F4FF7E51B3E465A5B6321B /* SheetHeightKey.swift in Sources */,
 				6A8D9973AD54CF9EB3A196E3 /* SpeechManager.swift in Sources */,
-				84DC849B6C4942F794208415 /* ButtonStyles.swift in Sources */,
 				267EC0DD96D33B90EB61AC7D /* Theme.swift in Sources */,
 				0586441257CB066BE1FDD673 /* VoiceSettingsView.swift in Sources */,
 				78366D7C49444B9622139744 /* WalkView.swift in Sources */,
+				913AA603168068264EB0E333 /* WatchCompanion.swift in Sources */,
+				C9A3449A63B42278C81FCA9B /* WatchLinkSession.swift in Sources */,
 				8C1DC94E932F1B44170B6CD7 /* WelcomeView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA28DC0709F56F93C206C3D7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F0185C7C7D8BBB0BD9CDD1E2 /* GuidancePage.swift in Sources */,
+				B50B2E274849A81CFCB00B3E /* LooperWatchApp.swift in Sources */,
+				19DBD97869493F1BF17B140F /* ResultView.swift in Sources */,
+				DCDD0185C9E9410E447D827D /* RootView.swift in Sources */,
+				740A7D8DDE6F31A3D963D72B /* StartLoopView.swift in Sources */,
+				F7A2A461C46C3AF95508BC54 /* WatchHapticPlayer.swift in Sources */,
+				926D1DF491CF4720A776CA0E /* WatchLinkSession.swift in Sources */,
+				E2F9D134C92F3EC7730A72C3 /* WatchModel.swift in Sources */,
+				7F26F682AB9F9066ECA76208 /* WatchRouteRecorder.swift in Sources */,
+				D1AB71CC6AD8E33E5D664EA5 /* WatchTheme.swift in Sources */,
+				5351B5A62E18DC491790C3F7 /* WatchWorkout.swift in Sources */,
+				985980F093B13CDD3100F14A /* WorkoutPages.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		4557837914B7F3B27C41ECDE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 166DD396CF53787BFA49E688 /* LooperWatch */;
+			targetProxy = CDD3B29EDC1D722BE90B30C4 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		237ABDD6901DE69534FFB6D5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = LooperWatch/LooperWatch.entitlements;
+				CURRENT_PROJECT_VERSION = 6;
+				INFOPLIST_FILE = LooperWatch/Info.plist;
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.woollams.Looper.watchkitapp;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
 		395702C410E25F7796C0A36C /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -319,6 +523,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = DDY2K7746M;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -333,7 +538,6 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.9;
@@ -344,9 +548,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Looper/Looper.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 5;
-				DEVELOPMENT_TEAM = DDY2K7746M;
+				CURRENT_PROJECT_VERSION = 6;
 				INFOPLIST_FILE = Looper/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -360,6 +564,23 @@
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
+		};
+		5362A12CE1255BBC14ECF624 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = LooperWatch/LooperWatch.entitlements;
+				CURRENT_PROJECT_VERSION = 6;
+				INFOPLIST_FILE = LooperWatch/Info.plist;
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.woollams.Looper.watchkitapp;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
 		};
 		6FEA67731CD8F764F6C814C2 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -399,6 +620,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = DDY2K7746M;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -420,7 +642,6 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.9;
@@ -431,9 +652,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Looper/Looper.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 5;
-				DEVELOPMENT_TEAM = DDY2K7746M;
+				CURRENT_PROJECT_VERSION = 6;
 				INFOPLIST_FILE = Looper/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -456,6 +677,15 @@
 			buildConfigurations = (
 				3A82EE0E8AA5CD47F4B810B6 /* Debug */,
 				9D0B9C372EC630F7A87A3951 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		5732F583C02BFF404F372454 /* Build configuration list for PBXNativeTarget "LooperWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				237ABDD6901DE69534FFB6D5 /* Debug */,
+				5362A12CE1255BBC14ECF624 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -494,6 +724,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = C7D206EB494B09532BCE23E1 /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */;
 			productName = MapLibre;
+		};
+		9E464C30A96FFB196493C847 /* LooperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LooperKit;
 		};
 		C3BFB291A79BB42386011E39 /* LooperKit */ = {
 			isa = XCSwiftPackageProductDependency;
