@@ -109,8 +109,9 @@ targets:
           # location updates, which is what keeps the route recording with
           # the wrist down mid-run.
           - location
-        NSHealthUpdateUsageDescription: "Looper records your walk or run on your Watch as a workout in Apple Health, with its distance and the route you took."
-        NSHealthShareUsageDescription: "Looper reads your heart rate from this workout so it can show it on your wrist while you walk or run."
+        NSHealthUpdateUsageDescription: "Looper records your walk or run in Apple Health with its heart rate, distance, active energy and route."
+        NSHealthShareUsageDescription: "Looper reads the heart rate, distance and active energy recorded during this workout so it can show your progress and save complete walk or run details."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Looper uses your Watch's location to record the route of your walk or run, even while your wrist is down."
         NSLocationWhenInUseUsageDescription: "Looper uses your Watch's location to record the route of your walk or run."
     entitlements:
       path: LooperWatch/LooperWatch.entitlements

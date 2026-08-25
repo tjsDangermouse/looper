@@ -12,6 +12,12 @@ import SwiftUI
 /// stopped hearing them.
 @MainActor
 final class WatchModel: ObservableObject {
+    enum LaunchPhase: Equatable {
+        case permissions
+        case ready
+        case blocked(String)
+    }
+
     enum Screen: Equatable {
         /// Nothing prepared yet — the phone hasn't sent a loop.
         case waiting
@@ -31,6 +37,9 @@ final class WatchModel: ObservableObject {
     /// means the numbers on screen are the Watch's own and the turn guidance
     /// has stopped — said out loud rather than quietly faked.
     @Published private(set) var isPhoneLive = false
+    /// The normal app stays behind this gate until the two first-run sheets
+    /// have been presented and answered in a deliberate order.
+    @Published private(set) var launchPhase: LaunchPhase = .permissions
 
     let workout = WatchWorkout()
     private let link = WatchLinkSession()
@@ -38,6 +47,7 @@ final class WatchModel: ObservableObject {
     private var freshnessTask: Task<Void, Never>?
     private var lastStateAt: Date?
     private var handledCommandIDs: Set<String> = []
+    private var permissionGate: Task<Bool, Never>?
     private let defaults = UserDefaults.standard
     private static let planKey = "watch.last-plan"
     /// How long the wrist waits before admitting the phone has gone quiet.
@@ -67,6 +77,7 @@ final class WatchModel: ObservableObject {
     func activate() {
         link.activate()
         Task {
+            guard await completePermissionGate() else { return }
             // A Watch app relaunched mid-outing — swiped away, or evicted for
             // memory — picks the running workout back up rather than starting
             // a second one.
@@ -79,11 +90,55 @@ final class WatchModel: ObservableObject {
         }
     }
 
+    /// Location must resolve first. Only then may HealthKit present its sheet.
+    /// A shared task also makes a phone-initiated launch wait on the exact same
+    /// gate instead of starting a competing authorization request.
+    private func completePermissionGate() async -> Bool {
+        if launchPhase == .ready { return true }
+        if let permissionGate { return await permissionGate.value }
+
+        launchPhase = .permissions
+        let gate = Task { @MainActor [weak self] () -> Bool in
+            guard let self else { return false }
+            let location = await workout.requestLocationAuthorization()
+            guard location == .authorizedAlways || location == .authorizedWhenInUse else {
+                launchPhase = .blocked("Allow location access in Settings so Looper can record your route, then try again.")
+                return false
+            }
+
+            // The delegate callback records the choice before watchOS has
+            // necessarily finished dismissing its sheet. Leave that short
+            // transition clear before presenting HealthKit's larger sheet.
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard await workout.requestAuthorization() else {
+                launchPhase = .blocked("Allow Health access in Settings so Looper can record your workout, then try again.")
+                return false
+            }
+            launchPhase = .ready
+            return true
+        }
+        permissionGate = gate
+        let ready = await gate.value
+        permissionGate = nil
+        return ready
+    }
+
+    func retryPermissions() {
+        Task {
+            guard await completePermissionGate() else { return }
+            if await workout.recoverRunningWorkout() { beginFreshnessWatch() }
+            requestPlan()
+        }
+    }
+
     /// The phone launched us with a workout configuration: it has tapped
     /// Start and expects a workout on this wrist.
     func handle(_ configuration: HKWorkoutConfiguration) {
         let activity: Activity = configuration.activityType == .running ? .running : .walking
-        Task { await start(activity: activity, initiatedHere: false) }
+        Task {
+            guard await completePermissionGate() else { return }
+            await start(activity: activity, initiatedHere: false)
+        }
     }
 
     // MARK: Starting

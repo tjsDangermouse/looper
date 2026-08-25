@@ -9,20 +9,20 @@ struct StartLoopView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
                 if let plan = model.plan {
                     Label(plan.activity == .running ? "Run" : "Walk",
                           systemImage: plan.activity == .running ? "figure.run" : "figure.walk")
-                        .font(.caption.weight(.semibold))
+                        .font(.caption2.weight(.semibold))
                         .foregroundStyle(Color.looperAccent)
 
                     Text(plan.routeName)
-                        .font(.headline)
+                        .font(.subheadline.weight(.semibold))
                         .lineLimit(2)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.8)
 
                     Text(plan.targetDescription)
-                        .font(.title3.weight(.semibold))
+                        .font(.headline)
                         .foregroundStyle(.primary)
                     Text(plan.mode == .distance ? "target distance" : "target time")
                         .font(.caption2)
@@ -41,7 +41,7 @@ struct StartLoopView: View {
                     .tint(Color.looperAccent)
                     .foregroundStyle(Color.looperOnAccent)
                     .disabled(model.starting)
-                    .padding(.top, 4)
+                    .padding(.top, 1)
                     .accessibilityLabel("Start \(plan.activity == .running ? "run" : "walk"), \(plan.routeName), \(plan.targetDescription)")
 
                     // Said before the walk rather than after it goes wrong:
@@ -50,6 +50,10 @@ struct StartLoopView: View {
                     Text("Turn-by-turn guidance comes from your iPhone.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+
+                    Text(WatchAppVersion.displayString)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
 
                     // The reason for the permission sheet, on screen before
                     // the sheet is. Plain, and no broader than the truth:

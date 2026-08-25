@@ -15,6 +15,7 @@ final class WatchRouteRecorder: NSObject {
     private let manager = CLLocationManager()
     private var pending: [CLLocation] = []
     private var onBatch: (([CLLocation]) -> Void)?
+    private var authorizationContinuation: CheckedContinuation<CLAuthorizationStatus, Never>?
     /// Fixes are handed over in batches rather than one at a time; HealthKit
     /// would rather have a handful than a steady drip.
     private static let batchSize = 20
@@ -26,42 +27,32 @@ final class WatchRouteRecorder: NSObject {
         manager.activityType = .fitness
     }
 
-    func start(onBatch: @escaping ([CLLocation]) -> Void) {
-        self.onBatch = onBatch
-        // Authorization is granted asynchronously — on the very first workout
-        // after install, the status is still `.notDetermined` the instant
-        // this call returns. Claiming background updates before CoreLocation
-        // has actually authorized the app is the same hard exception as
-        // claiming them with no background mode declared, so starting is
-        // split off and only run once authorization is settled.
-        switch manager.authorizationStatus {
-        case .authorizedWhenInUse, .authorizedAlways:
-            beginUpdating()
-        case .notDetermined:
+    /// Resolves only after the location sheet has been answered. The launch
+    /// gate awaits this before asking HealthKit anything, so watchOS never
+    /// stacks two permission sheets over each other.
+    func requestAuthorization() async -> CLAuthorizationStatus {
+        let status = manager.authorizationStatus
+        guard status == .notDetermined else { return status }
+        return await withCheckedContinuation { continuation in
+            authorizationContinuation = continuation
             manager.requestWhenInUseAuthorization()
-        default:
-            break
         }
     }
 
-    private func beginUpdating() {
-        #if targetEnvironment(simulator)
-        // The watchOS Simulator doesn't grant `CLClientIsBackgroundable`
-        // regardless of the background mode declared or the workout
-        // session's state — Apple's own daemons refuse it there in a way
-        // that doesn't reproduce on a real Watch, and `NSInternalInconsistencyException`
-        // from a hard `false` assertion can't be caught. It's also not
-        // needed in the Simulator: nothing suspends this process the way a
-        // real device would. So background updates are only claimed on
-        // an actual Watch.
-        #else
-        // Claiming background updates without the matching background mode
-        // declared is a hard exception, and a crash at the moment a workout
-        // starts is the worst failure this app could have. So the bundle is
-        // asked what it actually declares rather than assumed.
-        let modes = Bundle.main.object(forInfoDictionaryKey: "WKBackgroundModes") as? [String] ?? []
-        if modes.contains("location") { manager.allowsBackgroundLocationUpdates = true }
-        #endif
+    func start(onBatch: @escaping ([CLLocation]) -> Void) {
+        self.onBatch = onBatch
+        // `allowsBackgroundLocationUpdates` was tried here and reliably
+        // crashed on a real Watch (`CLClientIsBackgroundable` false) even
+        // with Always authorization confirmed granted in Settings. That flag
+        // asks CoreLocation for *its own* background grant — the pairing of
+        // Always authorization with the `location` background mode, for apps
+        // whose only reason to run in the background is tracking location.
+        // This app's reason is the workout: `HKWorkoutSession`'s
+        // `workout-processing` background mode already keeps the process
+        // (and the updates below) running for the life of the workout, a
+        // window CoreLocation's own bookkeeping never gets told about. The
+        // two mechanisms don't compose, and asking for the one this app
+        // doesn't need is what was crashing it.
         manager.startUpdatingLocation()
     }
 
@@ -79,6 +70,13 @@ final class WatchRouteRecorder: NSObject {
 }
 
 extension WatchRouteRecorder: CLLocationManagerDelegate {
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        guard manager.authorizationStatus != .notDetermined,
+              let continuation = authorizationContinuation else { return }
+        authorizationContinuation = nil
+        continuation.resume(returning: manager.authorizationStatus)
+    }
+
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         // The same standard the phone holds its own track to: a fix
         // CoreLocation couldn't place, or placed to within a hundred metres,
@@ -93,15 +91,5 @@ extension WatchRouteRecorder: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         // A workout with no map is still a workout; nothing here should
         // interrupt the recording.
-    }
-
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        // Only fires mid-workout on the very first run, once the walker has
-        // answered the permission sheet `start()` triggered.
-        guard onBatch != nil else { return }
-        switch manager.authorizationStatus {
-        case .authorizedWhenInUse, .authorizedAlways: beginUpdating()
-        default: break
-        }
     }
 }

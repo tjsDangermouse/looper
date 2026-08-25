@@ -38,6 +38,27 @@ final class WalkingMathsTests: XCTestCase {
         XCTAssertGreaterThan(nearestProgress(Point(0.00001, 0.00001), loop, from: 300).distanceAlong, 300)
     }
 
+    func testDoesNotMistakeTheSharedStartAndFinishForACompletedLoop() {
+        XCTAssertEqual(
+            progressWithoutStartFinishJump(previous: 0, candidate: 3_995, routeLength: 4_000),
+            0
+        )
+    }
+
+    func testAcceptsTheFinishOnceTheLoopIsUnderway() {
+        XCTAssertEqual(
+            progressWithoutStartFinishJump(previous: 2_000, candidate: 3_995, routeLength: 4_000),
+            3_995
+        )
+    }
+
+    func testAcceptsOrdinaryProgressAtTheBeginning() {
+        XCTAssertEqual(
+            progressWithoutStartFinishJump(previous: 0, candidate: 40, routeLength: 4_000),
+            40
+        )
+    }
+
     func testReadsANumberedTurnFromORS() {
         let step = Step(instruction: "Turn left", distanceMeters: 0, durationSeconds: 0, maneuver: .code(0))
         XCTAssertEqual(turnKind(step), .left)
@@ -122,8 +143,11 @@ final class WalkingMathsTests: XCTestCase {
         XCTAssertEqual(turnAnnouncement(turn, unit: .km)?.text, "In 50 metres, turn left")
     }
 
-    func testSpeaksTheBareTurnAtTheCorner() {
-        let turn = TurnAnnouncementInput(index: 0, instruction: "Turn left", distanceAway: 10)
+    func testWaitsUntilFiveMetresToSpeakTheBareTurn() {
+        let approaching = TurnAnnouncementInput(index: 0, instruction: "Turn left", distanceAway: 10)
+        XCTAssertEqual(turnAnnouncement(approaching, unit: .km)?.text, "In 10 metres, turn left")
+
+        let turn = TurnAnnouncementInput(index: 0, instruction: "Turn left", distanceAway: 5)
         XCTAssertEqual(turnAnnouncement(turn, unit: .km)?.text, "Turn left")
     }
 

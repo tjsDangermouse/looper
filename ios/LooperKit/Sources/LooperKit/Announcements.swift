@@ -9,7 +9,7 @@ public enum Band: String {
 }
 
 public func turnBand(_ metresAway: Double) -> Band? {
-    if metresAway < 30 { return .now }
+    if metresAway <= 5 { return .now }
     if metresAway < 120 { return .near }
     if metresAway < 450 { return .soon }
     return nil

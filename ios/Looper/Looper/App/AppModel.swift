@@ -523,8 +523,12 @@ final class AppModel: ObservableObject {
         sessionStore.save(record, immediately: true)
     }
 
-    private func record(_ update: LocationManager.PositionUpdate, on route: Route) {
-        guard var record = session, !record.isFinished else { return }
+    /// Records one accepted fix and reports the single transition from walking
+    /// to arrived. The location loop uses that transition to close the outing
+    /// through `endWalk()`, exactly as either device's End button would.
+    @discardableResult
+    private func record(_ update: LocationManager.PositionUpdate, on route: Route) -> Bool {
+        guard var record = session, !record.isFinished else { return false }
         let location = update.location
         record.track.append(
             TrackPoint(
@@ -553,6 +557,7 @@ final class AppModel: ObservableObject {
         // Finishing the loop is a one-off fact worth writing straight away,
         // rather than waiting on the track's usual throttled flush.
         sessionStore.save(record, immediately: justArrived)
+        return justArrived
     }
 
     /// Closes the record off. Returns nil if there was nothing being
@@ -726,11 +731,22 @@ final class AppModel: ObservableObject {
                 locationState = ""
                 position = update.point
                 let match = nearestProgress(update.point, selected.geometry.coordinates, from: walked)
-                walked = match.distanceAlong
-                progress = match.distanceAlong
+                let safeProgress = progressWithoutStartFinishJump(
+                    previous: walked,
+                    candidate: match.distanceAlong,
+                    routeLength: selected.distanceMeters
+                )
+                walked = safeProgress
+                progress = safeProgress
                 badFixes = match.distanceToRoute > 55 ? badFixes + 1 : 0
                 offRoute = badFixes >= 3
-                record(update, on: selected)
+                if record(update, on: selected) {
+                    // This is the same idempotent path used by both End
+                    // buttons. It presents the summary and tells the Watch to
+                    // finish its one canonical HealthKit workout.
+                    endWalk()
+                    return
+                }
                 announceIfNeeded()
             }
         }
@@ -754,7 +770,13 @@ final class AppModel: ObservableObject {
             if spoken != announcement.key { spoken = announcement.key; speechManager.speak(announcement.text) }
             return
         }
-        if turn == nil, spoken != "home" { spoken = "home"; speechManager.speak("You are back where you started.") }
+        if turn == nil,
+           let selected,
+           hasArrived(selected, progressMeters: progress),
+           spoken != "home" {
+            spoken = "home"
+            speechManager.speak("You are back where you started.")
+        }
     }
 
     func toggleMute() {

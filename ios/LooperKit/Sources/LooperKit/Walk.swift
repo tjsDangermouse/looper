@@ -36,3 +36,20 @@ public func hasArrived(_ route: Route, progressMeters: Double) -> Bool {
     guard route.steps.contains(where: { $0.distanceMeters > 0 }) else { return false }
     return nextTurn(route, progressMeters) == nil
 }
+
+/// A loop's first and last coordinates occupy the same patch of ground. GPS
+/// noise can therefore make the final segment a slightly closer match than
+/// the first one before the outing has properly begun. Refuse that impossible
+/// jump while progress is still in the opening quarter (capped at 500 m); once
+/// underway, the genuine final approach remains available as normal.
+public func progressWithoutStartFinishJump(
+    previous: Double,
+    candidate: Double,
+    routeLength: Double
+) -> Double {
+    guard routeLength > 0 else { return candidate }
+    let opening = min(500, routeLength * 0.25)
+    let finalQuarter = routeLength * 0.75
+    if previous < opening, candidate > finalQuarter { return previous }
+    return candidate
+}

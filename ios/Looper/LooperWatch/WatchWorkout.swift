@@ -69,9 +69,14 @@ final class WatchWorkout: NSObject, ObservableObject {
 
     var isRunning: Bool { session != nil && (phase == .active || phase == .paused) }
 
-    /// Everything this app writes, and the one thing it reads. Heart rate is
-    /// read so it can be shown live on the wrist; no step counts are written,
-    /// and nothing else is read.
+    /// The launch gate waits for Core Location to settle before it asks for
+    /// Health access. Returning the status lets the gate keep the main app
+    /// hidden when location access was declined.
+    func requestLocationAuthorization() async -> CLAuthorizationStatus {
+        await locations.requestAuthorization()
+    }
+
+    /// Everything this app writes. No step samples are written.
     ///
     /// Active energy is included so the session's own live builder can save
     /// the active-energy samples watchOS already computes from the wrist's
@@ -85,9 +90,16 @@ final class WatchWorkout: NSObject, ObservableObject {
         return types
     }
 
+    /// Metrics the Watch records automatically for this workout configuration.
+    /// HealthKit only delivered heart rate when that was the sole requested
+    /// read type; without distance Fitness cannot derive pace, and without
+    /// active energy it cannot show kilocalories for the workout.
     private var readTypes: Set<HKObjectType> {
-        guard let heart = HKObjectType.quantityType(forIdentifier: .heartRate) else { return [] }
-        return [heart]
+        var types: Set<HKObjectType> = []
+        if let heart = HKObjectType.quantityType(forIdentifier: .heartRate) { types.insert(heart) }
+        if let distance = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning) { types.insert(distance) }
+        if let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) { types.insert(energy) }
+        return types
     }
 
     /// Whether the walker has yet been asked. Used to put the reason on
