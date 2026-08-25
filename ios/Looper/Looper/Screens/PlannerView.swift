@@ -77,6 +77,8 @@ struct PlannerView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                WaypointHint(model: model)
+
                 Button {
                     amountFocused = false
                     model.findRoutes()
@@ -89,5 +91,27 @@ struct PlannerView: View {
             }
             .padding(.top, 4)
         }
+    }
+}
+
+struct WaypointHint: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "mappin.and.ellipse")
+                .foregroundStyle(.blue)
+            Text(model.waypoints.isEmpty
+                 ? "Long-press the map to add up to \(AppModel.waypointLimit) waypoints"
+                 : "\(model.waypoints.count) of \(AppModel.waypointLimit) waypoints added")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Spacer()
+            if !model.waypoints.isEmpty {
+                Button("Clear", action: model.clearWaypoints)
+                    .font(.footnote.weight(.semibold))
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }

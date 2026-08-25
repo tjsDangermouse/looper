@@ -21,6 +21,7 @@ export const MAX_DISTANCE_KM = 30
 export const MIN_DURATION_MINUTES = 10
 export const MAX_DURATION_MINUTES = 360
 export const MAX_VARIATION = 999
+export const MAX_WAYPOINTS = 4
 
 export function parseLoopRequest(body: unknown): LoopRequest {
   if (!body || typeof body !== 'object') throw new ValidationError('Send a valid route request.', 'body')
@@ -77,6 +78,7 @@ export function parseLoopRequest(body: unknown): LoopRequest {
     throw new ValidationError('Ask for a different set of loops.', 'variation')
   }
   const exclude = parseExcludedRoutes(input.exclude)
+  const waypoints = parseWaypoints(input.waypoints)
 
   return {
     start: { lng, lat },
@@ -87,9 +89,25 @@ export function parseLoopRequest(body: unknown): LoopRequest {
     ...(activity ? { activity } : {}),
     ...(walkingPaceMinutesPerKm !== undefined ? { walkingPaceMinutesPerKm } : {}),
     variation: Math.trunc(rawVariation),
+    ...(waypoints ? { waypoints } : {}),
     ...(exclude ? { exclude } : {}),
     overrides: parseOverrides(input.overrides),
   }
+}
+
+function parseWaypoints(value: unknown): Array<{ lng: number; lat: number }> | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length < 1 || value.length > MAX_WAYPOINTS) {
+    throw new ValidationError(`Choose between 1 and ${MAX_WAYPOINTS} waypoints.`, 'waypoints')
+  }
+  return value.map(point => {
+    const lng = Number(point?.lng)
+    const lat = Number(point?.lat)
+    if (!Number.isFinite(lng) || !Number.isFinite(lat) || Math.abs(lng) > 180 || Math.abs(lat) > 90) {
+      throw new ValidationError('Choose valid waypoints on the map.', 'waypoints')
+    }
+    return { lng, lat }
+  })
 }
 
 function parseExcludedRoutes(value: unknown): [number, number][][] | undefined {

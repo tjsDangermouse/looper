@@ -12,6 +12,7 @@ struct ContentView: View {
                 ZStack(alignment: .bottom) {
                     MapLibreMapView(
                         start: model.start,
+                        waypoints: model.waypoints,
                         routes: model.screen == .choices || model.screen == .walk ? model.mapRoutes : [],
                         selectedRouteID: model.selected?.id,
                         position: model.position,
@@ -23,7 +24,8 @@ struct ContentView: View {
                         onFollowChange: { model.following = $0 },
                         onPoint: { point in
                             if model.screen == .planner { model.start = point }
-                        }
+                        },
+                        onLongPress: model.addWaypoint
                     )
                     .ignoresSafeArea()
 
@@ -90,6 +92,22 @@ struct ContentView: View {
                 LoopSummaryView(model: model, summary: summary)
                     .interactiveDismissDisabled()
             }
+        }
+        .alert("Waypoints exceed your plan", isPresented: Binding(
+            get: { model.expectationMessage != nil },
+            set: { if !$0 { model.expectationMessage = nil } }
+        )) {
+            Button("Change plan") {
+                model.expectationMessage = nil
+                model.screen = .planner
+            }
+            Button("Remove waypoints", role: .destructive) {
+                model.expectationMessage = nil
+                model.clearWaypoints()
+            }
+            Button("Cancel", role: .cancel) { model.expectationMessage = nil }
+        } message: {
+            Text(model.expectationMessage ?? "")
         }
     }
 }

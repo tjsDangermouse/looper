@@ -10,6 +10,7 @@ private let chevronSpacing: NSNumber = 110
 
 struct MapLibreMapView: UIViewRepresentable {
     var start: Point
+    var waypoints: [Point]
     var routes: [Route]
     var selectedRouteID: String?
     var position: Point?
@@ -20,6 +21,7 @@ struct MapLibreMapView: UIViewRepresentable {
     var padding: (bottom: CGFloat, right: CGFloat)
     var onFollowChange: (Bool) -> Void
     var onPoint: (Point) -> Void
+    var onLongPress: (Point) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
@@ -36,6 +38,10 @@ struct MapLibreMapView: UIViewRepresentable {
 
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         mapView.addGestureRecognizer(tap)
+        let longPress = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleLongPress(_:)))
+        longPress.minimumPressDuration = 0.55
+        mapView.addGestureRecognizer(longPress)
+        tap.require(toFail: longPress)
 
         // A drag or pinch is the walker asking to look elsewhere, so following
         // stops until they ask for it back. These run alongside MLNMapView's
@@ -67,6 +73,7 @@ struct MapLibreMapView: UIViewRepresentable {
 
         private var routeLayers: [String: (source: MLNShapeSource, line: MLNLineStyleLayer, symbol: MLNSymbolStyleLayer)] = [:]
         private var startAnnotation: MLNPointAnnotation?
+        private var waypointAnnotations: [WaypointAnnotation] = []
         private var styleReady = false
 
         // Previous-value trackers, one per camera effect — each effect only
@@ -100,6 +107,13 @@ struct MapLibreMapView: UIViewRepresentable {
             }
         }
 
+        @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+            guard gesture.state == .began, let mapView else { return }
+            let coordinate = mapView.convert(gesture.location(in: mapView), toCoordinateFrom: mapView)
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            parent.onLongPress(Point(coordinate.longitude, coordinate.latitude))
+        }
+
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
             true
         }
@@ -108,6 +122,13 @@ struct MapLibreMapView: UIViewRepresentable {
             style.setImage(chevronImage(), forName: "chevron")
             styleReady = true
             sync()
+        }
+
+        func mapView(_ mapView: MLNMapView, imageFor annotation: MLNAnnotation) -> MLNAnnotationImage? {
+            guard let waypoint = annotation as? WaypointAnnotation else { return nil }
+            let identifier = "waypoint-\(waypoint.number)"
+            if let image = mapView.dequeueReusableAnnotationImage(withIdentifier: identifier) { return image }
+            return MLNAnnotationImage(image: waypointImage(number: waypoint.number), reuseIdentifier: identifier)
         }
 
         func sync() {
@@ -138,6 +159,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 lastFitSelectedRouteID = nil
             }
             updateStartMarker(mapView)
+            updateWaypointMarkers(mapView)
             let didFit = syncFit(mapView) || syncWalkingEnd(mapView)
             if didFit {
                 // A route fit has just placed the geometry in the visible map
@@ -167,6 +189,19 @@ struct MapLibreMapView: UIViewRepresentable {
                 mapView.addAnnotation(annotation)
                 startAnnotation = annotation
             }
+        }
+
+        private func updateWaypointMarkers(_ mapView: MLNMapView) {
+            let current = waypointAnnotations.map { Point($0.coordinate.longitude, $0.coordinate.latitude) }
+            guard current != parent.waypoints else { return }
+            if !waypointAnnotations.isEmpty { mapView.removeAnnotations(waypointAnnotations) }
+            waypointAnnotations = parent.waypoints.enumerated().map { index, point in
+                let annotation = WaypointAnnotation()
+                annotation.number = index + 1
+                annotation.coordinate = CLLocationCoordinate2D(latitude: point.lat, longitude: point.lng)
+                return annotation
+            }
+            mapView.addAnnotations(waypointAnnotations)
         }
 
         private func syncRoutes(_ mapView: MLNMapView) {
@@ -410,6 +445,39 @@ struct MapLibreMapView: UIViewRepresentable {
             let padded = paddedCenter(target, zoom: zoom, mapView: mapView)
             mapView.setCenter(padded, zoomLevel: zoom, animated: true)
         }
+    }
+}
+
+private final class WaypointAnnotation: MLNPointAnnotation {
+    var number = 0
+}
+
+private func waypointImage(number: Int) -> UIImage {
+    let size = CGSize(width: 38, height: 46)
+    return UIGraphicsImageRenderer(size: size).image { _ in
+        let circle = CGRect(x: 3, y: 2, width: 32, height: 32)
+        let path = UIBezierPath(ovalIn: circle)
+        UIColor.systemBlue.setFill()
+        path.fill()
+        UIColor.white.setStroke()
+        path.lineWidth = 3
+        path.stroke()
+
+        let pointer = UIBezierPath()
+        pointer.move(to: CGPoint(x: 13, y: 30))
+        pointer.addLine(to: CGPoint(x: 19, y: 44))
+        pointer.addLine(to: CGPoint(x: 25, y: 30))
+        pointer.close()
+        UIColor.systemBlue.setFill()
+        pointer.fill()
+
+        let text = "\(number)" as NSString
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 16, weight: .bold),
+            .foregroundColor: UIColor.white,
+        ]
+        let textSize = text.size(withAttributes: attributes)
+        text.draw(at: CGPoint(x: 19 - textSize.width / 2, y: 18 - textSize.height / 2), withAttributes: attributes)
     }
 }
 

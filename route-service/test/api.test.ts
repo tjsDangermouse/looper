@@ -27,6 +27,14 @@ describe('input validation', () => {
   })
   it('defaults the variation to zero', () => expect(parseLoopRequest(valid).variation).toBe(0))
   it('keeps a variation it is given', () => expect(parseLoopRequest({ ...valid, variation: 3 }).variation).toBe(3))
+  it('accepts up to four waypoints', () => {
+    const waypoints = [{ lng: -4.47, lat: 54.16 }, { lng: -4.46, lat: 54.15 }]
+    expect(parseLoopRequest({ ...valid, waypoints }).waypoints).toEqual(waypoints)
+  })
+  it('refuses too many or invalid waypoints', () => {
+    expect(() => parseLoopRequest({ ...valid, waypoints: Array(5).fill({ lng: -4.47, lat: 54.16 }) })).toThrow(ValidationError)
+    expect(() => parseLoopRequest({ ...valid, waypoints: [{ lng: 300, lat: 54.16 }] })).toThrow(ValidationError)
+  })
   it('keeps previously offered routes out of a refresh', () => {
     expect(parseLoopRequest({ ...valid, exclude: [[[0, 0], [0.001, 0]]] }).exclude).toEqual([[[0, 0], [0.001, 0]]])
   })

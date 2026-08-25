@@ -142,6 +142,27 @@ describe('generating loops', () => {
     const down = async () => { throw new GraphHopperError('down', undefined, 'transport') }
     await expect(generateLoops(request(), { route: down })).rejects.toThrow(GraphHopperError)
   })
+
+  it('returns three loops that pass through every requested waypoint', async () => {
+    const waypoint: LngLat = [START.lng + 0.004, START.lat + 0.004]
+    const result = await generateLoops(request({ waypoints: [{ lng: waypoint[0], lat: waypoint[1] }] }), { route: fakeEngine() })
+    expect(result.routes).toHaveLength(3)
+    for (const route of result.routes) {
+      expect(route.geometry.coordinates).toContainEqual(waypoint)
+      expect(route.geometry.coordinates[0]).toEqual([START.lng, START.lat])
+      expect(route.geometry.coordinates.at(-1)).toEqual([START.lng, START.lat])
+      expect(route.targetDifferencePercent).toBeLessThanOrEqual(25)
+    }
+    expect(new Set(result.routes.map(route => JSON.stringify(route.geometry.coordinates))).size).toBe(3)
+  })
+
+  it('asks the walker to change a plan that waypoints necessarily exceed by over 25%', async () => {
+    const farAway = { lng: START.lng, lat: START.lat + 0.03 }
+    const result = await generateLoops(request({ distanceKm: 1, waypoints: [farAway] }), { route: fakeEngine() })
+    expect(result.routes).toHaveLength(0)
+    expect(result.expectationExceeded).toBe(true)
+    expect(result.warning).toMatch(/more than 25%|increase|remove/i)
+  })
 })
 
 describe('falling back where no clean loop exists', () => {

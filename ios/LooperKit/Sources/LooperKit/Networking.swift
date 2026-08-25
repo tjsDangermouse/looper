@@ -25,10 +25,11 @@ struct LoopRequestBody: Encodable {
     let walkingPaceMinutes: Double?
     let walkingPaceUnit: Unit?
     let variation: Int
+    let waypoints: [StartPoint]?
     let exclude: [[Point]]?
 
     enum CodingKeys: String, CodingKey {
-        case start, mode, distanceKm, durationMinutes, units, activity, walkingPaceMinutes, walkingPaceUnit, variation, exclude
+        case start, mode, distanceKm, durationMinutes, units, activity, walkingPaceMinutes, walkingPaceUnit, variation, waypoints, exclude
     }
 
     func encode(to encoder: Encoder) throws {
@@ -42,6 +43,7 @@ struct LoopRequestBody: Encodable {
         try container.encodeIfPresent(walkingPaceMinutes, forKey: .walkingPaceMinutes)
         try container.encodeIfPresent(walkingPaceUnit, forKey: .walkingPaceUnit)
         try container.encode(variation, forKey: .variation)
+        try container.encodeIfPresent(waypoints, forKey: .waypoints)
         try container.encodeIfPresent(exclude, forKey: .exclude)
     }
 }
@@ -68,16 +70,19 @@ private struct LoopsResponseBody: Decodable {
 
     let routes: [RouteDTO]?
     let warning: String?
+    let expectationExceeded: Bool?
     let error: String?
 }
 
 public struct LoopsResult {
     public var routes: [Route]
     public var warning: String?
+    public var expectationExceeded: Bool
 
-    public init(routes: [Route], warning: String? = nil) {
+    public init(routes: [Route], warning: String? = nil, expectationExceeded: Bool = false) {
         self.routes = routes
         self.warning = warning
+        self.expectationExceeded = expectationExceeded
     }
 }
 
@@ -114,6 +119,7 @@ public func requestLoops(
     walkingPaceMinutes: Double? = nil,
     walkingPaceUnit: Unit? = nil,
     variation: Int,
+    waypoints: [Point] = [],
     excludeRoutes: [Route] = [],
     apiBase: String,
     client: LoopsHTTPClient
@@ -131,6 +137,7 @@ public func requestLoops(
         walkingPaceMinutes: walkingPaceMinutes,
         walkingPaceUnit: walkingPaceUnit,
         variation: variation,
+        waypoints: waypoints.isEmpty ? nil : waypoints.map { .init(lng: $0.lng, lat: $0.lat) },
         exclude: excludeRoutes.isEmpty ? nil : excludeRoutes.map { compactRoute($0.geometry.coordinates) }
     )
     let encoded = try JSONEncoder().encode(body)
@@ -156,5 +163,5 @@ public func requestLoops(
             reversed: dto.reversed
         )
     }
-    return LoopsResult(routes: routes, warning: decoded.warning)
+    return LoopsResult(routes: routes, warning: decoded.warning, expectationExceeded: decoded.expectationExceeded ?? false)
 }

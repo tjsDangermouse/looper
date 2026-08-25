@@ -39,6 +39,8 @@ final class AppModel: ObservableObject {
     @Published var showsRouteOverlay = true
     @Published var busy = false
     @Published var error = ""
+    @Published var waypoints: [Point] = []
+    @Published var expectationMessage: String?
     @Published var muted = false
     @Published private(set) var hasActiveWalk = false
     @Published var offRoute = false
@@ -97,6 +99,9 @@ final class AppModel: ObservableObject {
     private var preparedPlan: LoopPlanPayload?
     private var startingWalk = false
     private var pausedAt: Date?
+    private var routeWaypoints: [Point] = []
+
+    static let waypointLimit = 4
 
     init(
         apiBase: String,
@@ -257,6 +262,22 @@ final class AppModel: ObservableObject {
 
     var turn: TurnHit? { selected.flatMap { nextTurn($0, progress) } }
     var remaining: Double { selected.map { max(0, $0.distanceMeters - progress) } ?? 0 }
+    var waypointsNeedSearch: Bool { waypoints != routeWaypoints }
+
+    func addWaypoint(_ point: Point) {
+        guard screen == .planner || screen == .choices else { return }
+        guard waypoints.count < Self.waypointLimit else {
+            error = "You can add up to \(Self.waypointLimit) waypoints."
+            return
+        }
+        waypoints.append(point)
+        error = ""
+    }
+
+    func clearWaypoints() {
+        waypoints.removeAll()
+        error = ""
+    }
 
     func toggleReversed() {
         reversed.toggle()
@@ -279,6 +300,8 @@ final class AppModel: ObservableObject {
     }
 
     func openFavorite(_ route: Route) {
+        waypoints = []
+        routeWaypoints = []
         routes = [route]
         selected = route
         reversed = false
@@ -326,7 +349,8 @@ final class AppModel: ObservableObject {
             error = mode == .time ? "Choose 15 minutes to 4 hours." : "Choose a loop between 1 and 20 km."
             return
         }
-        let key = "\(String(format: "%.5f", start.lng)),\(String(format: "%.5f", start.lat))|\(mode.rawValue)|\(amount)|\(unit.rawValue)"
+        let waypointKey = waypoints.map { "\(String(format: "%.5f", $0.lng)),\(String(format: "%.5f", $0.lat))" }.joined(separator: ";")
+        let key = "\(String(format: "%.5f", start.lng)),\(String(format: "%.5f", start.lat))|\(mode.rawValue)|\(amount)|\(unit.rawValue)|\(waypointKey)"
         let sameSpot = lastAsk.key == key
         let variation = sameSpot
             ? (lastAsk.variation + AppModel.variationStride) % 900
@@ -340,6 +364,7 @@ final class AppModel: ObservableObject {
         error = ""
         reversed = false
         startFindingStageTimer()
+        let requestedWaypoints = waypoints
 
         Task {
             do {
@@ -353,16 +378,25 @@ final class AppModel: ObservableObject {
                     walkingPaceMinutes: activePaceMinutes,
                     walkingPaceUnit: activePaceUnit,
                     variation: variation,
+                    waypoints: requestedWaypoints,
                     excludeRoutes: sameSpot ? routes : [],
                     apiBase: apiBase,
                     client: httpClient
                 )
                 guard seq == requestSeq else { return } // a later request already started; its result is the one that counts
+                if result.expectationExceeded {
+                    let message = result.warning ?? "These waypoints need a longer loop. Increase your distance or time, or remove a waypoint."
+                    expectationMessage = message
+                    error = message
+                    busy = false
+                    return
+                }
                 guard !result.routes.isEmpty else {
                     throw LooperAPIError.message(result.warning ?? "We couldn’t find a clean loop of that length from here. Try a different distance or move the start point.")
                 }
                 routes = result.routes
                 selected = result.routes.first
+                routeWaypoints = requestedWaypoints
                 showsRouteOverlay = true
                 screen = .choices
                 error = result.warning ?? ""
@@ -704,6 +738,9 @@ final class AppModel: ObservableObject {
         progress = 0
         locationState = ""
         error = ""
+        waypoints = []
+        routeWaypoints = []
+        expectationMessage = nil
         showingVoiceSettings = false
         screen = .welcome
     }

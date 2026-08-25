@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import type { LineString } from 'geojson'
+import { GraphHopperError } from '../graphhopper.js'
 import { DEFAULT_ATTEMPT_COUNT, generateLoopAttempts } from './candidates.js'
 import { MAX_SHARED_FRACTION, initialBearing as bearingOf, labelRoutes, selectDiverseRoutes } from './diversity.js'
-import type { LngLat } from './geo.js'
+import { destination, type LngLat } from './geo.js'
 import { analyseRouteQuality, sharedCorridorMetres, type QualityReport, type QualityThresholds } from './quality.js'
-import { LEG_BUDGET_SHARE, buildLoopIncrementally, type LegRouter, type RoutedCandidate } from './routing.js'
+import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinLegGeometries, type LegRouter, type RoutedCandidate, type RoutedLeg } from './routing.js'
+import { avoidanceCustomModel } from './avoidance.js'
 import { seedFor } from './random.js'
 import { targetMetresFor, targetSecondsFor, type LoopMode } from './units.js'
 
@@ -54,6 +56,8 @@ export type LoopRequest = {
   variation?: number
   /** Loops already shown to the walker, excluded from a refresh. */
   exclude?: LngLat[][]
+  /** Places the walker explicitly asked every offered loop to visit, in order. */
+  waypoints?: Array<{ lng: number; lat: number }>
   overrides?: LoopOverrides
 }
 
@@ -103,7 +107,7 @@ export type LoopRoute = {
   }
 }
 
-export type LoopResponse = { routes: LoopRoute[]; warning?: string; diagnostics?: Diagnostics }
+export type LoopResponse = { routes: LoopRoute[]; warning?: string; expectationExceeded?: boolean; diagnostics?: Diagnostics }
 
 export type GenerateOptions = {
   route: LegRouter
@@ -144,6 +148,10 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
   const firstTarget = targetMetresFor(request)
   const overrides = request.overrides
   const candidateCount = overrides?.candidateCount ?? options.candidateCount ?? DEFAULT_ATTEMPT_COUNT
+
+  if (request.waypoints?.length) {
+    return generateWaypointLoops(request, options, start, firstTarget, targetSeconds)
+  }
 
   const rejections: Record<string, number> = {}
   const first = await attempt(firstTarget, firstTarget, variation)
@@ -322,6 +330,137 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
     return request.walkingPaceMinutesPerKm === undefined
       ? candidate.durationSeconds
       : candidate.distanceMeters / 1000 * request.walkingPaceMinutesPerKm * 60
+  }
+}
+
+const WAYPOINT_EXPECTATION_LIMIT = 1.25
+const WAYPOINT_GUIDE_COUNT = 6
+
+/**
+ * Route through explicit places before returning home. The first candidate is
+ * the shortest honest route through them; later candidates spend any spare
+ * distance in different compass sectors without moving a pin the walker chose.
+ */
+async function generateWaypointLoops(
+  request: LoopRequest,
+  options: GenerateOptions,
+  start: LngLat,
+  targetMetres: number,
+  targetSeconds: number | undefined,
+): Promise<LoopResponse> {
+  const points: LngLat[] = [start, ...request.waypoints!.map(point => [point.lng, point.lat] as LngLat), start]
+  const direct = await routeWaypointCandidate(points, options.route, options.signal)
+  if (!direct) return { routes: [], warning: 'One or more waypoints cannot be reached on foot.' }
+
+  const durationFor = (candidate: RoutedCandidate) => request.walkingPaceMinutesPerKm === undefined
+    ? candidate.durationSeconds
+    : candidate.distanceMeters / 1000 * request.walkingPaceMinutesPerKm * 60
+  const requested = targetSeconds ?? targetMetres
+  const minimum = targetSeconds ? durationFor(direct) : direct.distanceMeters
+  if (minimum > requested * WAYPOINT_EXPECTATION_LIMIT) {
+    const actual = request.mode === 'time'
+      ? `${Math.ceil(minimum / 60)} minutes`
+      : `${(minimum / 1000).toFixed(1)} km`
+    const asked = request.mode === 'time'
+      ? `${Math.round(request.durationMinutes!)} minutes`
+      : `${request.distanceKm!.toFixed(1)} km`
+    return {
+      routes: [],
+      expectationExceeded: true,
+      warning: `These waypoints need at least ${actual}, which is more than 25% over your ${asked} plan. Increase your plan or remove a waypoint.`,
+    }
+  }
+
+  // Add one invisible shaping point to each alternative. It is placed in a
+  // different compass sector and at a slightly different reach, then inserted
+  // between (never instead of) the pins the walker supplied. This spends the
+  // spare distance on genuine loop shape rather than merely returning the
+  // shortest there-and-back three times.
+  const residualMetres = Math.max(0, targetMetres - direct.distanceMeters)
+  const guideRadius = Math.max(150, residualMetres / 2)
+  const guideAttempts = generateLoopAttempts(
+    seedFor(start, targetMetres, request.variation ?? 0),
+    WAYPOINT_GUIDE_COUNT * 2,
+  ).filter(attempt => attempt.direction === 'clockwise')
+  const guided = await mapWithConcurrency(guideAttempts, Math.min(options.concurrency ?? 6, 3), async attempt => {
+    const variant = Math.floor(attempt.index / 2)
+    const scales = [0.72, 0.86, 1, 1, 1.14, 1.28]
+    const guide = destination(start, guideRadius * scales[variant], attempt.initialBearing)
+    const insertion = 1 + (variant % (points.length - 1))
+    const shaped = [...points.slice(0, insertion), guide, ...points.slice(insertion)]
+    return routeWaypointCandidate(shaped, options.route, options.signal)
+  })
+  const candidates = [direct, ...guided.filter((candidate): candidate is RoutedCandidate => candidate !== undefined)]
+    .filter(candidate => (targetSeconds ? durationFor(candidate) : candidate.distanceMeters) <= requested * WAYPOINT_EXPECTATION_LIMIT)
+
+  // A constrained request should still present three choices. If the street
+  // network has only one or two distinct paths within the allowed leeway, the
+  // honest shortest route remains a valid option rather than returning fewer.
+  while (candidates.length < 3) candidates.push(candidates[candidates.length - 1])
+  candidates.sort((a, b) => Math.abs((targetSeconds ? durationFor(a) : a.distanceMeters) - requested)
+    - Math.abs((targetSeconds ? durationFor(b) : b.distanceMeters) - requested))
+
+  const routes = candidates.slice(0, 3).map((candidate, index): LoopRoute => {
+    const durationSeconds = durationFor(candidate)
+    const report = analyseRouteQuality({
+      coordinates: candidate.coordinates,
+      start,
+      distanceMeters: candidate.distanceMeters,
+      durationSeconds,
+      targetMetres,
+      targetSeconds,
+      legDistances: candidate.legDistances,
+      maneuverSigns: candidate.steps.map(step => step.sign),
+      thresholds: { maxDistanceError: 1, maxDurationError: 1 },
+    })
+    const actual = targetSeconds ? durationSeconds : candidate.distanceMeters
+    return {
+      id: randomUUID(),
+      label: `Waypoint loop ${index + 1}`,
+      distanceMeters: Math.round(candidate.distanceMeters),
+      durationSeconds: Math.round(durationSeconds),
+      targetDifferencePercent: Math.round((actual / requested - 1) * 100),
+      geometry: { type: 'LineString', coordinates: candidate.coordinates },
+      steps: candidate.steps.map(step => ({
+        instruction: step.instruction,
+        distanceMeters: Math.round(step.distanceMeters),
+        durationSeconds: Math.round(candidate.distanceMeters > 0 ? step.distanceMeters / candidate.distanceMeters * durationSeconds : step.durationSeconds),
+        maneuver: step.maneuver,
+        road: step.road,
+        roadClass: step.roadClass,
+        startIndex: step.startIndex,
+        endIndex: step.endIndex,
+      })),
+      quality: report.quality,
+    }
+  })
+  return { routes }
+}
+
+async function routeWaypointCandidate(
+  points: LngLat[],
+  route: LegRouter,
+  signal?: AbortSignal,
+): Promise<RoutedCandidate | undefined> {
+  const legs: RoutedLeg[] = []
+  for (let index = 1; index < points.length; index++) {
+    signal?.throwIfAborted()
+    const from = points[index - 1]
+    const to = points[index]
+    try {
+      const leg = await route([from, to], avoidanceCustomModel([]))
+      legs.push({ ...leg, relaxed: false, avoidanceAreaCount: 0 })
+    } catch (error) {
+      if (error instanceof GraphHopperError && error.kind !== 'transport') return undefined
+      throw error
+    }
+  }
+  const joined = joinLegGeometries(legs)
+  return {
+    attemptId: `waypoints-${points.length}`,
+    legs,
+    ...joined,
+    legDistances: legs.map(leg => leg.distanceMeters),
   }
 }
 

@@ -276,6 +276,25 @@ final class AskingLooperForLoopsTests: XCTestCase {
         XCTAssertEqual(excluded, [[[0, 0], [0.001, 0]]])
     }
 
+    func testSendsWaypointsInTheirMapOrder() async throws {
+        let client = MockLoopsHTTPClient(responseJSON: ["routes": []])
+        let waypoints = [Point(-4.47, 54.16), Point(-4.46, 54.15)]
+        _ = try await requestLoops(start: start, mode: .distance, distanceKm: 4, unit: .km, variation: 0, waypoints: waypoints, apiBase: "", client: client)
+        let sent = client.lastBody["waypoints"] as? [[String: Double]]
+        XCTAssertEqual(sent?[0]["lng"], -4.47)
+        XCTAssertEqual(sent?[1]["lat"], 54.15)
+    }
+
+    func testCarriesTheExpectationWarningFlag() async throws {
+        let client = MockLoopsHTTPClient(responseJSON: [
+            "routes": [],
+            "warning": "Increase your plan or remove a waypoint.",
+            "expectationExceeded": true,
+        ])
+        let result = try await requestLoops(start: start, mode: .distance, distanceKm: 4, unit: .km, variation: 0, apiBase: "", client: client)
+        XCTAssertTrue(result.expectationExceeded)
+    }
+
     func testNamesEachLoopForTheWalker() async throws {
         let route: [String: Any] = [
             "id": "r1", "label": "North loop", "distanceMeters": 4000, "durationSeconds": 2880,

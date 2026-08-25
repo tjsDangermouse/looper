@@ -56,6 +56,8 @@ struct ChoicesView: View {
                         Text(model.error).font(.footnote).foregroundStyle(.orange)
                     }
 
+                    WaypointHint(model: model)
+
                     ForEach(Array(model.shownRoutes.enumerated()), id: \.element.id) { index, route in
                         HStack(spacing: 0) {
                             Button {
@@ -109,12 +111,18 @@ struct ChoicesView: View {
             if let selected = model.selected {
                 VStack(spacing: 6) {
                     Button {
-                        model.beginWalk(selected)
+                        if model.waypointsNeedSearch { model.findRoutes() }
+                        else { model.beginWalk(selected) }
                     } label: {
-                        Label("Start walk", systemImage: "figure.walk")
+                        Label(
+                            model.waypointsNeedSearch
+                                ? (model.waypoints.isEmpty ? "Find new loops" : "Find waypoint loops")
+                                : "Start walk",
+                            systemImage: model.waypointsNeedSearch ? "point.topleft.down.to.point.bottomright.curvepath" : "figure.walk"
+                        )
                     }
                     .buttonStyle(PillButtonStyle())
-                    .disabled(!model.startupNotice.isEmpty)
+                    .disabled(!model.startupNotice.isEmpty || model.busy)
 
                     // Only ever on screen for the few seconds the Watch is
                     // given to bring its workout up.
