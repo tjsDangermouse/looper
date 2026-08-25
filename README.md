@@ -160,7 +160,7 @@ route service without interrupting either GraphHopper container or an in-progres
 download:
 
 ```powershell
-docker compose -p looper_router up -d --build --no-deps --force-recreate route-service
+docker compose -p looper_router -f docker-compose.prod.yml up -d --no-deps --build route-service
 ```
 
 Sizing: the Isle of Man graph runs comfortably in 512 MB. England's first import is the

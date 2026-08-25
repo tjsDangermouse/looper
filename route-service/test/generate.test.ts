@@ -152,8 +152,20 @@ describe('generating loops', () => {
       expect(route.geometry.coordinates[0]).toEqual([START.lng, START.lat])
       expect(route.geometry.coordinates.at(-1)).toEqual([START.lng, START.lat])
       expect(route.targetDifferencePercent).toBeLessThanOrEqual(25)
+      expect(route.quality.repeatedPercent).toBeLessThanOrEqual(12)
+      expect(route.quality.compactness).toBeGreaterThanOrEqual(0.2)
     }
     expect(new Set(result.routes.map(route => JSON.stringify(route.geometry.coordinates))).size).toBe(3)
+  })
+
+  it('penalises walked ground on every waypoint-loop return leg', async () => {
+    const models: any[] = []
+    const recording = async (points: LngLat[], model: any) => {
+      models.push(model)
+      return fakeEngine()(points)
+    }
+    await generateLoops(request({ waypoints: [{ lng: START.lng + 0.004, lat: START.lat + 0.004 }] }), { route: recording })
+    expect(models.some(model => model?.priority?.length > 0)).toBe(true)
   })
 
   it('asks the walker to change a plan that waypoints necessarily exceed by over 25%', async () => {

@@ -4,8 +4,8 @@ import { GraphHopperError } from '../graphhopper.js'
 import { DEFAULT_ATTEMPT_COUNT, generateLoopAttempts } from './candidates.js'
 import { MAX_SHARED_FRACTION, initialBearing as bearingOf, labelRoutes, selectDiverseRoutes } from './diversity.js'
 import { destination, type LngLat } from './geo.js'
-import { analyseRouteQuality, sharedCorridorMetres, type QualityReport, type QualityThresholds } from './quality.js'
-import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinLegGeometries, type LegRouter, type RoutedCandidate, type RoutedLeg } from './routing.js'
+import { MAX_REPEATED_FRACTION, analyseRouteQuality, sharedCorridorMetres, type QualityReport, type QualityThresholds } from './quality.js'
+import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinLegGeometries, routeLegAttempt, type LegRouter, type RoutedCandidate, type RoutedLeg } from './routing.js'
 import { avoidanceCustomModel } from './avoidance.js'
 import { seedFor } from './random.js'
 import { targetMetresFor, targetSecondsFor, type LoopMode } from './units.js'
@@ -334,7 +334,7 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
 }
 
 const WAYPOINT_EXPECTATION_LIMIT = 1.25
-const WAYPOINT_GUIDE_COUNT = 6
+const WAYPOINT_GUIDE_COUNT = 16
 
 /**
  * Route through explicit places before returning home. The first candidate is
@@ -349,7 +349,10 @@ async function generateWaypointLoops(
   targetSeconds: number | undefined,
 ): Promise<LoopResponse> {
   const points: LngLat[] = [start, ...request.waypoints!.map(point => [point.lng, point.lat] as LngLat), start]
-  const direct = await routeWaypointCandidate(points, options.route, options.signal)
+  // This is only the lower-bound check. It is deliberately routed without
+  // anti-retrace penalties; offering it would turn a single waypoint into the
+  // same path out and back, which is not a loop.
+  const direct = await routeWaypointCandidate(points, options.route, false, options.signal)
   if (!direct) return { routes: [], warning: 'One or more waypoints cannot be reached on foot.' }
 
   const durationFor = (candidate: RoutedCandidate) => request.walkingPaceMinutesPerKm === undefined
@@ -385,38 +388,54 @@ async function generateWaypointLoops(
   const guided = await mapWithConcurrency(guideAttempts, Math.min(options.concurrency ?? 6, 3), async attempt => {
     const variant = Math.floor(attempt.index / 2)
     const scales = [0.72, 0.86, 1, 1, 1.14, 1.28]
-    const guide = destination(start, guideRadius * scales[variant], attempt.initialBearing)
+    const guide = destination(start, guideRadius * scales[variant % scales.length], attempt.initialBearing)
     const insertion = 1 + (variant % (points.length - 1))
     const shaped = [...points.slice(0, insertion), guide, ...points.slice(insertion)]
-    return routeWaypointCandidate(shaped, options.route, options.signal)
+    return routeWaypointCandidate(shaped, options.route, true, options.signal)
   })
-  const candidates = [direct, ...guided.filter((candidate): candidate is RoutedCandidate => candidate !== undefined)]
-    .filter(candidate => (targetSeconds ? durationFor(candidate) : candidate.distanceMeters) <= requested * WAYPOINT_EXPECTATION_LIMIT)
-
-  // A constrained request should still present three choices. If the street
-  // network has only one or two distinct paths within the allowed leeway, the
-  // honest shortest route remains a valid option rather than returning fewer.
-  while (candidates.length < 3) candidates.push(candidates[candidates.length - 1])
-  candidates.sort((a, b) => Math.abs((targetSeconds ? durationFor(a) : a.distanceMeters) - requested)
-    - Math.abs((targetSeconds ? durationFor(b) : b.distanceMeters) - requested))
-
-  const routes = candidates.slice(0, 3).map((candidate, index): LoopRoute => {
-    const durationSeconds = durationFor(candidate)
-    const report = analyseRouteQuality({
-      coordinates: candidate.coordinates,
-      start,
-      distanceMeters: candidate.distanceMeters,
-      durationSeconds,
-      targetMetres,
-      targetSeconds,
-      legDistances: candidate.legDistances,
-      maneuverSigns: candidate.steps.map(step => step.sign),
-      thresholds: { maxDistanceError: 1, maxDurationError: 1 },
+  const analysed = guided
+    .filter((candidate): candidate is RoutedCandidate => candidate !== undefined)
+    .map(candidate => {
+      const durationSeconds = durationFor(candidate)
+      const report = analyseRouteQuality({
+        coordinates: candidate.coordinates,
+        start,
+        distanceMeters: candidate.distanceMeters,
+        durationSeconds,
+        targetMetres,
+        targetSeconds,
+        legDistances: candidate.legDistances,
+        maneuverSigns: candidate.steps.map(step => step.sign),
+        thresholds: { maxDistanceError: 0.25, maxDurationError: 0.25 },
+      })
+      return { candidate, report, coordinates: candidate.coordinates, quality: report.quality, bearing: bearingOf(candidate.coordinates, start) }
     })
+    // Waypoint mode promises a loop. Unlike the standard fallback, a long
+    // there-and-back feature is never excused here, even when it is the only
+    // walkable ground through the pin.
+    .filter(entry => entry.report.pass && entry.report.quality.repeatedPercent <= MAX_REPEATED_FRACTION * 100)
+
+  const diverse = selectDiverseRoutes(analysed, 3, MAX_SHARED_FRACTION)
+  const chosen = [...diverse]
+  for (const candidate of analysed.sort((a, b) => b.quality.score - a.quality.score)) {
+    if (chosen.length >= 3) break
+    if (!chosen.includes(candidate)) chosen.push(candidate)
+  }
+  if (!chosen.length) {
+    return {
+      routes: [],
+      warning: 'We couldn’t make a clean loop through those waypoints. Move or remove a waypoint, or increase your plan.',
+    }
+  }
+
+  const labels = labelRoutes(chosen.map(entry => ({ bearing: entry.bearing, distanceMeters: entry.candidate.distanceMeters })))
+  const routes = chosen.slice(0, 3).map((entry, index): LoopRoute => {
+    const { candidate, report } = entry
+    const durationSeconds = durationFor(candidate)
     const actual = targetSeconds ? durationSeconds : candidate.distanceMeters
     return {
       id: randomUUID(),
-      label: `Waypoint loop ${index + 1}`,
+      label: labels[index],
       distanceMeters: Math.round(candidate.distanceMeters),
       durationSeconds: Math.round(durationSeconds),
       targetDifferencePercent: Math.round((actual / requested - 1) * 100),
@@ -434,25 +453,42 @@ async function generateWaypointLoops(
       quality: report.quality,
     }
   })
-  return { routes }
+  return {
+    routes,
+    ...(routes.length < 3
+      ? { warning: `We found only ${routes.length} clean ${routes.length === 1 ? 'loop' : 'loops'} through those waypoints. Try moving a waypoint for more choices.` }
+      : {}),
+  }
 }
 
 async function routeWaypointCandidate(
   points: LngLat[],
   route: LegRouter,
+  avoidWalkedGround: boolean,
   signal?: AbortSignal,
 ): Promise<RoutedCandidate | undefined> {
   const legs: RoutedLeg[] = []
+  const walked: LngLat[][] = []
   for (let index = 1; index < points.length; index++) {
     signal?.throwIfAborted()
     const from = points[index - 1]
     const to = points[index]
-    try {
-      const leg = await route([from, to], avoidanceCustomModel([]))
-      legs.push({ ...leg, relaxed: false, avoidanceAreaCount: 0 })
-    } catch (error) {
-      if (error instanceof GraphHopperError && error.kind !== 'transport') return undefined
-      throw error
+    if (avoidWalkedGround) {
+      // User waypoints stay exact: unlike generated corners, they are never
+      // pulled away from a dead end. The next leg instead avoids ground already
+      // used, and the finished geometry is rejected if that still retraces.
+      const result = await routeLegAttempt(route, points[0], walked, from, to, { signal })
+      if (!result) return undefined
+      legs.push({ ...result.leg, relaxed: result.relaxed, avoidanceAreaCount: walked.length })
+      walked.push(result.leg.coordinates)
+    } else {
+      try {
+        const leg = await route([from, to], avoidanceCustomModel([]))
+        legs.push({ ...leg, relaxed: false, avoidanceAreaCount: 0 })
+      } catch (error) {
+        if (error instanceof GraphHopperError && error.kind !== 'transport') return undefined
+        throw error
+      }
     }
   }
   const joined = joinLegGeometries(legs)
