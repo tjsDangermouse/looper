@@ -41,7 +41,7 @@ services:
 
   route-service:
     build:
-      context: ./services/route-service
+      context: .
     environment:
       PORT: 8080
       GRAPHHOPPER_IOM_URL: http://graphhopper-iom:8989

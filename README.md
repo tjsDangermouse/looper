@@ -17,22 +17,29 @@ Looper PWA  ─────►  Looper Route Service  ─────►  self-h
 The app talks to Looper's own API and to nothing else. There is no third-party routing
 provider and no routing API key anywhere in this repository.
 
-## Layout
+## Repository map
 
 | Path | What it is |
 | --- | --- |
-| `src/` | The PWA: map, planner, route choices, active-walk guidance |
-| `services/route-service/` | The Looper Route Service — loop generation, quality, diversity |
-| `graphhopper/` | Self-hosted GraphHopper: Dockerfile, `config.yml`, import/serve entrypoint |
-| `docker-compose.yml` | Local development stack |
-| `docker-compose.prod.yml` | Production stack — GraphHopper stays on the internal network |
-| `data/` | Where OSM extracts live (git-ignored) |
+| `web/` | The web PWA — [web guide](web/README.md) |
+| `ios/` | iPhone and Apple Watch apps — [iOS guide](ios/README.md) |
+| `route-service/` | Route API and all of its deployment assets — [service guide](route-service/README.md) |
+| `route-service/contracts/loop-api/v1.md` | Versioned API contract shared by the web and iOS clients |
+
+The three product areas have no source-code imports between them. The web and
+iOS clients meet the route service only through [Loop API v1](route-service/contracts/loop-api/v1.md).
+GraphHopper, Compose files, data documentation, and the API contract are
+operational assets owned by the route service and already sit within its
+extraction boundary.
 
 ## Local development
 
 ```bash
+cd route-service
 cp .env.example .env          # nothing secret in it; no API keys exist here
 docker compose up --build     # GraphHopper + route service
+
+cd ../web
 npm install && npm run dev    # the PWA on :5173, proxying /v1 to :8988
 ```
 
@@ -55,12 +62,14 @@ origin and no CORS. Set `LOOPER_API_URL` in `.env` if the route service is somew
 ### Running the route service without Docker
 
 ```bash
-cd services/route-service
+cd route-service
 npm install
 GRAPHHOPPER_URL=http://localhost:8989 npm run dev
 ```
 
 ## Importing OpenStreetMap data
+
+Run the Docker commands in this section from `route-service/`.
 
 The stack currently serves Isle of Man and England from separate GraphHopper graphs. The
 route service selects a graph from the requested starting location; a location outside
@@ -70,7 +79,7 @@ The importer accepts a local file or a download URL, in that order of preference
 
 ```bash
 # .env
-OSM_PBF_IOM_PATH=isle-of-man-latest.osm.pbf                              # looked for in ./data
+OSM_PBF_IOM_PATH=isle-of-man-latest.osm.pbf                              # looked for in route-service/data
 OSM_PBF_IOM_URL=https://download.geofabrik.de/europe/isle-of-man-latest.osm.pbf
 OSM_PBF_ENGLAND_PATH=england-latest.osm.pbf
 OSM_PBF_ENGLAND_URL=https://download.geofabrik.de/europe/united-kingdom/england-latest.osm.pbf
@@ -81,7 +90,7 @@ volume and reused. Data is never re-downloaded or re-imported on an ordinary res
 
 ### Downloading PBF backups on a Windows Docker host
 
-Keep the raw extracts in the project's `data/` folder so a graph can be rebuilt without
+Keep the raw extracts in `route-service/data/` so a graph can be rebuilt without
 downloading them again. The commands below download through the same Docker mount that
 GraphHopper uses, write atomically via a `.part` file, and do not rebuild a running graph.
 They assume the Compose project is named `looper_router`; change the value after `-p` if
@@ -120,7 +129,7 @@ function.
 
 ### Front end
 
-Stays where it is — Vercel or any static host. Set one build-time variable:
+Deploy `web/` to Vercel or any static host. Set one build-time variable:
 
 ```
 VITE_LOOPER_API_BASE=https://looper-routes.example.com
@@ -131,12 +140,13 @@ is baked into the bundle at build time, so changing it needs a rebuild.
 
 ### Routing service
 
-Deploy `docker-compose.prod.yml` to a small persistent container host — Fly.io, Render,
+Deploy `route-service/docker-compose.prod.yml` to a small persistent container host — Fly.io, Render,
 Railway, or a VPS. It differs from the development stack in one deliberate way:
 GraphHopper publishes no port and is reachable only from the route service over the
 internal Docker network. Only the route service faces the internet.
 
 ```bash
+cd route-service
 CORS_ORIGINS=https://looper.example.com docker compose -f docker-compose.prod.yml up -d --build
 ```
 
@@ -184,14 +194,15 @@ is no clean one at all, so the list is never a quiet blend of two different answ
 ## Checks
 
 ```bash
-npm run lint && npm run typecheck && npm test && npm run build
+(cd web && npm run lint && npm run typecheck && npm test && npm run build)
+(cd route-service && npm run lint && npm run typecheck && npm test && npm run build)
+(cd ios/LooperKit && swift test)
 ```
 
-`npm test` at the repository root runs both the app's tests and the route service's.
-The service can also be checked on its own:
+Run checks from each component directory. The service can be checked with:
 
 ```bash
-cd services/route-service && npm run lint && npm run typecheck && npm test
+cd route-service && npm run lint && npm run typecheck && npm test
 ```
 
 ## Known limits
