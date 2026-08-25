@@ -3,7 +3,7 @@ import type { LineString } from 'geojson'
 import { GraphHopperError } from '../graphhopper.js'
 import { DEFAULT_ATTEMPT_COUNT, generateLoopAttempts } from './candidates.js'
 import { MAX_SHARED_FRACTION, initialBearing as bearingOf, labelRoutes, selectDiverseRoutes } from './diversity.js'
-import { destination, distanceBetween, projector, type LngLat, type Metric } from './geo.js'
+import { destination, distanceBetween, haversine, projector, type LngLat, type Metric } from './geo.js'
 import { MAX_REPEATED_FRACTION, analyseRouteQuality, sharedCorridorMetres, type QualityReport, type QualityThresholds } from './quality.js'
 import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinLegGeometries, routeLegAttempt, type LegRouter, type RoutedCandidate, type RoutedLeg } from './routing.js'
 import { avoidanceCustomModel } from './avoidance.js'
@@ -335,6 +335,7 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
 
 const WAYPOINT_EXPECTATION_LIMIT = 1.25
 const WAYPOINT_GUIDE_COUNT = 16
+const WAYPOINT_GUIDE_RADIUS_SAMPLES = 48
 
 /**
  * Route through explicit places before returning home. The first candidate is
@@ -390,26 +391,35 @@ async function generateWaypointLoops(
       && routeHitsWaypoints(route.geometry.coordinates as LngLat[], request.waypoints!))
   if (naturalRoutes.length >= 3) return { routes: naturalRoutes.slice(0, 3) }
 
-  // Add one invisible shaping point to each alternative. It is placed in a
-  // different compass sector and at a slightly different reach, then inserted
-  // between (never instead of) the pins the walker supplied. This spends the
-  // spare distance on genuine loop shape rather than merely returning the
-  // shortest there-and-back three times.
-  const residualMetres = Math.max(0, targetMetres - direct.distanceMeters)
-  const guideRadius = Math.max(150, residualMetres / 2)
+  // Try the pins themselves with avoidance on the return legs. A waypoint on
+  // an existing loop often already divides it into two perfectly good paths;
+  // forcing an extra corner into that route only makes it less likely to fit.
+  const pinOnly = await routeWaypointCandidate(points, options.route, true, options.signal)
+
+  // Add one invisible shaping point to each alternative. Its reach is solved
+  // from the local network stretch measured by the direct route, rather than
+  // treating every metre left in the route budget as a metre of crow-flight.
+  // The old residual/2 guess routinely put the guide well outside a 5 km ring
+  // and caused otherwise available loops to be rejected as too long.
+  const directCrowMetres = pathThrough(points)
+  const networkStretch = directCrowMetres > 0
+    ? Math.min(3, Math.max(0.8, direct.distanceMeters / directCrowMetres))
+    : 1
+  const targetCrowMetres = targetMetres / networkStretch
   const guideAttempts = generateLoopAttempts(
     seedFor(start, targetMetres, request.variation ?? 0),
     WAYPOINT_GUIDE_COUNT * 2,
   ).filter(attempt => attempt.direction === 'clockwise')
   const guided = await mapWithConcurrency(guideAttempts, Math.min(options.concurrency ?? 6, 3), async attempt => {
     const variant = Math.floor(attempt.index / 2)
-    const scales = [0.72, 0.86, 1, 1, 1.14, 1.28]
-    const guide = destination(start, guideRadius * scales[variant % scales.length], attempt.initialBearing)
     const insertion = 1 + (variant % (points.length - 1))
+    const guideRadius = guideRadiusForTarget(points, insertion, start, attempt.initialBearing, targetCrowMetres)
+    const scales = [0.78, 0.9, 1, 1, 1.1, 1.22]
+    const guide = destination(start, guideRadius * scales[variant % scales.length], attempt.initialBearing)
     const shaped = [...points.slice(0, insertion), guide, ...points.slice(insertion)]
     return routeWaypointCandidate(shaped, options.route, true, options.signal)
   })
-  const analysed = guided
+  const analysed = [pinOnly, ...guided]
     .filter((candidate): candidate is RoutedCandidate => candidate !== undefined)
     .map(candidate => {
       const durationSeconds = durationFor(candidate)
@@ -422,7 +432,16 @@ async function generateWaypointLoops(
         targetSeconds,
         legDistances: candidate.legDistances,
         maneuverSigns: candidate.steps.map(step => step.sign),
-        thresholds: { maxDistanceError: 0.25, maxDurationError: 0.25 },
+        // A user pin can split an otherwise excellent route one metre from a
+        // generated corner. Leg balance therefore says where the user tapped,
+        // not whether the walk is good. Geometry still has to pass every loop,
+        // closure, compactness, U-turn and repeated-ground gate.
+        thresholds: {
+          maxDistanceError: 0.25,
+          maxDurationError: 0.25,
+          maxLegShare: 1,
+          minLegShare: 0,
+        },
       })
       return { candidate, report, coordinates: candidate.coordinates, quality: report.quality, bearing: bearingOf(candidate.coordinates, start) }
     })
@@ -482,6 +501,45 @@ async function generateWaypointLoops(
       ? { warning: `We found only ${routes.length} clean ${routes.length === 1 ? 'loop' : 'loops'} through those waypoints. Try moving a waypoint for more choices.` }
       : {}),
   }
+}
+
+/** Crow-flight length of a point sequence, used only to aim a guide point. */
+function pathThrough(points: LngLat[]): number {
+  let metres = 0
+  for (let index = 1; index < points.length; index++) metres += haversine(points[index - 1], points[index])
+  return metres
+}
+
+/**
+ * Find the guide reach whose point sequence is closest to the desired
+ * crow-flight perimeter. Sampling is intentional: the length is not monotonic
+ * when the bearing points between the two places being split, so binary search
+ * can confidently choose the wrong side of the minimum.
+ */
+function guideRadiusForTarget(
+  points: LngLat[],
+  insertion: number,
+  start: LngLat,
+  bearing: number,
+  targetCrowMetres: number,
+): number {
+  const before = points[insertion - 1]
+  const after = points[insertion]
+  const unchanged = pathThrough(points) - haversine(before, after)
+  const maximum = Math.max(300, targetCrowMetres)
+  let bestRadius = 0
+  let bestError = Infinity
+  for (let sample = 0; sample <= WAYPOINT_GUIDE_RADIUS_SAMPLES; sample++) {
+    const radius = maximum * sample / WAYPOINT_GUIDE_RADIUS_SAMPLES
+    const guide = destination(start, radius, bearing)
+    const estimate = unchanged + haversine(before, guide) + haversine(guide, after)
+    const error = Math.abs(estimate - targetCrowMetres)
+    if (error < bestError) {
+      bestError = error
+      bestRadius = radius
+    }
+  }
+  return Math.max(75, bestRadius)
 }
 
 const WAYPOINT_HIT_TOLERANCE_METRES = 40

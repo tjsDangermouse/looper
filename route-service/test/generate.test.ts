@@ -175,6 +175,41 @@ describe('generating loops', () => {
     for (const route of result.routes) expect(route.quality.repeatedPercent).toBeLessThanOrEqual(12)
   })
 
+  it('uses the waypoint itself to split a loop without requiring an extra guide', async () => {
+    const start: LngLat = [START.lng, START.lat]
+    const waypoint: LngLat = [START.lng + 0.01, START.lat]
+    const returnCorner: LngLat = [START.lng, START.lat + 0.012]
+    const same = (left: LngLat, right: LngLat) => left[0] === right[0] && left[1] === right[1]
+    const leg = (coordinates: LngLat[], distanceMeters: number): GraphHopperLeg => ({
+      coordinates,
+      distanceMeters,
+      durationSeconds: distanceMeters / (5000 / 3600),
+      steps: [
+        { instruction: 'Continue', distanceMeters, durationSeconds: distanceMeters / 1.39, sign: 0, maneuver: 'continue', startIndex: 0, endIndex: coordinates.length - 1 },
+        { instruction: 'Arrive at destination', distanceMeters: 0, durationSeconds: 0, sign: 4, maneuver: 'finish', startIndex: coordinates.length - 1, endIndex: coordinates.length - 1 },
+      ],
+    })
+    const twoWays = async (points: LngLat[], model: any): Promise<GraphHopperLeg> => {
+      const outward = same(points[0], start) && same(points[1], waypoint)
+      const home = same(points[0], waypoint) && same(points[1], start)
+      if (!outward && !home) throw new GraphHopperError('Connection between locations not found', 400, 'unreachable')
+      if (outward) return leg([start, waypoint], 2000)
+      return model?.priority?.length
+        ? leg([waypoint, returnCorner, start], 3000)
+        : leg([waypoint, start], 2000)
+    }
+
+    const result = await generateLoops(
+      request({ waypoints: [{ lng: waypoint[0], lat: waypoint[1] }] }),
+      { route: twoWays },
+    )
+
+    expect(result.routes).toHaveLength(1)
+    expect(result.routes[0].geometry.coordinates).toContainEqual(waypoint)
+    expect(result.routes[0].geometry.coordinates.at(-1)).toEqual(start)
+    expect(result.routes[0].quality.repeatedPercent).toBe(0)
+  })
+
   it('asks the walker to change a plan that waypoints necessarily exceed by over 25%', async () => {
     const farAway = { lng: START.lng, lat: START.lat + 0.03 }
     const result = await generateLoops(request({ distanceKm: 1, waypoints: [farAway] }), { route: fakeEngine() })

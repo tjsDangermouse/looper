@@ -124,11 +124,13 @@ struct MapLibreMapView: UIViewRepresentable {
             sync()
         }
 
-        func mapView(_ mapView: MLNMapView, imageFor annotation: MLNAnnotation) -> MLNAnnotationImage? {
+        func mapView(_ mapView: MLNMapView, viewFor annotation: MLNAnnotation) -> MLNAnnotationView? {
             guard let waypoint = annotation as? WaypointAnnotation else { return nil }
-            let identifier = "waypoint-\(waypoint.number)"
-            if let image = mapView.dequeueReusableAnnotationImage(withIdentifier: identifier) { return image }
-            return MLNAnnotationImage(image: waypointImage(number: waypoint.number), reuseIdentifier: identifier)
+            let identifier = "waypoint"
+            let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? WaypointAnnotationView
+                ?? WaypointAnnotationView(reuseIdentifier: identifier)
+            view.configure(number: waypoint.number)
+            return view
         }
 
         func sync() {
@@ -450,6 +452,32 @@ struct MapLibreMapView: UIViewRepresentable {
 
 private final class WaypointAnnotation: MLNPointAnnotation {
     var number = 0
+}
+
+private final class WaypointAnnotationView: MLNAnnotationView {
+    private let marker = UIImageView()
+
+    override init(reuseIdentifier: String?) {
+        super.init(reuseIdentifier: reuseIdentifier)
+        frame = CGRect(origin: .zero, size: CGSize(width: 38, height: 46))
+        marker.frame = bounds
+        marker.contentMode = .center
+        addSubview(marker)
+        // The coordinate belongs at the pin's 44 pt tip, not at the 23 pt
+        // centre of its image. Move the view centre up by that 21 pt gap so
+        // the bottom tip, rather than the top of the marker, lands on the map.
+        centerOffset = CGVector(dx: 0, dy: -21)
+        isAccessibilityElement = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(number: Int) {
+        marker.image = waypointImage(number: number)
+        accessibilityLabel = "Waypoint \(number)"
+    }
 }
 
 private func waypointImage(number: Int) -> UIImage {
