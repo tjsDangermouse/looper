@@ -350,11 +350,16 @@ final class AppModel: ObservableObject {
             return
         }
         let waypointKey = waypoints.map { "\(String(format: "%.5f", $0.lng)),\(String(format: "%.5f", $0.lat))" }.joined(separator: ";")
-        let key = "\(String(format: "%.5f", start.lng)),\(String(format: "%.5f", start.lat))|\(mode.rawValue)|\(amount)|\(unit.rawValue)|\(waypointKey)"
+        let planKey = "\(String(format: "%.5f", start.lng)),\(String(format: "%.5f", start.lat))|\(mode.rawValue)|\(amount)|\(unit.rawValue)|\(activity.rawValue)"
+        let key = "\(planKey)|\(waypointKey)"
         let sameSpot = lastAsk.key == key
+        // Adding or moving a waypoint should refine the loops currently on
+        // screen, not silently roll a new random family first. Only an exact
+        // repeat (the refresh action) advances the variation.
+        let samePlan = lastAsk.key.hasPrefix("\(planKey)|")
         let variation = sameSpot
             ? (lastAsk.variation + AppModel.variationStride) % 900
-            : Int.random(in: 0..<300) * AppModel.variationStride
+            : samePlan ? lastAsk.variation : Int.random(in: 0..<300) * AppModel.variationStride
         lastAsk = (key, variation)
 
         requestSeq += 1

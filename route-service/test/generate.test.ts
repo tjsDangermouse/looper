@@ -168,6 +168,13 @@ describe('generating loops', () => {
     expect(models.some(model => model?.priority?.length > 0)).toBe(true)
   })
 
+  it('keeps clean standard loops when they already pass the waypoint', async () => {
+    const result = await generateLoops(request({ waypoints: [{ lng: START.lng, lat: START.lat }] }), { route: fakeEngine() })
+    expect(result.routes).toHaveLength(3)
+    expect(result.warning).toBeUndefined()
+    for (const route of result.routes) expect(route.quality.repeatedPercent).toBeLessThanOrEqual(12)
+  })
+
   it('asks the walker to change a plan that waypoints necessarily exceed by over 25%', async () => {
     const farAway = { lng: START.lng, lat: START.lat + 0.03 }
     const result = await generateLoops(request({ distanceKm: 1, waypoints: [farAway] }), { route: fakeEngine() })

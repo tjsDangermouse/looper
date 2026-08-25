@@ -3,7 +3,7 @@ import type { LineString } from 'geojson'
 import { GraphHopperError } from '../graphhopper.js'
 import { DEFAULT_ATTEMPT_COUNT, generateLoopAttempts } from './candidates.js'
 import { MAX_SHARED_FRACTION, initialBearing as bearingOf, labelRoutes, selectDiverseRoutes } from './diversity.js'
-import { destination, type LngLat } from './geo.js'
+import { destination, distanceBetween, projector, type LngLat, type Metric } from './geo.js'
 import { MAX_REPEATED_FRACTION, analyseRouteQuality, sharedCorridorMetres, type QualityReport, type QualityThresholds } from './quality.js'
 import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinLegGeometries, routeLegAttempt, type LegRouter, type RoutedCandidate, type RoutedLeg } from './routing.js'
 import { avoidanceCustomModel } from './avoidance.js'
@@ -374,6 +374,22 @@ async function generateWaypointLoops(
     }
   }
 
+  // Most pins added from the choices screen already sit on one or more of the
+  // clean loops being shown. Generate the ordinary candidates first and keep
+  // any whose actual routed geometry passes the pins in order. Rebuilding a
+  // perfectly good loop around a point it already visits is both slower and
+  // much more likely to manufacture a needless spur.
+  const ordinary = await generateLoops(
+    { ...request, waypoints: undefined },
+    { ...options, onDiagnostics: undefined },
+  )
+  const naturalRoutes = ordinary.warning === RETRACES_WARNING
+    ? []
+    : ordinary.routes.filter(route =>
+      route.quality.repeatedPercent <= MAX_REPEATED_FRACTION * 100
+      && routeHitsWaypoints(route.geometry.coordinates as LngLat[], request.waypoints!))
+  if (naturalRoutes.length >= 3) return { routes: naturalRoutes.slice(0, 3) }
+
   // Add one invisible shaping point to each alternative. It is placed in a
   // different compass sector and at a slightly different reach, then inserted
   // between (never instead of) the pins the walker supplied. This spends the
@@ -422,6 +438,12 @@ async function generateWaypointLoops(
     if (!chosen.includes(candidate)) chosen.push(candidate)
   }
   if (!chosen.length) {
+    if (naturalRoutes.length) {
+      return {
+        routes: naturalRoutes,
+        warning: `We found only ${naturalRoutes.length} clean ${naturalRoutes.length === 1 ? 'loop' : 'loops'} through those waypoints. Try moving a waypoint for more choices.`,
+      }
+    }
     return {
       routes: [],
       warning: 'We couldn’t make a clean loop through those waypoints. Move or remove a waypoint, or increase your plan.',
@@ -429,7 +451,7 @@ async function generateWaypointLoops(
   }
 
   const labels = labelRoutes(chosen.map(entry => ({ bearing: entry.bearing, distanceMeters: entry.candidate.distanceMeters })))
-  const routes = chosen.slice(0, 3).map((entry, index): LoopRoute => {
+  const forcedRoutes = chosen.slice(0, 3).map((entry, index): LoopRoute => {
     const { candidate, report } = entry
     const durationSeconds = durationFor(candidate)
     const actual = targetSeconds ? durationSeconds : candidate.distanceMeters
@@ -453,12 +475,47 @@ async function generateWaypointLoops(
       quality: report.quality,
     }
   })
+  const routes = [...naturalRoutes, ...forcedRoutes].slice(0, 3)
   return {
     routes,
     ...(routes.length < 3
       ? { warning: `We found only ${routes.length} clean ${routes.length === 1 ? 'loop' : 'loops'} through those waypoints. Try moving a waypoint for more choices.` }
       : {}),
   }
+}
+
+const WAYPOINT_HIT_TOLERANCE_METRES = 40
+
+/** True when a route passes every supplied pin in the order it was added. */
+function routeHitsWaypoints(coordinates: LngLat[], waypoints: Array<{ lng: number; lat: number }>): boolean {
+  if (coordinates.length < 2) return false
+  const project = projector(coordinates[0])
+  const route = coordinates.map(project)
+  let afterSegment = 0
+  for (const waypoint of waypoints) {
+    const point = project([waypoint.lng, waypoint.lat])
+    let bestSegment = -1
+    let bestDistance = Infinity
+    for (let index = afterSegment; index < route.length - 1; index++) {
+      const distance = pointToSegmentDistance(point, route[index], route[index + 1])
+      if (distance < bestDistance) {
+        bestDistance = distance
+        bestSegment = index
+      }
+    }
+    if (bestDistance > WAYPOINT_HIT_TOLERANCE_METRES) return false
+    afterSegment = bestSegment
+  }
+  return true
+}
+
+function pointToSegmentDistance(point: Metric, from: Metric, to: Metric): number {
+  const dx = to[0] - from[0]
+  const dy = to[1] - from[1]
+  const lengthSquared = dx * dx + dy * dy
+  if (lengthSquared === 0) return distanceBetween(point, from)
+  const position = Math.max(0, Math.min(1, ((point[0] - from[0]) * dx + (point[1] - from[1]) * dy) / lengthSquared))
+  return distanceBetween(point, [from[0] + position * dx, from[1] + position * dy])
 }
 
 async function routeWaypointCandidate(
