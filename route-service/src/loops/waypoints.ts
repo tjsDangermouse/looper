@@ -4,8 +4,8 @@ import { bearingBetween, compactness, destination, haversine, normaliseBearing, 
  * Waypoint loops, as a length problem rather than a shape problem.
  *
  * When a walker drops pins, the walk is no longer "a ring of about five
- * kilometres from here" — it is "through these places, in this order, in about
- * five kilometres". Those are different problems. The ring generator answers
+ * kilometres from here" — it is "through these places, in about five
+ * kilometres". Those are different problems. The ring generator answers
  * the first by aiming a shape and measuring what comes back; asking it to also
  * pass through three fixed points turns almost every attempt into a
  * near-miss, which is why waypoint mode misses the requested distance by four
@@ -13,11 +13,13 @@ import { bearingBetween, compactness, destination, haversine, normaliseBearing, 
  *
  * The structure the problem actually has:
  *
- *   anchors   a0 = start, a1 … am = the walker's pins, a(m+1) = start
+ *   anchors   a0 = start, a1 … am = the walker's pins in a chosen visiting
+ *             order (see `visitOrders`), a(m+1) = start
  *   backbone  B = Σ shortest(ai, a(i+1))          — the walk you cannot avoid
  *   slack     Δ = K - B                            — what there is to spend
  *
- * `B` is a floor: no walk through those pins in that order is shorter. If
+ * `B` is a floor: no walk through those pins in that order is shorter, and the
+ * order is chosen to make that floor as low as it can be. If
  * Δ is negative the request is impossible and should be refused, honestly and
  * immediately. If it is positive, the question is *where to spend it* — and
  * spending it evenly across the gaps produces a rounder walk than spending it
@@ -25,8 +27,9 @@ import { bearingBetween, compactness, destination, haversine, normaliseBearing, 
  *
  * So each gap gets a few alternatives of different lengths, and a small
  * dynamic programme picks one per gap to add up to the walk that was asked
- * for. Nothing in here moves a pin or reorders one: the anchors are the
- * problem statement, not part of the search.
+ * for. Nothing in here moves a pin: where the pins are is the problem
+ * statement. The order they are passed in is not — that was only ever the
+ * order they were tapped in, and `visitOrders` enumerates the alternatives.
  */
 
 export type Anchor = LngLat
@@ -403,4 +406,39 @@ export const FEASIBILITY_TOLERANCE = 0.05
 export function fitsInPlan(backbone: number, target: number, maxErrorFraction: number, tolerance = FEASIBILITY_TOLERANCE): boolean {
   if (!(target > 0)) return false
   return backbone <= target * (1 + maxErrorFraction) * (1 + tolerance)
+}
+
+/**
+ * Every genuinely different order the pins can be visited in.
+ *
+ * A walk out through three pins and back is the same walk whichever end of it
+ * you start from, so an order and its reverse are one order and only one of
+ * them is returned: one pin has one order, two have one, three have three,
+ * four have twelve.
+ *
+ * The pins are a set of places the walker wants to pass, not a sequence they
+ * asked to be marched through in the order they happened to tap. Fixing the
+ * tap order fixes the backbone, and a fixed backbone can cross itself, double
+ * back, or simply be longer than the plan allows — refusing a walk that a
+ * different order would have fitted comfortably.
+ *
+ * Deterministic and lexicographic, so the same pins always rank the same way.
+ */
+export function visitOrders(pinCount: number): number[][] {
+  const orders: number[][] = []
+  const seen = new Set<string>()
+  const walk = (remaining: number[], taken: number[]) => {
+    if (!remaining.length) {
+      const key = taken.join(',')
+      if (seen.has(key) || seen.has([...taken].reverse().join(','))) return
+      seen.add(key)
+      orders.push([...taken])
+      return
+    }
+    for (let index = 0; index < remaining.length; index++) {
+      walk([...remaining.slice(0, index), ...remaining.slice(index + 1)], [...taken, remaining[index]])
+    }
+  }
+  walk(Array.from({ length: pinCount }, (_, index) => index), [])
+  return orders
 }

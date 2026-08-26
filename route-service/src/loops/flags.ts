@@ -68,6 +68,12 @@ export type AlgorithmFlags = {
    * across the gaps, rather than from one global shaping point.
    */
   waypointBackbone: boolean
+  /**
+   * Treat the walker's pins as a set of places to pass rather than a sequence
+   * to be marched through in tap order: try every distinct visiting order and
+   * build from the ones that fit the plan best.
+   */
+  freeWaypointOrder: boolean
   /** Serve an identical repeat request from a bounded in-memory cache. */
   requestCache: boolean
 }
@@ -120,6 +126,14 @@ export const DEFAULT_FLAGS: AlgorithmFlags = {
   pullbackTurnOnly: true,
   guidePointPullback: false,
   waypointBackbone: true,
+  // The tap order was never part of the request, and holding to it both raises
+  // the floor a walk has to clear and fixes the shape it can have. Measured on
+  // the same three places tapped in ring order and tapped out of it: out of
+  // order the fixture offered one walk, and now offers the same three walks as
+  // the in-order fixture, to the metre. Five extra engine calls across the
+  // whole waypoint mix, because a second order is only built when it is a
+  // genuine alternative. See the Phase 7 note in docs/routing-baseline.md.
+  freeWaypointOrder: true,
   requestCache: false,
 }
 

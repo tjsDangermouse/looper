@@ -17,7 +17,7 @@ import { longestRepeatedSection } from './edges.js'
 import { findRepeatedCorridors, MIN_SHARED_RUN_METRES } from './quality.js'
 import { normaliseBearing } from './geo.js'
 import { biasAttemptsToNetwork, summariseNetwork, type NetworkSummary, type ReachedPoint } from './network.js'
-import { allocateSlack, DEFAULT_ALLOCATION, fitsInPlan, planSegmentOptions, type SegmentOption } from './waypoints.js'
+import { allocateSlack, DEFAULT_ALLOCATION, fitsInPlan, planSegmentOptions, visitOrders, type SegmentOption } from './waypoints.js'
 import { pickForRefinement, screenSkeleton, type ScreenVerdict } from './screening.js'
 import { destination as pointAtBearing } from './geo.js'
 import { targetMetresFor, targetSecondsFor, type LoopMode } from './units.js'
@@ -1048,6 +1048,28 @@ const SCREEN_CORNER_COUNT = 3
  */
 const REFINE_LIMIT = 8
 
+/**
+ * How many visiting orders are built properly.
+ *
+ * Ranking every order is nearly free — it is one routed leg per pair of places
+ * — but building one costs a shaping-point route per option per gap, so only
+ * the best few earn that. Two, because the shortest backbone is not always the
+ * one that shapes up best, and a third has never been what was missing.
+ */
+const ORDER_ATTEMPTS = 2
+
+/**
+ * How much longer than the shortest order a second order may be and still be
+ * worth building.
+ *
+ * A second order is only worth its shaping-point routes when it is a genuine
+ * alternative. One that starts a tenth of the walk behind spends that tenth
+ * before it has shaped anything, and on the benchmark it never produced a walk
+ * the shortest order had not already produced better — it just doubled the
+ * engine calls of every three-pin request.
+ */
+const ORDER_SPREAD = 0.1
+
 /** How many assembled walks are measured before the diversity selector picks three. */
 const BACKBONE_ASSEMBLY_LIMIT = 24
 /** Resolution of the slack allocation, as a share of the requested length. */
@@ -1099,153 +1121,259 @@ async function generateBackboneWaypointLoops(
     options.onDiagnostics?.(diagnostics)
     return diagnostics
   }
-  const anchors: LngLat[] = [start, ...request.waypoints!.map(point => [point.lng, point.lat] as LngLat), start]
-  const gapCount = anchors.length - 1
+  const pins: LngLat[] = request.waypoints!.map(point => [point.lng, point.lat] as LngLat)
+  /** Every place the walk must touch. Node 0 is the start, which is also the end. */
+  const nodes: LngLat[] = [start, ...pins]
   const durationFor = (metres: number, seconds: number) => request.walkingPaceMinutesPerKm === undefined
     ? seconds
     : metres / 1000 * request.walkingPaceMinutesPerKm * 60
 
-  // One direct route per gap. These are the backbone and they are also the
-  // "spend nothing here" option, so nothing is paid for twice.
-  const directs: RoutedLeg[] = []
-  for (let gap = 0; gap < gapCount; gap++) {
+  // Anchor-to-anchor legs, routed once each and kept. With the visiting order
+  // free the same pair of places turns up in several orders, and the engine
+  // should be asked about it once.
+  const legs = new Map<string, RoutedLeg>()
+  const spans = new Map<string, { distanceMeters: number; durationSeconds: number }>()
+  const unroutable = new Set<string>()
+  const legKey = (from: number, to: number) => `${from}>${to}`
+  const spanKey = (from: number, to: number) => (from < to ? `${from}-${to}` : `${to}-${from}`)
+
+  const legBetween = async (from: number, to: number): Promise<RoutedLeg | undefined> => {
+    const known = legs.get(legKey(from, to))
+    if (known) return known
+    if (unroutable.has(spanKey(from, to))) return undefined
     options.signal?.throwIfAborted()
-    const leg = await routeSegment(options.route, anchors[gap], anchors[gap + 1], [], options.signal, 'waypoint-direct')
+    const leg = await routeSegment(options.route, nodes[from], nodes[to], [], options.signal, 'waypoint-direct')
     if (!leg) {
-      return { routes: [], warning: 'One or more waypoints cannot be reached on foot.', diagnostics: report('unreachable', 0) }
+      unroutable.add(spanKey(from, to))
+      return undefined
     }
-    directs.push(leg)
+    legs.set(legKey(from, to), leg)
+    spans.set(spanKey(from, to), { distanceMeters: leg.distanceMeters, durationSeconds: leg.durationSeconds })
+    return leg
   }
-  const backbone = directs.reduce((total, leg) => total + leg.distanceMeters, 0)
+
+  /**
+   * How far apart two places are on foot, for ranking orders only.
+   *
+   * Measured in whichever direction it was first wanted. One-way streets and
+   * kerbs make a walk back marginally different from the walk out, but by far
+   * less than the bucket the allocation works in — and the walk that is
+   * actually offered is always routed the way it is walked, below.
+   */
+  const spanBetween = async (from: number, to: number) => {
+    const known = spans.get(spanKey(from, to))
+    if (known) return known
+    await legBetween(from, to)
+    return spans.get(spanKey(from, to))
+  }
+
+  /**
+   * The orders worth considering. With the flag off that is the order the
+   * walker happened to tap in, which is what this generator has always used.
+   */
+  const orders = flags.freeWaypointOrder ? visitOrders(pins.length) : [pins.map((_, index) => index)]
+  type Ordering = { sequence: number[]; anchors: LngLat[]; backbone: number; measured: number }
+  const orderings: Ordering[] = []
+  for (const order of orders) {
+    const sequence = [0, ...order.map(index => index + 1), 0]
+    let backbone = 0
+    let measured = 0
+    let routable = true
+    for (let gap = 0; gap < sequence.length - 1; gap++) {
+      const span = await spanBetween(sequence[gap], sequence[gap + 1])
+      if (!span) {
+        routable = false
+        break
+      }
+      backbone += span.distanceMeters
+      measured += targetSeconds ? durationFor(span.distanceMeters, span.durationSeconds) : span.distanceMeters
+    }
+    // An order the engine cannot join up disqualifies that order, not the
+    // walk: another order may reach the same pins by a road that exists.
+    if (routable) orderings.push({ sequence, anchors: sequence.map(node => nodes[node]), backbone, measured })
+  }
+  if (!orderings.length) {
+    return { routes: [], warning: 'One or more waypoints cannot be reached on foot.', diagnostics: report('unreachable', 0) }
+  }
+  orderings.sort((a, b) => a.backbone - b.backbone || a.sequence.join().localeCompare(b.sequence.join()))
+
   // A pin on the doorstep, or three pins within a street of each other, does
   // not describe a route: the backbone is nearly nothing and the slack is
   // nearly the whole walk, so "spread the slack across the gaps" degenerates
   // into "invent a loop", which is the ring generator's job and it is better
   // at it. Hand those back to the generator that reuses an ordinary loop
   // already passing the pins.
-  if (backbone < targetMetres * PIN_CONSTRAINT_SHARE) return handOver('doorstep-pin', rejections)
+  if (orderings[0].backbone < targetMetres * PIN_CONSTRAINT_SHARE) return handOver('doorstep-pin', rejections)
   const requested = targetSeconds ?? targetMetres
-  const measuredBackbone = targetSeconds
-    ? directs.reduce((total, leg) => total + durationFor(leg.distanceMeters, leg.durationSeconds), 0)
-    : backbone
 
   // Refusing costs the walker their walk, so the floor is checked properly
   // before it is used to refuse: the profile's preferred route can be longer
-  // than the shortest one, and a preference is not a bound.
+  // than the shortest one, and a preference is not a bound. With the order
+  // free the floor is the shortest order's, which is the only honest one —
+  // the walk the tap order happened to describe was never the shortest way
+  // through those places.
   const maxError = request.overrides?.quality?.maxDistanceError ?? WAYPOINT_DISTANCE_TOLERANCE
-  if (!fitsInPlan(measuredBackbone, requested, maxError)) {
-    const floor = await trueLowerBound(options, anchors, targetSeconds ? durationFor : undefined, measuredBackbone)
+  let attempts = orderings.filter(ordering => fitsInPlan(ordering.measured, requested, maxError))
+  if (!attempts.length) {
+    const shortest = orderings[0]
+    const floor = await trueLowerBound(options, shortest.anchors, targetSeconds ? durationFor : undefined, shortest.measured)
     if (!fitsInPlan(floor, requested, maxError)) {
       return { ...refuseWaypoints(request, floor, targetSeconds !== undefined), diagnostics: report('over-plan', 0) }
     }
+    attempts = [shortest]
   }
+  // Each order costs a full set of shaping-point routes, so only the best few
+  // are built, and only while they are still close to the shortest. They are
+  // already sorted shortest backbone first, which is the order with the most
+  // slack to spend and therefore the most room to be shaped into a walk.
+  attempts = flags.freeWaypointOrder
+    ? attempts.filter(ordering => ordering.backbone <= attempts[0].backbone * (1 + ORDER_SPREAD)).slice(0, ORDER_ATTEMPTS)
+    : attempts.slice(0, 1)
 
-  const slack = Math.max(0, targetMetres - backbone)
-  const perGap = slack / gapCount
+  const analysed: Array<{
+    candidate: RoutedCandidate
+    report: ReturnType<typeof analyseRouteQuality>
+    coordinates: LngLat[]
+    quality: ReturnType<typeof analyseRouteQuality>['quality']
+    bearing: number
+    traversals: ReturnType<typeof measureTraversals> | undefined
+    totalMetres: number
+    durationSeconds: number
+  }> = []
+  let assembledPlans = 0
+  let enclosingPlans = 0
+  let bestShape = 0
 
-  // A few ways of spending part of the slack in each gap, routed once each.
-  const byGap: SegmentOption[][] = []
-  const routed = new Map<string, RoutedLeg[]>()
-  for (let gap = 0; gap < gapCount; gap++) {
-    const forThisGap: SegmentOption[] = [{
-      gap,
-      id: `${gap}-direct`,
-      guides: [],
-      distanceMeters: directs[gap].distanceMeters,
-      durationSeconds: directs[gap].durationSeconds,
-    }]
-    routed.set(`${gap}-direct`, [directs[gap]])
+  for (const ordering of attempts) {
+    const anchors = ordering.anchors
+    const gapCount = anchors.length - 1
 
-    const crow = haversine(anchors[gap], anchors[gap + 1])
-    const stretch = crow > 0 ? directs[gap].distanceMeters / crow : 1
-    for (const plan of planSegmentOptions(gap, anchors[gap], anchors[gap + 1], perGap, stretch)) {
-      if (!plan.guides.length) continue
-      const legs = await routeThrough(
-        options.route,
-        [anchors[gap], ...plan.guides, anchors[gap + 1]],
-        options.signal,
-        (kind, kept) => metrics?.countFixup(kind, kept),
-        flags.guidePointPullback,
-      )
-      if (!legs) continue
-      routed.set(plan.id, legs)
-      forThisGap.push({
+    // The direct route for each gap, in the direction it is walked. These are
+    // the backbone and they are also the "spend nothing here" option, so
+    // nothing is paid for twice.
+    const directs: RoutedLeg[] = []
+    for (let gap = 0; gap < gapCount; gap++) {
+      const leg = await legBetween(ordering.sequence[gap], ordering.sequence[gap + 1])
+      if (!leg) break
+      directs.push(leg)
+    }
+    if (directs.length < gapCount) continue
+
+    const backbone = directs.reduce((total, leg) => total + leg.distanceMeters, 0)
+    const slack = Math.max(0, targetMetres - backbone)
+    const perGap = slack / gapCount
+
+    // A few ways of spending part of the slack in each gap, routed once each.
+    const byGap: SegmentOption[][] = []
+    const routed = new Map<string, RoutedLeg[]>()
+    for (let gap = 0; gap < gapCount; gap++) {
+      const forThisGap: SegmentOption[] = [{
         gap,
-        id: plan.id,
-        guides: plan.guides,
-        distanceMeters: legs.reduce((total, leg) => total + leg.distanceMeters, 0),
-        durationSeconds: legs.reduce((total, leg) => total + leg.durationSeconds, 0),
+        id: `${gap}-direct`,
+        guides: [],
+        distanceMeters: directs[gap].distanceMeters,
+        durationSeconds: directs[gap].durationSeconds,
+      }]
+      routed.set(`${gap}-direct`, [directs[gap]])
+
+      const crow = haversine(anchors[gap], anchors[gap + 1])
+      const stretch = crow > 0 ? directs[gap].distanceMeters / crow : 1
+      for (const plan of planSegmentOptions(gap, anchors[gap], anchors[gap + 1], perGap, stretch)) {
+        if (!plan.guides.length) continue
+        const legsForPlan = await routeThrough(
+          options.route,
+          [anchors[gap], ...plan.guides, anchors[gap + 1]],
+          options.signal,
+          (kind, kept) => metrics?.countFixup(kind, kept),
+          flags.guidePointPullback,
+        )
+        if (!legsForPlan) continue
+        routed.set(plan.id, legsForPlan)
+        forThisGap.push({
+          gap,
+          id: plan.id,
+          guides: plan.guides,
+          distanceMeters: legsForPlan.reduce((total, leg) => total + leg.distanceMeters, 0),
+          durationSeconds: legsForPlan.reduce((total, leg) => total + leg.durationSeconds, 0),
+        })
+      }
+      byGap.push(forThisGap)
+    }
+
+    const allocations = allocateSlack(byGap, {
+      anchors,
+      target: targetMetres,
+      bucketMetres: Math.max(25, targetMetres * BACKBONE_BUCKET_SHARE),
+      limit: BACKBONE_ASSEMBLY_LIMIT,
+    })
+    if (!allocations.length) continue
+    assembledPlans += allocations.length
+    enclosingPlans += allocations.filter(allocation => allocation.shape >= DEFAULT_ALLOCATION.minShape).length
+    bestShape = Math.max(bestShape, ...allocations.map(allocation => allocation.shape))
+
+    for (const allocation of allocations) {
+      const chosenLegs = allocation.chosen.flatMap(option => routed.get(option.id) ?? [])
+      const joined = joinAndTrimLegs(chosenLegs)
+      const candidate: RoutedCandidate = {
+        // The order goes in the name: two orders can choose the same option in
+        // every gap and be different walks.
+        attemptId: `backbone-${ordering.sequence.join('')}-${allocation.chosen.map(option => option.id).join('_')}`,
+        legs: chosenLegs,
+        ...joined,
+        legDistances: chosenLegs.map(leg => leg.distanceMeters),
+      }
+      const durationSeconds = durationFor(candidate.distanceMeters, candidate.durationSeconds)
+      const traversals = flags.edgeOverlap ? measureTraversals(candidate.coordinates, candidate.edges) : undefined
+      const quality = analyseRouteQuality({
+        traversals,
+        coordinates: candidate.coordinates,
+        start,
+        distanceMeters: candidate.distanceMeters,
+        durationSeconds,
+        targetMetres,
+        targetSeconds,
+        legDistances: candidate.legDistances,
+        maneuverSigns: candidate.steps.map(step => step.sign),
+        // A pin can split an otherwise excellent walk one metre from a corner,
+        // so leg balance says where the walker tapped rather than whether the
+        // walk is good. Everything about the walk's own shape still applies.
+        thresholds: {
+          ...request.overrides?.quality,
+          maxDistanceError: request.overrides?.quality?.maxDistanceError ?? WAYPOINT_DISTANCE_TOLERANCE,
+          maxDurationError: request.overrides?.quality?.maxDurationError ?? WAYPOINT_DISTANCE_TOLERANCE,
+          maxLegShare: 1,
+          minLegShare: 0,
+        },
+      })
+      if (flags.edgeOverlap) metrics?.countOverlapSource(quality.overlapSource)
+      assembled++
+      if (quality.pass) passed++
+      for (const reason of quality.rejections) {
+        rejections[reason] = (rejections[reason] ?? 0) + 1
+        metrics?.countRejection(reason)
+      }
+      analysed.push({
+        candidate,
+        report: quality,
+        coordinates: candidate.coordinates,
+        quality: quality.quality,
+        bearing: bearingOf(candidate.coordinates, start),
+        traversals,
+        totalMetres: candidate.distanceMeters,
+        durationSeconds,
       })
     }
-    byGap.push(forThisGap)
   }
 
-  const allocations = allocateSlack(byGap, {
-    anchors,
-    target: targetMetres,
-    bucketMetres: Math.max(25, targetMetres * BACKBONE_BUCKET_SHARE),
-    limit: BACKBONE_ASSEMBLY_LIMIT,
-  })
-  if (!allocations.length) return handOver('no-allocation', rejections)
+  if (!analysed.length) return handOver('no-allocation', rejections)
   // Reported on every exit from here on: if `enclosing` is zero the shape
   // preference had nothing to prefer, and the problem is where the shaping
   // points are put rather than which combination is chosen.
   const shapes: Diagnostics['backboneShapes'] = {
-    assembled: allocations.length,
-    enclosing: allocations.filter(allocation => allocation.shape >= DEFAULT_ALLOCATION.minShape).length,
-    best: Number(Math.max(...allocations.map(allocation => allocation.shape)).toFixed(3)),
+    assembled: assembledPlans,
+    enclosing: enclosingPlans,
+    best: Number(bestShape.toFixed(3)),
   }
-
-  const analysed = allocations.map(allocation => {
-    const legs = allocation.chosen.flatMap(option => routed.get(option.id) ?? [])
-    const joined = joinAndTrimLegs(legs)
-    const candidate: RoutedCandidate = {
-      attemptId: `backbone-${allocation.chosen.map(option => option.id).join('_')}`,
-      legs,
-      ...joined,
-      legDistances: legs.map(leg => leg.distanceMeters),
-    }
-    const durationSeconds = durationFor(candidate.distanceMeters, candidate.durationSeconds)
-    const traversals = flags.edgeOverlap ? measureTraversals(candidate.coordinates, candidate.edges) : undefined
-    const quality = analyseRouteQuality({
-      traversals,
-      coordinates: candidate.coordinates,
-      start,
-      distanceMeters: candidate.distanceMeters,
-      durationSeconds,
-      targetMetres,
-      targetSeconds,
-      legDistances: candidate.legDistances,
-      maneuverSigns: candidate.steps.map(step => step.sign),
-      // A pin can split an otherwise excellent walk one metre from a corner,
-      // so leg balance says where the walker tapped rather than whether the
-      // walk is good. Everything about the walk's own shape still applies.
-      thresholds: {
-        ...request.overrides?.quality,
-        maxDistanceError: request.overrides?.quality?.maxDistanceError ?? WAYPOINT_DISTANCE_TOLERANCE,
-        maxDurationError: request.overrides?.quality?.maxDurationError ?? WAYPOINT_DISTANCE_TOLERANCE,
-        maxLegShare: 1,
-        minLegShare: 0,
-      },
-    })
-    if (flags.edgeOverlap) metrics?.countOverlapSource(quality.overlapSource)
-    assembled++
-    if (quality.pass) passed++
-    for (const reason of quality.rejections) {
-      rejections[reason] = (rejections[reason] ?? 0) + 1
-      metrics?.countRejection(reason)
-    }
-    return {
-      candidate,
-      report: quality,
-      coordinates: candidate.coordinates,
-      quality: quality.quality,
-      bearing: bearingOf(candidate.coordinates, start),
-      traversals,
-      totalMetres: candidate.distanceMeters,
-      durationSeconds,
-    }
-  })
 
   const offerable = analysed.filter(entry => entry.report.pass)
   // Every assembled walk failed a gate. `rejections` says which, which is the

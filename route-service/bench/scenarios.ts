@@ -141,6 +141,16 @@ export const SCENARIOS: Scenario[] = [
     request: { ...base, distanceKm: 8, waypoints: [near(1100, 0), near(700, 900), near(-500, 600)] },
   },
   {
+    id: 'waypoint-three-zigzag',
+    // The same three places as the scenario above, tapped the way a walker
+    // actually taps them: the one they thought of first, then the one on the
+    // other side, then the one in between. Walked in tap order that crosses
+    // itself twice; walked as a ring it is a loop of the same three places.
+    about: 'Three pins tapped out of ring order — the tap order is not the walk',
+    network: 'dense-grid',
+    request: { ...base, distanceKm: 8, waypoints: [near(1100, 0), near(-500, 600), near(700, 900)] },
+  },
+  {
     id: 'waypoint-suburban',
     about: 'A pin in suburbia, where it may well land in a cul-de-sac',
     network: 'suburban',

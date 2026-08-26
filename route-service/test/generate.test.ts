@@ -40,6 +40,9 @@ function fakeEngine(options: {
   }
 }
 
+/** Tight enough that the zigzag through the pins is refused and the ring is not. */
+const TIGHT_PLAN_KM = 6.5
+
 const request = (overrides: Partial<LoopRequest> = {}): LoopRequest =>
   ({ start: START, mode: 'distance', distanceKm: 5, units: 'km', ...overrides })
 
@@ -588,6 +591,88 @@ describe('waypoint walks built from the backbone out', () => {
   it('answers the length that was asked for', async () => {
     const result = await generateLoops(request({ waypoints: pins, distanceKm: 6 }), { route: fakeEngine(), flags })
     for (const route of result.routes) expect(Math.abs(route.targetDifferencePercent)).toBeLessThanOrEqual(25)
+  })
+})
+
+describe('letting the pins be visited in any order', () => {
+  const flags = { waypointBackbone: true, freeWaypointOrder: true }
+  // Three pins round the start, tapped in the order they were noticed rather
+  // than the order they are passed: east, west, north. Walked in tap order
+  // that is a zigzag across the start; walked as a ring it is a loop.
+  const east = { lng: START.lng + 0.016, lat: START.lat }
+  const west = { lng: START.lng - 0.016, lat: START.lat }
+  const north = { lng: START.lng, lat: START.lat + 0.010 }
+  const zigzag = [east, west, north]
+
+  const arrivalOrder = (line: LngLat[], pins: typeof zigzag) => pins
+    .map(pin => {
+      const nearest = line.reduce((best, point, index) => {
+        const away = haversine(point, [pin.lng, pin.lat])
+        return away < best.away ? { away, index } : best
+      }, { away: Infinity, index: -1 })
+      expect(nearest.away).toBeLessThan(80)
+      return nearest.index
+    })
+
+  it('still passes every pin the walker dropped', async () => {
+    const result = await generateLoops(request({ waypoints: zigzag, distanceKm: 9 }), { route: fakeEngine(), flags })
+    expect(result.routes.length).toBeGreaterThan(0)
+    // arrivalOrder asserts each pin was reached; that it is allowed to come
+    // out unsorted is the whole point of the flag.
+    for (const route of result.routes) arrivalOrder(route.geometry.coordinates as LngLat[], zigzag)
+  })
+
+  it('walks them as a ring rather than in the order they were tapped', async () => {
+    const result = await generateLoops(request({ waypoints: zigzag, distanceKm: 9 }), { route: fakeEngine(), flags })
+    const orders = result.routes.map(route => arrivalOrder(route.geometry.coordinates as LngLat[], zigzag))
+    // East, north, west — or its mirror — is the ring. East, west, north is
+    // the tapping, and crosses the start twice on the way round.
+    expect(orders.some(order => order[0] < order[2] && order[2] < order[1] || order[1] < order[2] && order[2] < order[0])).toBe(true)
+  })
+
+  it('never moves a pin, whatever order it visits them in', async () => {
+    const asked = zigzag.map(pin => ({ ...pin }))
+    await generateLoops(request({ waypoints: asked, distanceKm: 9 }), { route: fakeEngine(), flags })
+    expect(asked).toEqual(zigzag)
+  })
+
+  it('holds to the tap order when the flag is off', async () => {
+    const result = await generateLoops(request({ waypoints: zigzag, distanceKm: 9 }), {
+      route: fakeEngine(),
+      flags: { waypointBackbone: true, freeWaypointOrder: false },
+    })
+    for (const route of result.routes) {
+      const order = arrivalOrder(route.geometry.coordinates as LngLat[], zigzag)
+      expect([...order].sort((a, b) => a - b)).toEqual(order)
+    }
+  })
+
+  it('offers a walk that fits a plan the tap order could not', async () => {
+    const asked = request({ waypoints: zigzag, distanceKm: TIGHT_PLAN_KM })
+    const fixed = await generateLoops(asked, { route: fakeEngine(), flags: { waypointBackbone: true, freeWaypointOrder: false } })
+    const free = await generateLoops(asked, { route: fakeEngine(), flags })
+    // The zigzag genuinely cannot be walked in that plan, and refusing was the
+    // honest answer to the question as it was asked. It was the wrong question.
+    expect(fixed.expectationExceeded).toBe(true)
+    expect(free.routes.length).toBeGreaterThan(0)
+  })
+
+  it('asks the engine about each pair of places once, not once per order', async () => {
+    let direct = 0
+    const counting = async (points: LngLat[], customModel: any, purpose?: string) => {
+      if (purpose === 'waypoint-direct') direct++
+      return fakeEngine()(points)
+    }
+    await generateLoops(request({ waypoints: zigzag, distanceKm: 9 }), { route: counting, flags })
+    // Four places is six pairs, plus the odd gap wanted the other way round.
+    // Ranking twelve orders by routing every gap of each would be forty-eight.
+    expect(direct).toBeLessThanOrEqual(14)
+  })
+
+  it('gives the same walks for the same request', async () => {
+    const one = await generateLoops(request({ waypoints: zigzag, distanceKm: 9 }), { route: fakeEngine(), flags })
+    const two = await generateLoops(request({ waypoints: zigzag, distanceKm: 9 }), { route: fakeEngine(), flags })
+    expect(two.routes.map(route => route.geometry)).toEqual(one.routes.map(route => route.geometry))
   })
 })
 
