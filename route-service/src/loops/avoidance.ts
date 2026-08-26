@@ -1,9 +1,8 @@
 import buffer from '@turf/buffer'
 import circle from '@turf/circle'
-import difference from '@turf/difference'
 import simplify from '@turf/simplify'
 import area from '@turf/area'
-import { featureCollection, lineString, feature } from '@turf/helpers'
+import { lineString, feature } from '@turf/helpers'
 import type { Feature, MultiPolygon, Polygon } from 'geojson'
 import type { LngLat } from './geo.js'
 
@@ -59,8 +58,6 @@ export function buildAvoidanceAreas(
   const exclusion = options.startExclusionMetres ?? START_EXCLUSION_RADIUS_METRES
   const maxAreas = options.maxAreas ?? MAX_AVOIDANCE_AREAS
 
-  const keepClear = exclusion > 0 ? circle(start, exclusion, { units: 'meters', steps: 32 }) : undefined
-
   const corridors: AnyPolygon[] = []
   for (const geometry of legGeometries) {
     const distinct = dropRepeatedPoints(geometry)
@@ -74,18 +71,27 @@ export function buildAvoidanceAreas(
     // the corridor is twenty-five metres wide: detail finer than that was
     // never going to survive the buffer, let alone matter to the answer.
     // Safe to mutate, because `dropRepeatedPoints` returned a fresh array.
-    const line = simplify(lineString(distinct), { tolerance: SIMPLIFY_TOLERANCE_DEGREES, highQuality: false, mutate: true })
-    if (line.geometry.coordinates.length < 2) continue
-    const buffered = buffer(line, halfWidth, { units: 'meters' }) as AnyPolygon | undefined
-    if (!buffered) continue
-    // The start circle comes out of each corridor rather than out of the
-    // merged whole. Cutting every part and then merging describes the same
-    // ground as merging and then cutting once, and this way it is one clip per
-    // leg on a small shape instead of one clip per call on a large one.
-    // A corridor entirely inside the start circle is a legitimate outcome for
-    // a very short first leg: there is then nothing left of it to avoid.
-    const cut = keepClear ? trySubtract(buffered, keepClear) : buffered
-    if (cut) corridors.push(cut)
+    // The ground near the start is dropped from the *line*, before anything is
+    // buffered, rather than clipped out of the finished corridor.
+    //
+    // Cutting a circle out of a polygon is exact and it is by far the most
+    // expensive thing this service does: turf clips with arbitrary-precision
+    // arithmetic, and it was 47% of all CPU. Dropping the points instead is a
+    // distance test each, and the corridor it produces differs by about two
+    // per cent of its area — a boundary a few metres out on a hint that is
+    // deliberately a preference rather than a barrier.
+    //
+    // A leg that passes the start again later is split into two runs and both
+    // are kept, which is the behaviour the clip had. A leg with nothing left
+    // outside the circle contributes nothing, which is a legitimate outcome
+    // for a very short first leg: there is then nothing left of it to avoid.
+    for (const run of runsOutside(distinct, start, exclusion > 0 ? exclusion + halfWidth : 0)) {
+      // Safe to mutate: `runsOutside` returns fresh arrays.
+      const line = simplify(lineString(run), { tolerance: SIMPLIFY_TOLERANCE_DEGREES, highQuality: false, mutate: true })
+      if (line.geometry.coordinates.length < 2) continue
+      const buffered = buffer(line, halfWidth, { units: 'meters' }) as AnyPolygon | undefined
+      if (buffered) corridors.push(buffered)
+    }
   }
   if (!corridors.length) return []
 
@@ -97,26 +103,6 @@ export function buildAvoidanceAreas(
     .slice(0, maxAreas)
 }
 
-/**
- * Polygon clipping is not total.
- *
- * A walk that doubles back along exactly the same line — the only bridge, a
- * promenade with no second path — buffers into corridors sharing a whole edge,
- * and the clipping library can fail outright on that degeneracy rather than
- * returning a shape. Letting it throw would abandon the entire request over
- * one candidate's geometry, which is the opposite of what an avoidance hint is
- * for: it is a preference, and a preference that cannot be expressed is not an
- * error, it is a weaker preference. So a start circle that cannot be cut out
- * simply is not cut out.
- */
-function trySubtract(shape: AnyPolygon, keepClear: AnyPolygon): AnyPolygon | undefined {
-  try {
-    return (difference(featureCollection([shape, keepClear] as never)) as AnyPolygon | null) ?? undefined
-  } catch {
-    return shape
-  }
-}
-
 /** Turf refuses a line with a repeated vertex; GraphHopper emits them at joins. */
 function dropRepeatedPoints(coordinates: LngLat[]): LngLat[] {
   const out: LngLat[] = []
@@ -125,6 +111,67 @@ function dropRepeatedPoints(coordinates: LngLat[]): LngLat[] {
     if (!last || last[0] !== point[0] || last[1] !== point[1]) out.push(point)
   }
   return out
+}
+
+/**
+ * The stretches of a line that lie further than `radius` from `centre`, as
+ * separate runs. A radius of zero keeps the line whole.
+ *
+ * The line is cut where it crosses the circle rather than at whichever vertex
+ * happens to fall outside it. GraphHopper emits a vertex every few metres, so
+ * the two are nearly the same on a real leg — but they are not the same on a
+ * sparse one, where a segment can span the whole circle and dropping its inner
+ * end would throw the entire corridor away. A corridor that silently does not
+ * exist is the worst failure available here: the walk stops being steered and
+ * nothing says so.
+ */
+function runsOutside(coordinates: LngLat[], centre: LngLat, radius: number): LngLat[][] {
+  if (radius <= 0) return [coordinates]
+  const runs: LngLat[][] = []
+  let run: LngLat[] = []
+  let previous: LngLat | undefined
+  let previousOutside = false
+  for (const point of coordinates) {
+    const outside = metresBetween(centre, point) >= radius
+    if (previous && outside !== previousOutside) {
+      run.push(outside ? crossingPoint(previous, point, centre, radius) : crossingPoint(point, previous, centre, radius))
+    }
+    if (outside) {
+      run.push(point)
+    } else {
+      if (run.length >= 2) runs.push(run)
+      run = []
+    }
+    previous = point
+    previousOutside = outside
+  }
+  if (run.length >= 2) runs.push(run)
+  return runs
+}
+
+/**
+ * Where the segment from a point inside the circle to one outside it crosses
+ * the boundary. Bisected rather than solved: the segment is short, twenty-four
+ * halvings put it well inside a millimetre, and keeping `inside` inside and
+ * `outside` outside makes the answer obviously the right root.
+ */
+function crossingPoint(inside: LngLat, outside: LngLat, centre: LngLat, radius: number): LngLat {
+  let low = 0
+  let high = 1
+  const at = (t: number): LngLat => [inside[0] + (outside[0] - inside[0]) * t, inside[1] + (outside[1] - inside[1]) * t]
+  for (let step = 0; step < 24; step++) {
+    const mid = (low + high) / 2
+    if (metresBetween(centre, at(mid)) < radius) low = mid
+    else high = mid
+  }
+  return at(high)
+}
+
+/** Flat-earth enough over the tens of metres this is asked about. */
+function metresBetween(a: LngLat, b: LngLat): number {
+  const north = (b[1] - a[1]) * 111320
+  const east = (b[0] - a[0]) * 111320 * Math.cos((a[1] * Math.PI) / 180)
+  return Math.hypot(north, east)
 }
 
 function explodeToPolygons(shape: AnyPolygon): Feature<Polygon>[] {
@@ -181,8 +228,16 @@ export const shortestPathCustomModel = (): CustomModel => ({ distance_influence:
 export function avoidanceCustomModel(areas: Feature<Polygon>[], priority: number = AVOID_PRIORITY): CustomModel | undefined {
   if (!areas.length) return undefined
   const named = areas.map((polygon, index) => ({ ...polygon, id: `looper_avoid_${index}`, properties: polygon.properties ?? {} }))
+  // One rule naming every corridor, not one rule each.
+  //
+  // GraphHopper applies each matching rule in turn, so a rule per corridor
+  // multiplies the penalty once for every corridor an edge falls in — and
+  // corridors overlap wherever the walk crosses its own path. Ground walked
+  // twice would be discouraged four hundredfold instead of twentyfold, which
+  // is not the strength this was tuned at. Naming them in one expression says
+  // what was always meant: this ground has been walked, once.
   return {
-    priority: named.map(polygon => ({ if: `in_${polygon.id}`, multiply_by: String(priority) })),
+    priority: [{ if: named.map(polygon => `in_${polygon.id}`).join(' || '), multiply_by: String(priority) }],
     areas: { type: 'FeatureCollection', features: named },
   }
 }

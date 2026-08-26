@@ -384,22 +384,30 @@ function priorityPerEdge(network: Network, midpoints: LngLat[], customModel: Cus
   const priority = new Float64Array(network.edges.length).fill(1)
   const areas = customModel?.areas?.features ?? []
   if (!areas.length) return priority
-  const multipliers = new Map<string, number>()
+  // A rule names one area or several — `in_a`, or `in_a || in_b || in_c`. The
+  // multiplier applies once to an edge the rule matches, however many of its
+  // areas that edge happens to fall in, which is what the `||` means and what
+  // GraphHopper does with it. Modelling it per-area instead would penalise
+  // ground under two overlapping corridors twice, and overlapping corridors
+  // are exactly what a walk crossing its own path produces.
+  const byId = new Map(areas.map(area => [String((area as Feature<Polygon> & { id?: string }).id ?? ''), area]))
   for (const rule of customModel?.priority ?? []) {
-    const match = /^in_(\S+)$/.exec(String(rule.if ?? ''))
-    if (match) multipliers.set(match[1], Number(rule.multiply_by))
-  }
-
-  for (const area of areas) {
-    const id = String((area as Feature<Polygon> & { id?: string }).id ?? '')
-    const multiplier = multipliers.get(id)
-    if (multiplier === undefined || !Number.isFinite(multiplier)) continue
-    const box = boundingBox(area)
-    for (let index = 0; index < midpoints.length; index++) {
-      const [lng, lat] = midpoints[index]
-      if (lng < box[0] || lng > box[2] || lat < box[1] || lat > box[3]) continue
-      if (booleanPointInPolygon([lng, lat], area)) priority[index] *= multiplier
+    const multiplier = Number(rule.multiply_by)
+    const named = [...String(rule.if ?? '').matchAll(/in_(\w+)/g)].map(match => match[1])
+    if (!named.length || !Number.isFinite(multiplier)) continue
+    const matched = new Uint8Array(midpoints.length)
+    for (const id of named) {
+      const area = byId.get(id)
+      if (!area) continue
+      const box = boundingBox(area)
+      for (let index = 0; index < midpoints.length; index++) {
+        if (matched[index]) continue
+        const [lng, lat] = midpoints[index]
+        if (lng < box[0] || lng > box[2] || lat < box[1] || lat > box[3]) continue
+        if (booleanPointInPolygon([lng, lat], area)) matched[index] = 1
+      }
     }
+    for (let index = 0; index < matched.length; index++) if (matched[index]) priority[index] *= multiplier
   }
   return priority
 }
