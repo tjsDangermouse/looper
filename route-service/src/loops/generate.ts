@@ -37,8 +37,28 @@ import { targetMetresFor, targetSecondsFor, type LoopMode } from './units.js'
  * for another corner if that one could not be made to work, rather than every
  * walk being forced into the same stencil regardless of what is underneath it.
  */
-/** Corner counts tried, simplest first, before an attempt gives up on a bearing. */
-const CORNER_COUNTS_TO_TRY = [1, 2, 3, 4]
+/**
+ * Corner counts an attempt tries, and the order it tries them in.
+ *
+ * The loop stops at the first shape that passes, so the order is the cost: a
+ * three-cornered ring is what most ground wants, and starting there rather
+ * than at a two-legged there-and-back saves trying two shapes that were never
+ * going to be the answer. Measured on the fixtures, that reordering alone is
+ * 6% of all engine calls for no change to what is offered.
+ *
+ * The tail is what a bearing pays when *nothing* works — one and four are
+ * still there because a promenade genuinely wants two legs and a housing
+ * estate genuinely wants five, and dropping them costs a walk.
+ */
+const CORNER_COUNTS_TO_TRY = [3, 2, 1, 4]
+/**
+ * The narrow sweep: only the two shapes that answer most of the time.
+ *
+ * A quarter of all engine calls, measured, and it costs a walk in twenty and
+ * some separation between the walks that remain. Whether that is a good trade
+ * depends on the ground, so it is a flag rather than a decision.
+ */
+const NARROW_CORNER_COUNTS = [3, 2]
 /** Fresh candidate batches tried before we honestly return fewer than three loops. */
 const MAX_DISCOVERY_BATCHES = 3
 /**
@@ -564,7 +584,7 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
     async function buildOne(loopAttempt: LoopAttempt): Promise<Analysed | undefined> {
       metrics?.countCandidateBuilt()
       let best: Analysed | undefined
-      for (const cornerCount of CORNER_COUNTS_TO_TRY) {
+      for (const cornerCount of flags.narrowCornerSweep ? NARROW_CORNER_COUNTS : CORNER_COUNTS_TO_TRY) {
         const entry = await buildAndAnalyse(loopAttempt, { cornerCount, targetScale: 1, bearingShift: 0 }, options.route)
         if (!entry) continue
         // A clean shape at this corner count: no need to try a fussier one.

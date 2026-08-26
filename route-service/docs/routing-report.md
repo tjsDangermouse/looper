@@ -464,3 +464,82 @@ The rollout order in §7 stands, with two corrections:
 - Every "off, no measured benefit" verdict above was reached against fixtures
   that missed 40% of real engine work. `localRepair` in particular deserves
   re-measuring against the edge-snapping fixtures before it is written off.
+
+---
+
+# Addendum 2: what was actually wrong with waypoint mode
+
+The addendum above said waypoint mode failing was "the most important open
+item" and guessed at the cause. The guess was wrong, twice, and the diagnostics
+added to find out are what eventually found it.
+
+## The bug
+
+`buildLoopIncrementally` finishes with `trimTinySpikes(joinLegGeometries(legs))`.
+The trim splices out any backtrack under an 80 m round trip — the short duck
+into a driveway that the ground genuinely offers no way round, small enough
+that showing it does more harm than quietly not showing it.
+
+Both waypoint generators joined their legs and never trimmed them. Every one
+of those forty-metre spikes survived into the finished walk, and
+`out-and-back-spur` — which refuses any reverse run under 500 m — threw the lot
+out. Measured on the deployed build: **20 of 24 assembled walks**, against
+`repeated-corridor` at 1.
+
+This predates the backbone work entirely. The older guide-point generator
+joined without trimming too, so both paths failed the same way for the same
+reason, and waypoint mode has been broken like this for as long as it has
+existed.
+
+Joining and trimming are now one exported step, `joinAndTrimLegs`, used by all
+three builders.
+
+## What it did, measured on production
+
+| | before | after |
+| --- | --- | --- |
+| wp-one | 0 routes, 7.0 s, 353 calls | **2 routes, 0.6 s, 34 calls** |
+| wp-two | 0 routes, 11.8 s, 528 calls | **1 route, 0.8 s, 54 calls** |
+| stage | `legacy-empty` | `backbone` |
+| plans enclosing ground | unknown | 24 of 24, best shape 0.64–0.68 |
+
+Standard loops unchanged: 415 calls and 5.0 s at Douglas either way.
+
+## The two wrong guesses, and what they cost
+
+**"It's `repeated-corridor`, from gaps routed independently retracing each
+other."** It was 1 of 24. The reasoning was plausible and the fixtures
+supported it; nothing had measured it.
+
+**"It's the shape ranking."** Half right. The allocation genuinely was ranking
+a plan with a compactness of *zero* first — right length to within five metres,
+enclosing no ground at all — and fixing that dropped `shapeless` from 18 to 14.
+But the first attempt at the fix changed nothing at all, because the filter
+governed only the three combinations picked for variety while the other twenty
+were filled in unfiltered. A preference applied to three of twenty-four is not
+a preference.
+
+Both were caught only because the diagnostics report a stage and a rejection
+tally. Before that, every one of these failures reached the walker as the same
+sentence and reached the logs as nothing.
+
+## What is still wrong
+
+- **Suburban pins still fail** — `out-and-back-spur` 23 of 24 on the fixture.
+  Cul-de-sac ground puts guide points down dead ends longer than the 80 m trim
+  budget. The ring builder repairs exactly this with `applyJoinPullback`, and
+  the waypoint builders never call it; guide points are the generator's own and
+  may be moved, so that is the obvious next lever.
+- **wp-one offers two walks and wp-two offers one**, not three. Fixed now
+  rather than broken, but not finished.
+
+## Corner-count sweep
+
+Separately: an attempt tries corner counts until one passes, so the order is
+the cost. Starting at three — what most ground wants — rather than at a
+two-legged there-and-back is **6% of all engine calls for no change to what is
+offered**, and slightly better distance error. Now the default.
+
+Trying *only* the two shapes that usually work is **26%**, and costs about one
+walk in twenty plus some separation between the ones that remain. That is a
+trade rather than a win, so it is `LOOPER_NARROW_CORNER_SWEEP`, off.

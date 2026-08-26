@@ -39,6 +39,11 @@ export type AlgorithmFlags = {
   /** Screen many cheap skeletons before paying for incremental avoidance. */
   twoStageScreening: boolean
   /**
+   * Try only the two shapes that answer most of the time, instead of every
+   * shape from a two-legged there-and-back to a five-legged estate loop.
+   */
+  narrowCornerSweep: boolean
+  /**
    * Only pay for a cheaper reroute of an over-long leg when the leg actually
    * looks like it detoured round something. A leg that is long because its
    * target is far away is not going to be shortened by relaxing a penalty it
@@ -101,6 +106,10 @@ export const DEFAULT_FLAGS: AlgorithmFlags = {
   // Measured on real production traffic: the fix-ups are 43% of all engine
   // work, and these two gates cut the wasted part without changing a single
   // offered walk. -8% calls together, and better-separated alternatives.
+  // A quarter of all engine calls, and it costs a walk in twenty plus some
+  // separation between the ones that remain. Whether that trade is worth it
+  // depends on the ground, so it stays a decision rather than a default.
+  narrowCornerSweep: false,
   budgetDetourGate: true,
   pullbackTurnOnly: true,
   waypointBackbone: true,
