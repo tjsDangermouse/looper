@@ -15,6 +15,14 @@ export const config = {
   requestTimeoutMs: number(process.env.REQUEST_TIMEOUT_MS, 25000),
   candidateCount: number(process.env.CANDIDATE_COUNT, 24),
   concurrency: number(process.env.ROUTING_CONCURRENCY, 6),
+  /**
+   * Ceiling on concurrent GraphHopper calls across *all* walkers at once, per
+   * region — not per request, unlike `concurrency` above. Tune from real
+   * traffic/load testing; this default is a starting point, not a target.
+   */
+  graphhopperMaxConcurrency: number(process.env.GRAPHHOPPER_MAX_CONCURRENCY, 24),
+  /** Waiters beyond this are refused immediately rather than left to queue. */
+  graphhopperMaxQueue: number(process.env.GRAPHHOPPER_MAX_QUEUE, 100),
   rateLimitPerMinute: number(process.env.RATE_LIMIT_PER_MINUTE, 20),
   corsOrigins: (process.env.CORS_ORIGINS ?? '*').split(',').map(origin => origin.trim()).filter(Boolean),
   isProduction: process.env.NODE_ENV === 'production',

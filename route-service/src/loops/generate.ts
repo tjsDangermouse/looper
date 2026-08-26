@@ -29,6 +29,15 @@ import { targetMetresFor, targetSecondsFor, type LoopMode } from './units.js'
 const CORNER_COUNTS_TO_TRY = [1, 2, 3, 4]
 /** Fresh candidate batches tried before we honestly return fewer than three loops. */
 const MAX_DISCOVERY_BATCHES = 3
+/**
+ * Once a batch has this many passing candidates, the remaining unstarted
+ * attempts are skipped — a buffer above the three actually offered, since
+ * diversity filtering can still discard some of them. Attempts already
+ * dispatched (up to `concurrency` of them) finish anyway rather than being
+ * cancelled mid-flight, which keeps this change from touching the routing
+ * layer's own cancellation semantics.
+ */
+const EARLY_STOP_PASSING_COUNT = 5
 
 export const NO_CLEAN_LOOP_WARNING =
   'We couldn’t find a clean loop of that length from here. Try a different distance or move the start point.'
@@ -280,6 +289,7 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
   async function attempt(constructionTarget: number, qualityTarget: number, candidateVariation: number): Promise<{ analysed: Analysed[]; passing: Analysed[] }> {
     const seed = seedFor([start[0], start[1]], qualityTarget, candidateVariation)
     const attempts = generateLoopAttempts(seed, candidateCount)
+    let passingCount = 0
     const routed = await mapWithConcurrency(attempts, options.concurrency ?? 6, async loopAttempt => {
       let best: Analysed | undefined
       for (const cornerCount of CORNER_COUNTS_TO_TRY) {
@@ -317,8 +327,9 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
         if (!best || entry.report.quality.score > best.report.quality.score) best = entry
       }
       if (best) for (const reason of best.report.rejections) rejections[reason] = (rejections[reason] ?? 0) + 1
+      if (best?.report.pass) passingCount++
       return best
-    })
+    }, () => passingCount >= EARLY_STOP_PASSING_COUNT)
     const analysed = routed.filter((entry): entry is Analysed => entry !== undefined)
     return { analysed, passing: analysed.filter(entry => entry.report.pass) }
   }
@@ -636,12 +647,18 @@ function median(values: number[]): number {
 /**
  * Candidates are independent, but twenty-four at once is more load than a small
  * routing container should take from one walker.
+ *
+ * `shouldStop`, checked before each item is claimed, lets a caller stop
+ * dispatching *new* work once it already has enough — an attempt already
+ * claimed still runs to completion, so this only ever trims the tail of a
+ * batch that turned out not to be needed.
  */
-export async function mapWithConcurrency<T, R>(items: T[], limit: number, worker: (item: T) => Promise<R>): Promise<R[]> {
+export async function mapWithConcurrency<T, R>(items: T[], limit: number, worker: (item: T) => Promise<R>, shouldStop?: () => boolean): Promise<R[]> {
   const results = new Array<R>(items.length)
   let next = 0
   const runners = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
     for (;;) {
+      if (shouldStop?.()) return
       const index = next++
       if (index >= items.length) return
       results[index] = await worker(items[index])

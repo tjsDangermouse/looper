@@ -131,6 +131,16 @@ describe('generating loops', () => {
     for (const route of result.routes) expect(Math.abs(route.durationSeconds - 3600) / 3600).toBeLessThanOrEqual(.15)
   })
 
+  it('stops dispatching new attempts once enough have already passed', async () => {
+    let calls = 0
+    const counting = async (points: LngLat[]) => { calls++; return fakeEngine()(points) }
+    const full = await generateLoops(request(), { route: counting, candidateCount: 24 })
+    expect(full.routes).toHaveLength(3)
+    // Running every one of the 24 attempts to exhaustion against this fixture
+    // costs 648 calls; stopping once enough loops pass should cut that sharply.
+    expect(calls).toBeLessThan(250)
+  })
+
   it('never asks the engine for a round trip', async () => {
     const seen: LngLat[][] = []
     await generateLoops(request(), { route: async points => { seen.push(points); return fakeEngine()(points) } })

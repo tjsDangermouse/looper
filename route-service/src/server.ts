@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { config } from './config.js'
+import { ConcurrencyLimiter, LimiterBusyError } from './concurrencyLimiter.js'
 import { GraphHopperClient, GraphHopperError } from './graphhopper.js'
 import { coarseLocation, log } from './log.js'
 import { createRateLimiter } from './http/rateLimit.js'
@@ -32,9 +33,14 @@ export function createApp(options: { graphhopper?: GraphHopperClient; regionalGr
     { id: 'england' as const, bounds: REGION_BOUNDS.england, graphhopper: new GraphHopperClient(config.graphhopperEnglandUrl, config.graphhopperProfile, config.legTimeoutMs) },
   ]
   const limiter = createRateLimiter(config.rateLimitPerMinute)
+  // One ceiling per GraphHopper client, shared across every walker's request —
+  // unlike `config.concurrency`, which only bounds one request's own fan-out.
+  const engineLimiters = new WeakMap<GraphHopperClient, ConcurrencyLimiter>(
+    regionalGraphs.map(graph => [graph.graphhopper, new ConcurrencyLimiter(config.graphhopperMaxConcurrency, config.graphhopperMaxQueue)]),
+  )
 
   return createServer((request, response) => {
-    void handle(request, response, regionalGraphs, limiter).catch(error => {
+    void handle(request, response, regionalGraphs, limiter, engineLimiters).catch(error => {
       log('error', 'unhandled', { error: String(error) })
       if (!response.headersSent) send(response, 500, { error: GENERIC_ERROR })
     })
@@ -46,6 +52,7 @@ async function handle(
   response: ServerResponse,
   regionalGraphs: RegionalGraph[],
   limiter: ReturnType<typeof createRateLimiter>,
+  engineLimiters: WeakMap<GraphHopperClient, ConcurrencyLimiter>,
 ) {
   applyCors(request, response)
   if (request.method === 'OPTIONS') { response.writeHead(204); response.end(); return }
@@ -75,6 +82,7 @@ async function handle(
   }
   const regionalGraph = graphForLocation(regionalGraphs, parsed.start)
   if (!regionalGraph) return send(response, 400, { error: UNSUPPORTED_LOCATION })
+  const engineLimiter = engineLimiters.get(regionalGraph.graphhopper)
 
   // One clock for the whole request. When it runs out every routing call still
   // in flight is cancelled rather than left running against the engine.
@@ -90,8 +98,14 @@ async function handle(
       concurrency: config.concurrency,
       signal: controller.signal,
       onDiagnostics: value => { diagnostics = value },
-      route: (points, customModel) =>
-        regionalGraph.graphhopper.route(points as LngLat[], { customModel, signal: controller.signal, timeoutMs: config.legTimeoutMs }),
+      route: (points, customModel) => {
+        const call = () => regionalGraph.graphhopper.route(points as LngLat[], { customModel, signal: controller.signal, timeoutMs: config.legTimeoutMs })
+        if (!engineLimiter) return call()
+        return engineLimiter.run(call, controller.signal).catch(error => {
+          if (error instanceof LimiterBusyError) throw new GraphHopperError('Routing engine busy.', undefined, 'timeout')
+          throw error
+        })
+      },
     })
     log('info', 'loops', {
       mode: parsed.mode,
