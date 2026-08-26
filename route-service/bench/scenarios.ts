@@ -159,6 +159,12 @@ export const SCENARIOS: Scenario[] = [
     request: { ...base, distanceKm: 5, waypoints: [near(2600, 100)] },
   },
   {
+    id: 'urban-5km-production-width',
+    about: 'The urban 5 km request at production\u2019s candidate count, not the bench default \u2014 the only case comparable with a live probe',
+    network: 'dense-grid',
+    request: { ...base, overrides: { candidateCount: 24 } },
+  },
+  {
     id: 'waypoint-impossible',
     about: 'A pin far beyond the plan — must refuse with expectationExceeded, not invent a walk',
     network: 'dense-grid',

@@ -486,8 +486,22 @@ export async function buildLoopIncrementally(
  * generators, for as long as they have existed: they joined and did not trim,
  * and `out-and-back-spur` threw out twenty of every twenty-four.
  */
-export const joinAndTrimLegs = (legs: Parameters<typeof joinLegGeometries>[0]) =>
-  trimTinySpikes(joinLegGeometries(legs))
+export const joinAndTrimLegs = (
+  legs: Parameters<typeof joinLegGeometries>[0],
+  /**
+   * Places the finished walk must still pass once the trim has had its way
+   * with it.
+   *
+   * The walker's own pins, and only those. A generated shaping point is ours
+   * to move and ours to trim round — that is the whole purpose of the trim —
+   * but a pin is the problem statement. Routing through a pin and then
+   * splicing the section containing it out of the geometry offers a walk that
+   * does not go where it was asked to go, and nothing downstream would notice:
+   * the engine was asked correctly, so every check on what we *asked for*
+   * passes.
+   */
+  protectedPoints: LngLat[] = [],
+) => trimTinySpikes(joinLegGeometries(legs), protectedPoints)
 
 /**
  * Cut any backtrack under TINY_SPIKE_ROUND_TRIP_METRES straight out of the
@@ -514,11 +528,11 @@ function trimTinySpikes(joined: {
   distanceMeters: number
   durationSeconds: number
   edges?: EdgeSpan[]
-}): typeof joined {
+}, protectedPoints: LngLat[] = []): typeof joined {
   const originalDistanceMeters = joined.distanceMeters
   let current = joined
   for (;;) {
-    const next = trimTinySpikesOnce(current)
+    const next = trimTinySpikesOnce(current, protectedPoints)
     if (next.coordinates.length === current.coordinates.length) return next
     if (originalDistanceMeters - next.distanceMeters > MAX_TOTAL_TRIM_METRES) return current
     current = next
@@ -531,9 +545,14 @@ function trimTinySpikesOnce(joined: {
   distanceMeters: number
   durationSeconds: number
   edges?: EdgeSpan[]
-}): typeof joined {
+}, protectedPoints: LngLat[] = []): typeof joined {
   const { coordinates, steps, distanceMeters, durationSeconds } = joined
   const n = coordinates.length
+  // Found again on every pass rather than carried through the splice and
+  // remapped alongside the steps and edges. A pin is never what gets trimmed,
+  // so it is still exactly where it was, and looking it up again cannot go
+  // stale the way a carried index quietly can.
+  const protectedIndices = protectedIndexesFor(coordinates, protectedPoints)
   const keep = new Array<boolean>(n).fill(true)
   const anchorFor = Array.from({ length: n }, (_, index) => index)
   const reversalLimit = Math.cos((SPIKE_ANGLE_DEGREES * Math.PI) / 180)
@@ -549,9 +568,16 @@ function trimTinySpikesOnce(joined: {
     const leavingI = rawDirection(coordinates[i], coordinates[i + 1])
     let pathMetres = 0
     let spliceAt = -1
+    // Splicing at j removes everything from i + 1 to j, so the first pin
+    // lying ahead of i is a ceiling on how far this splice may reach. A walk
+    // that no longer passes a place the walker chose is not the walk that was
+    // asked for, however tidy the geometry reads afterwards — and a pin at
+    // the tip of a short cul-de-sac is exactly the shape this trim is looking
+    // for, so this is the common case rather than the corner one.
+    const firstProtectedAhead = protectedIndices.find(index => index > i) ?? Infinity
     // The last point is where the walk closes back on the start; it is
     // never a spike to be spliced away, whatever it happens to sit near.
-    for (let j = i + 2; j < n - 1; j++) {
+    for (let j = i + 2; j < n - 1 && j < firstProtectedAhead; j++) {
       pathMetres += haversine(coordinates[j - 1], coordinates[j])
       if (pathMetres > TINY_SPIKE_ROUND_TRIP_METRES) break
       if (haversine(coordinates[i], coordinates[j]) >= TINY_SPIKE_MATCH_METRES) continue
@@ -607,6 +633,35 @@ function trimTinySpikesOnce(joined: {
     durationSeconds: durationSeconds * (1 - trimmedFraction),
     ...(joined.edges ? { edges: newEdges } : {}),
   }
+}
+
+/**
+ * Where on the joined line each place the walker insisted on actually falls.
+ *
+ * A pin is an end of the leg that arrives at it, so it is one of these
+ * vertices rather than merely near one; the nearest-vertex search is for the
+ * metre or two of snapping between what was asked for and what the network
+ * offered, not for a genuine search.
+ *
+ * Sorted, so the scan above can ask for the first one ahead of a point and
+ * stop looking.
+ */
+function protectedIndexesFor(coordinates: LngLat[], points: LngLat[]): number[] {
+  if (!points.length) return []
+  const found = new Set<number>()
+  for (const point of points) {
+    let bestIndex = -1
+    let bestMetres = Infinity
+    for (let index = 0; index < coordinates.length; index++) {
+      const away = haversine(coordinates[index], point)
+      if (away < bestMetres) {
+        bestMetres = away
+        bestIndex = index
+      }
+    }
+    if (bestIndex >= 0) found.add(bestIndex)
+  }
+  return [...found].sort((a, b) => a - b)
 }
 
 /**

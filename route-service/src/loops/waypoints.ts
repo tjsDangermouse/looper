@@ -104,8 +104,26 @@ export function planSegmentOptions(
 export type AllocationOptions = {
   /** Distance or duration the whole walk is aiming at. */
   target: number
+  /**
+   * What of an option the table is adding up.
+   *
+   * A walk asked for in minutes and assembled in metres is the right length
+   * and the wrong walk: the two only move together on flat ground at an
+   * assumed pace, and the ground a walker asks about in minutes is very often
+   * the ground where they do not. Every option already carries both figures,
+   * so the table can add up whichever one was actually asked for and the
+   * distance case is exactly what it always was.
+   *
+   * Note that the *shaping points* are still placed in metres — see
+   * `planSegmentOptions`. A guide is a place on the ground, and there is no
+   * duration-space equivalent of stepping perpendicular from a midpoint. This
+   * is the one boundary where the two units legitimately meet: the slack is
+   * converted to metres to decide where to ask, and the answer that comes back
+   * is measured in whichever unit the walker used.
+   */
+  measure: (option: SegmentOption) => number
   /** Resolution of the dynamic programme, in the same unit as `target`. */
-  bucketMetres: number
+  bucketSize: number
   /** Most buckets the table may have. Bounds the work, whatever is asked for. */
   maxBuckets: number
   /** Distinct combinations kept per state, which is what makes several answers possible. */
@@ -137,7 +155,8 @@ export type AllocationOptions = {
 
 export const DEFAULT_ALLOCATION: AllocationOptions = {
   target: 0,
-  bucketMetres: 100,
+  measure: option => option.distanceMeters,
+  bucketSize: 100,
   maxBuckets: 96,
   keepPerState: 3,
   limit: 6,
@@ -148,6 +167,7 @@ export const DEFAULT_ALLOCATION: AllocationOptions = {
 export type Allocation = {
   /** One option per gap, in gap order. */
   chosen: SegmentOption[]
+  /** In whatever `measure` counts — metres by default, seconds in time mode. */
   total: number
   /** How far off the target, in the target's own unit. */
   error: number
@@ -214,18 +234,18 @@ export function allocateSlack(
   const anchors = options.anchors
   if (!byGap.length || byGap.some(gap => !gap.length)) return []
 
-  const bucketOf = (value: number) => Math.min(settings.maxBuckets - 1, Math.max(0, Math.round(value / settings.bucketMetres)))
+  const bucketOf = (value: number) => Math.min(settings.maxBuckets - 1, Math.max(0, Math.round(value / settings.bucketSize)))
   type Partial_ = { chosen: SegmentOption[]; total: number }
   let states = new Map<number, Partial_[]>([[0, [{ chosen: [], total: 0 }]]])
 
   for (const gap of byGap) {
     const next = new Map<number, Partial_[]>()
     // Options in a stable order, so the table is filled the same way every run.
-    const ordered = [...gap].sort((a, b) => a.distanceMeters - b.distanceMeters || (a.id < b.id ? -1 : 1))
+    const ordered = [...gap].sort((a, b) => settings.measure(a) - settings.measure(b) || (a.id < b.id ? -1 : 1))
     for (const bucket of [...states.keys()].sort((a, b) => a - b)) {
       for (const partial of states.get(bucket)!) {
         for (const option of ordered) {
-          const total = partial.total + option.distanceMeters
+          const total = partial.total + settings.measure(option)
           // Anything already this far over cannot come back under it, and a
           // walk twice as long as the plan is not a walk the plan describes.
           if (total > settings.target * 2) continue
@@ -256,7 +276,7 @@ export function allocateSlack(
         chosen: partial.chosen,
         total: partial.total,
         error: Math.abs(partial.total - settings.target),
-        concentration: concentrationOf(partial.chosen, byGap),
+        concentration: concentrationOf(partial.chosen, byGap, settings.measure),
         shape: anchors ? ringShapeOf(anchors, partial.chosen) : 0,
       })
     }
@@ -379,10 +399,14 @@ function deduplicated() {
  * The largest share of the walk's total detour spent in any one gap. Zero
  * gaps of detour, or none at all, is perfectly even rather than undefined.
  */
-function concentrationOf(chosen: SegmentOption[], byGap: SegmentOption[][]): number {
+function concentrationOf(
+  chosen: SegmentOption[],
+  byGap: SegmentOption[][],
+  measure: (option: SegmentOption) => number,
+): number {
   const detours = chosen.map((option, gap) => {
-    const shortest = Math.min(...byGap[gap].map(candidate => candidate.distanceMeters))
-    return Math.max(0, option.distanceMeters - shortest)
+    const shortest = Math.min(...byGap[gap].map(candidate => measure(candidate)))
+    return Math.max(0, measure(option) - shortest)
   })
   const total = detours.reduce((sum, detour) => sum + detour, 0)
   if (total <= 0) return 0

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { GraphHopperError, type GraphHopperLeg } from '../src/graphhopper.js'
 import { NO_CLEAN_LOOP_WARNING, RETRACES_WARNING, generateLoops, mapWithConcurrency, type LoopRequest } from '../src/loops/generate.js'
-import { haversine, type LngLat } from '../src/loops/geo.js'
+import { bearingBetween, destination, haversine, type LngLat } from '../src/loops/geo.js'
 import { RequestMetrics } from '../src/loops/metrics.js'
 
 const START = { lng: -4.4816, lat: 54.1506 }
@@ -351,6 +351,49 @@ describe('stopping early without letting timing decide', () => {
   })
 })
 
+describe('sweeping the loop shapes across the batch', () => {
+  const flags = { progressiveCornerSweep: true }
+
+  it('offers exactly the same walks as sweeping inside each candidate', async () => {
+    const inside = await generateLoops(request(), { route: fakeEngine() })
+    const across = await generateLoops(request(), { route: fakeEngine(), flags })
+    expect(across.routes.map(route => route.geometry)).toEqual(inside.routes.map(route => route.geometry))
+    expect(across.routes.map(route => route.label)).toEqual(inside.routes.map(route => route.label))
+  })
+
+  it('offers the same walks whatever the concurrency is set to', async () => {
+    const six = await generateLoops(request(), { route: fakeEngine(), flags, concurrency: 6 })
+    for (const concurrency of [1, 3, 12]) {
+      const other = await generateLoops(request(), { route: fakeEngine(), flags, concurrency })
+      expect(other.routes.map(route => route.geometry)).toEqual(six.routes.map(route => route.geometry))
+    }
+  })
+
+  it('offers the same walks however slowly individual calls came back', async () => {
+    const steady = await generateLoops(request(), { route: fakeEngine(), flags })
+    const shuffled = await generateLoops(request(), {
+      route: fakeEngine({ delayMs: points => (Math.abs(Math.round(points[1][0] * 1e6)) % 7) * 2 }),
+      flags,
+    })
+    expect(shuffled.routes.map(route => route.geometry)).toEqual(steady.routes.map(route => route.geometry))
+  })
+
+  it('still reaches the awkward shapes that the narrow sweep gives up on', async () => {
+    // Ground where no leg over 800 m can be routed, so the three- and
+    // two-cornered rings cannot be built at this distance and only a
+    // five-legged one fits. This is the walk in twenty that `narrowCornerSweep`
+    // costs — putting those shapes last has to keep it, or it is the same
+    // trade under a different name.
+    const awkward = () => fakeEngine({ fail: points => haversine(points[0], points[1]) > 800 })
+
+    const narrow = await generateLoops(request(), { route: awkward(), flags: { narrowCornerSweep: true } })
+    expect(narrow.routes).toHaveLength(0)
+
+    const progressive = await generateLoops(request(), { route: awkward(), flags })
+    expect(progressive.routes.length).toBeGreaterThan(0)
+  })
+})
+
 describe('measuring overlap on the network', () => {
   it('falls back to geometry when the engine reports no edge ids, and says so', async () => {
     const result = await generateLoops(request(), {
@@ -501,6 +544,123 @@ describe('asking the network which way to look first', () => {
     const one = await generateLoops(request(), { route: fakeEngine(), reachFrom, flags })
     const two = await generateLoops(request(), { route: fakeEngine(), reachFrom, flags })
     expect(two.routes.map(route => route.geometry)).toEqual(one.routes.map(route => route.geometry))
+  })
+})
+
+describe('a waypoint walk asked for in minutes', () => {
+  const flags = { waypointBackbone: true }
+  const pins = [{ lng: -4.4746, lat: 54.1546 }, { lng: -4.4886, lat: 54.1566 }]
+  /** 72 minutes is 6 km at the assumed pace, so the two fixtures are the same ground. */
+  const asked = { mode: 'time' as const, durationMinutes: 72, waypoints: pins }
+
+  /** Ground the walker covers faster than the 5 km/h the target was sized at. */
+  const atSpeed = (kmh: number) => {
+    const engine = fakeEngine()
+    return async (points: LngLat[]): Promise<GraphHopperLeg> => {
+      const leg = await engine(points)
+      return { ...leg, durationSeconds: leg.distanceMeters / (kmh * 1000 / 3600) }
+    }
+  }
+
+  it('answers the time that was asked for on ground that walks faster than assumed', async () => {
+    // Within the reach of the options the first pass offers, no re-aim is
+    // needed: the combinations are all routed and all measured, so the one
+    // that takes the right time is found whatever order the table ranked them
+    // in. This is the case that already worked, held in place.
+    const result = await generateLoops(
+      request({ ...asked, overrides: { quality: { maxDurationError: 0.05, maxDistanceError: 0.6 } } }),
+      { route: atSpeed(7), flags },
+    )
+    expect(result.routes.length).toBeGreaterThan(0)
+    expect(result.diagnostics!.retry).toBe('none')
+    for (const route of result.routes) {
+      expect(Math.abs(route.durationSeconds / (72 * 60) - 1)).toBeLessThan(0.05)
+    }
+  })
+
+  it('re-sizes the options when the time asked for is out of their reach', async () => {
+    // The shaping points are still placed in metres, from the assumed pace, so
+    // a pace far enough out puts every option the table can see too short —
+    // and the closest combination it can assemble is still not close. Measuring
+    // what came back and asking again is the only thing that helps here.
+    const result = await generateLoops(
+      request({ ...asked, overrides: { quality: { maxDurationError: 0.05, maxDistanceError: 0.9 } } }),
+      { route: atSpeed(9), flags },
+    )
+    expect(result.diagnostics!.retry).toBe('duration')
+    for (const route of result.routes) {
+      expect(Math.abs(route.durationSeconds / (72 * 60) - 1)).toBeLessThan(0.05)
+    }
+  })
+
+  it('re-aims at nothing when the assumed pace was right', async () => {
+    const result = await generateLoops(request(asked), { route: atSpeed(5), flags })
+    expect(result.routes.length).toBeGreaterThan(0)
+    expect(result.diagnostics!.retry).toBe('none')
+  })
+})
+
+describe('a pin at the end of a cul-de-sac', () => {
+  const flags = { waypointBackbone: true }
+  const pin = { lng: -4.4666, lat: 54.1546 }
+  const pinAt: LngLat = [pin.lng, pin.lat]
+  /**
+   * The junction the cul-de-sac leaves the road at. Both the leg arriving at
+   * the pin and the leg leaving it come through here, so the joined walk runs
+   * out to the pin and straight back down the same stub — a sixty-metre
+   * out-and-back, well inside what the tiny-spike trim exists to remove.
+   */
+  const mouth = destination(pinAt, 30, bearingBetween(pinAt, [START.lng, START.lat]))
+
+  /** The straight-line engine above, but the pin is only reachable up a stub. */
+  const cameo = (corners: LngLat[]): GraphHopperLeg => {
+    const coordinates: LngLat[] = []
+    let distanceMeters = 0
+    for (let index = 1; index < corners.length; index++) {
+      const straight = haversine(corners[index - 1], corners[index])
+      const steps = Math.max(2, Math.round(straight / 30))
+      for (let step = index === 1 ? 0 : 1; step <= steps; step++) {
+        coordinates.push([
+          corners[index - 1][0] + (corners[index][0] - corners[index - 1][0]) * (step / steps),
+          corners[index - 1][1] + (corners[index][1] - corners[index - 1][1]) * (step / steps),
+        ])
+      }
+      distanceMeters += straight * 1.52
+    }
+    return {
+      coordinates,
+      distanceMeters,
+      durationSeconds: distanceMeters / (5000 / 3600),
+      steps: [
+        { instruction: 'Continue', distanceMeters, durationSeconds: distanceMeters / 1.39, sign: 0, maneuver: 'continue', startIndex: 0, endIndex: coordinates.length - 1 },
+        { instruction: 'Arrive at destination', distanceMeters: 0, durationSeconds: 0, sign: 4, maneuver: 'finish', startIndex: coordinates.length - 1, endIndex: coordinates.length - 1 },
+      ],
+    }
+  }
+
+  const engine = async (points: LngLat[]): Promise<GraphHopperLeg> => {
+    const [from, to] = points
+    if (haversine(to, pinAt) < 1) return cameo([from, mouth, pinAt])
+    if (haversine(from, pinAt) < 1) return cameo([pinAt, mouth, to])
+    return cameo([from, to])
+  }
+
+  it('still passes the pin, however tidy trimming the stub would look', async () => {
+    const result = await generateLoops(request({ waypoints: [pin], distanceKm: 5 }), { route: engine, flags })
+    expect(result.routes.length).toBeGreaterThan(0)
+    for (const route of result.routes) {
+      const line = route.geometry.coordinates as LngLat[]
+      expect(Math.min(...line.map(point => haversine(point, pinAt)))).toBeLessThan(5)
+    }
+  })
+
+  it('still trims the stub when no walker asked to go up it', async () => {
+    // The same ground, the same engine, and nothing pinned: the out-and-back
+    // has nothing to protect it and goes, exactly as it always did.
+    const result = await generateLoops(request({ distanceKm: 5 }), { route: engine, flags })
+    const visited = result.routes.filter(route =>
+      (route.geometry.coordinates as LngLat[]).some(point => haversine(point, pinAt) < 5))
+    expect(visited).toHaveLength(0)
   })
 })
 

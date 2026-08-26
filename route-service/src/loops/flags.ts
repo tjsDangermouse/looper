@@ -44,6 +44,17 @@ export type AlgorithmFlags = {
    */
   narrowCornerSweep: boolean
   /**
+   * Sweep the corner counts across the whole batch rather than inside each
+   * candidate: every bearing at three corners first, then only the bearings
+   * that failed get two, and only what still fails gets one and four.
+   *
+   * Not `narrowCornerSweep` by another name. That one gives up on the awkward
+   * shapes permanently and pays for it in the walk it cannot find; this one
+   * only puts them last, so the promenade and the housing estate still get
+   * their answer — after the batch has established it needs one.
+   */
+  progressiveCornerSweep: boolean
+  /**
    * Only pay for a cheaper reroute of an over-long leg when the leg actually
    * looks like it detoured round something. A leg that is long because its
    * target is far away is not going to be shortened by relaxing a penalty it
@@ -116,6 +127,8 @@ export const DEFAULT_FLAGS: AlgorithmFlags = {
   // separation between the ones that remain. Whether that trade is worth it
   // depends on the ground, so it stays a decision rather than a default.
   narrowCornerSweep: false,
+  // Off until the benchmark says otherwise, like everything else here.
+  progressiveCornerSweep: false,
   budgetDetourGate: true,
   pullbackTurnOnly: true,
   guidePointPullback: false,

@@ -106,6 +106,45 @@ describe('spending the slack across the gaps', () => {
     expect(allocations[0].concentration).toBeCloseTo(0.5, 5)
   })
 
+  it('adds up whichever quantity the walker asked for', () => {
+    // A steep option and a flat one, deliberately not proportional: the steep
+    // way round is the shorter walk and the longer one.
+    const steep = (gap: number, id: string, distanceMeters: number, durationSeconds: number): SegmentOption =>
+      ({ gap, id: `${gap}-${id}`, guides: [], distanceMeters, durationSeconds })
+    const gaps = [
+      [steep(0, 'flat', 2000, 1440), steep(0, 'steep', 1500, 1800)],
+      [steep(1, 'flat', 2000, 1440), steep(1, 'steep', 1500, 1800)],
+    ]
+
+    // Forty-eight minutes, asked for in minutes: the two steep gaps.
+    const [byTime] = allocateSlack(gaps, {
+      target: 3600,
+      measure: option => option.durationSeconds,
+      bucketSize: 90,
+    })
+    expect(byTime.chosen.map(chosen => chosen.id)).toEqual(['0-steep', '1-steep'])
+    expect(byTime.error).toBe(0)
+
+    // The same ground asked for in metres wants the other pair entirely.
+    const [byDistance] = allocateSlack(gaps, { target: 4000 })
+    expect(byDistance.chosen.map(chosen => chosen.id)).toEqual(['0-flat', '1-flat'])
+    expect(byDistance.error).toBe(0)
+  })
+
+  it('measures how lopsided the spending was in that same quantity', () => {
+    const steep = (gap: number, id: string, distanceMeters: number, durationSeconds: number): SegmentOption =>
+      ({ gap, id: `${gap}-${id}`, guides: [], distanceMeters, durationSeconds })
+    // Every option is the same length; only the time differs. Measured in
+    // metres nothing is a detour at all, so nothing can be concentrated.
+    const gaps = [
+      [steep(0, 'quick', 1000, 600), steep(0, 'slow', 1000, 1200)],
+      [steep(1, 'quick', 1000, 600), steep(1, 'slow', 1000, 1200)],
+    ]
+    const [byTime] = allocateSlack(gaps, { target: 1800, measure: option => option.durationSeconds, bucketSize: 60 })
+    expect(byTime.total).toBe(1800)
+    expect(byTime.concentration).toBe(1)
+  })
+
   it('offers several different ways of spending it', () => {
     const gaps = [0, 1, 2].map(gap => [200, 400, 600, 800].map(metres => option(gap, `${metres}`, metres)))
     const allocations = allocateSlack(gaps, { target: 1500, limit: 5 })

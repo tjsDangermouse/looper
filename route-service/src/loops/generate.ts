@@ -59,6 +59,18 @@ const CORNER_COUNTS_TO_TRY = [3, 2, 1, 4]
  * depends on the ground, so it is a flag rather than a decision.
  */
 const NARROW_CORNER_COUNTS = [3, 2]
+/**
+ * The same shapes as `CORNER_COUNTS_TO_TRY`, in the same order, but as passes
+ * over the whole batch instead of a loop inside one candidate.
+ *
+ * The order is the cost either way. What changes is who pays it: sweeping
+ * inside a candidate, a bearing that never works pays for all four shapes
+ * before any other bearing is asked a single question. Sweeping across the
+ * batch, the three-cornered ring — which is what most ground wants — is tried
+ * everywhere first, and the expensive tail is only reached by the bearings
+ * that have actually earned it, on a batch that still needs them.
+ */
+const PROGRESSIVE_CORNER_WAVES: readonly (readonly number[])[] = [[3], [2], [1, 4]]
 /** Fresh candidate batches tried before we honestly return fewer than three loops. */
 const MAX_DISCOVERY_BATCHES = 3
 /**
@@ -520,6 +532,8 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
       if (screened.length) attempts = screened
     }
 
+    if (flags.progressiveCornerSweep) return progressiveSweep(attempts)
+
     if (!flags.diversityAwareEarlyStop) {
       const routed = await mapWithConcurrency(attempts, options.concurrency ?? 6, timed, () => passingCount >= EARLY_STOP_PASSING_COUNT)
       const analysed = routed.filter((entry): entry is Analysed => entry !== undefined)
@@ -583,8 +597,28 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
 
     async function buildOne(loopAttempt: LoopAttempt): Promise<Analysed | undefined> {
       metrics?.countCandidateBuilt()
-      let best: Analysed | undefined
-      for (const cornerCount of flags.narrowCornerSweep ? NARROW_CORNER_COUNTS : CORNER_COUNTS_TO_TRY) {
+      const best = await buildShapes(loopAttempt, flags.narrowCornerSweep ? NARROW_CORNER_COUNTS : CORNER_COUNTS_TO_TRY)
+      record(best)
+      return best
+    }
+
+    /**
+     * Try this bearing at each of `cornerCounts` in turn, stopping at the
+     * first shape that passes, and hand back the best of what came of it.
+     *
+     * Counts nothing. Which shapes a bearing is offered is the sweep's
+     * business and may be spread over several passes; how many candidates were
+     * built and why they were refused is the request's business and has to be
+     * said once per bearing, not once per shape it was tried at.
+     */
+    async function buildShapes(
+      loopAttempt: LoopAttempt,
+      cornerCounts: readonly number[],
+      /** What earlier passes over this same bearing already found, if anything. */
+      soFar?: Analysed,
+    ): Promise<Analysed | undefined> {
+      let best = soFar
+      for (const cornerCount of cornerCounts) {
         const entry = await buildAndAnalyse(loopAttempt, { cornerCount, targetScale: 1, bearingShift: 0 }, options.route)
         if (!entry) continue
         // A clean shape at this corner count: no need to try a fussier one.
@@ -599,7 +633,17 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
         const repaired = await tryRepair(best, loopAttempt)
         if (repaired) best = repaired
       }
+      return best
+    }
 
+    /**
+     * What one bearing finally came to, counted once.
+     *
+     * `countPassing` is off for a sweep that has already counted a bearing as
+     * it passed, because the stopping rule needed to know at the time rather
+     * than at the end.
+     */
+    function record(best: Analysed | undefined, countPassing = true): void {
       if (best) {
         metrics?.countCandidateRouted()
         for (const reason of best.report.rejections) {
@@ -608,10 +652,110 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
         }
       }
       if (best?.report.pass) {
-        passingCount++
+        if (countPassing) passingCount++
         metrics?.countCandidatePassed()
       }
-      return best
+    }
+
+    /**
+     * The corner sweep across the batch rather than inside each candidate.
+     *
+     * Each pass offers every outstanding bearing one group of shapes, and a
+     * bearing that has already produced an offerable walk takes no further
+     * part: a fussier shape cannot improve on a walk we are willing to offer.
+     * Between passes — and, as below, partway through one — the accumulated
+     * pool is asked whether it can already fill the offer, and the batch stops
+     * the moment it can.
+     *
+     * Stopping is decided on an unbroken finished *prefix* of the pass, never
+     * on whichever calls happened to come back first, for the same reason the
+     * diversity-aware stop above is: an answer that depends on how the work
+     * interleaved is not an answer. Attempts past the deciding prefix may well
+     * have finished, and are dropped anyway.
+     */
+    async function progressiveSweep(candidates: LoopAttempt[]): Promise<{ analysed: Analysed[]; passing: Analysed[] }> {
+      const maxShared = overrides?.maxSharedFraction ?? MAX_SHARED_FRACTION
+      const best = new Map<number, Analysed>()
+      // Once per bearing, here, rather than once per pass over it: how many
+      // candidates a request built is a fact about the batch, not the sweep.
+      for (let counted = 0; counted < candidates.length; counted++) metrics?.countCandidateBuilt()
+      let stoppedBecause: 'passing-quota' | 'diversity-satisfied' | undefined
+
+      for (const wave of PROGRESSIVE_CORNER_WAVES) {
+        const outstanding = candidates.filter(candidate => !best.get(candidate.index)?.report.pass)
+        if (!outstanding.length || stoppedBecause) break
+        const wavefront = outstanding.map((candidate, position) => ({ candidate, position }))
+        const results = new Array<Analysed | undefined>(wavefront.length)
+        const finished = new Array<boolean>(wavefront.length).fill(false)
+        let settledPrefix = 0
+        let stopAtPrefix = -1
+        const alreadyPassing = new Set<number>()
+
+        /**
+         * Everything this batch knows once `prefix` of this pass has settled:
+         * what earlier passes left for the bearings this one has not reached,
+         * and this pass's own answers for the ones it has.
+         */
+        const poolAt = (prefix: number): Analysed[] => {
+          const superseded = new Set(wavefront.slice(0, prefix).map(entry => entry.candidate.index))
+          return [
+            ...[...best.entries()].filter(([index]) => !superseded.has(index)).map(([, entry]) => entry),
+            ...results.slice(0, prefix).filter((entry): entry is Analysed => entry !== undefined),
+          ]
+        }
+
+        const enoughAlreadyNow = (prefix: number): 'passing-quota' | 'diversity-satisfied' | undefined => {
+          const passed = poolAt(prefix).filter(entry => entry.report.pass)
+          if (passed.length >= EARLY_STOP_PASSING_COUNT) return 'passing-quota'
+          // The stricter question — can the selector actually fill three
+          // genuinely different walks — is the diversity flag's to ask. Asking
+          // it here regardless would make this flag two changes at once, and
+          // the pair is measured together rather than assumed.
+          if (!flags.diversityAwareEarlyStop || passed.length < 3 + EARLY_STOP_RESERVE) return undefined
+          return selectPreferredDiverseRoutes(passed.map(toSelectable), 3, maxShared).length >= 3
+            ? 'diversity-satisfied'
+            : undefined
+        }
+
+        await mapWithConcurrency(wavefront, options.concurrency ?? 6, async ({ candidate, position }) => {
+          const build = () => buildShapes(candidate, wave, best.get(candidate.index))
+          const entry = metrics ? await metrics.timeCandidate(build) : await build()
+          results[position] = entry
+          finished[position] = true
+          if (entry?.report.pass && !alreadyPassing.has(candidate.index)) {
+            alreadyPassing.add(candidate.index)
+            passingCount++
+          }
+          // The settled prefix is the diversity rule's discipline, because
+          // that rule is the one whose answer would otherwise depend on which
+          // calls came back first. The plain quota is a count, and a count of
+          // finished work is the same count however the work interleaved.
+          if (!flags.diversityAwareEarlyStop) return entry
+          while (settledPrefix < wavefront.length && finished[settledPrefix]) {
+            settledPrefix++
+            if (stopAtPrefix >= 0) continue
+            const verdict = enoughAlreadyNow(settledPrefix)
+            if (verdict) {
+              stopAtPrefix = settledPrefix
+              stoppedBecause = verdict
+            }
+          }
+          return entry
+        }, () => (flags.diversityAwareEarlyStop ? stopAtPrefix >= 0 : passingCount >= EARLY_STOP_PASSING_COUNT))
+
+        if (!flags.diversityAwareEarlyStop && passingCount >= EARLY_STOP_PASSING_COUNT) stoppedBecause = 'passing-quota'
+        const kept = stopAtPrefix >= 0 ? stopAtPrefix : wavefront.length
+        for (let position = 0; position < kept; position++) {
+          const entry = results[position]
+          if (entry) best.set(wavefront[position].candidate.index, entry)
+        }
+      }
+
+      metrics?.recordEarlyStop(stoppedBecause ?? 'exhausted')
+      // In bearing order, never in the order the engine happened to answer in.
+      const analysed = [...best.entries()].sort(([a], [b]) => a - b).map(([, entry]) => entry)
+      for (const entry of analysed) record(entry, false)
+      return { analysed, passing: analysed.filter(entry => entry.report.pass) }
     }
 
     /**
@@ -790,6 +934,12 @@ async function generateWaypointLoops(
   targetSeconds: number | undefined,
 ): Promise<LoopResponse> {
   const points: LngLat[] = [start, ...request.waypoints!.map(point => [point.lng, point.lat] as LngLat), start]
+  /**
+   * The walker's own pins, separately from the sequence they sit in: a shaped
+   * candidate threads a guide point into that sequence, and a guide is ours to
+   * trim round where a pin is not.
+   */
+  const pins: LngLat[] = points.slice(1, -1)
   // This is only the lower-bound check. It is deliberately routed without
   // anti-retrace penalties; offering it would turn a single waypoint into the
   // same path out and back, which is not a loop.
@@ -834,7 +984,7 @@ async function generateWaypointLoops(
     // of why, or the newer code's failure is lost behind the older one's.
     handedOver = built
   }
-  const direct = await routeWaypointCandidate(points, options.route, false, options.signal, 'waypoint-direct')
+  const direct = await routeWaypointCandidate(points, options.route, false, options.signal, 'waypoint-direct', pins)
   if (!direct) {
     return { routes: [], warning: 'One or more waypoints cannot be reached on foot.', diagnostics: reportLegacy('unreachable', 0) }
   }
@@ -885,7 +1035,7 @@ async function generateWaypointLoops(
   // Try the pins themselves with avoidance on the return legs. A waypoint on
   // an existing loop often already divides it into two perfectly good paths;
   // forcing an extra corner into that route only makes it less likely to fit.
-  const pinOnly = await routeWaypointCandidate(points, options.route, true, options.signal, 'waypoint-leg')
+  const pinOnly = await routeWaypointCandidate(points, options.route, true, options.signal, 'waypoint-leg', pins)
 
   // Add one invisible shaping point to each alternative. Its reach is solved
   // from the local network stretch measured by the direct route, rather than
@@ -908,7 +1058,7 @@ async function generateWaypointLoops(
     const scales = [0.78, 0.9, 1, 1, 1.1, 1.22]
     const guide = destination(start, guideRadius * scales[variant % scales.length], attempt.initialBearing)
     const shaped = [...points.slice(0, insertion), guide, ...points.slice(insertion)]
-    return routeWaypointCandidate(shaped, options.route, true, options.signal, 'waypoint-leg')
+    return routeWaypointCandidate(shaped, options.route, true, options.signal, 'waypoint-leg', pins)
   })
   const analysed = [pinOnly, ...guided]
     .filter((candidate): candidate is RoutedCandidate => candidate !== undefined)
@@ -1081,6 +1231,8 @@ async function generateBackboneWaypointLoops(
   const rejections: Record<string, number> = {}
   let assembled = 0
   let passed = 0
+  /** Set when the ground turned out to walk at a different pace than assumed. */
+  let retry: Retry = 'none'
   /** Emitted on every exit, so no way of giving up is silent. */
   const report = (stage: WaypointStage, offered: number, shapes?: Diagnostics['backboneShapes']): Diagnostics => {
     const diagnostics: Diagnostics = {
@@ -1089,7 +1241,7 @@ async function generateBackboneWaypointLoops(
       passed,
       offered,
       rejections,
-      retry: 'none',
+      retry,
       retracing: false,
       targetMetres,
       stage,
@@ -1140,113 +1292,160 @@ async function generateBackboneWaypointLoops(
     }
   }
 
-  const slack = Math.max(0, targetMetres - backbone)
-  const perGap = slack / gapCount
+  /**
+   * Build every combination worth routing for a given construction distance,
+   * and measure each one.
+   *
+   * Separated out because in time mode this may be worth doing twice. The
+   * table below adds up whichever quantity the walker asked for, so a
+   * combination it picks really is the right *duration* — but how long the
+   * options are in the first place comes from `slack`, and `slack` is in
+   * metres, from an assumed pace. On ground where that pace is wrong, every
+   * option offered is the wrong size and the closest one the table can reach
+   * is still not close. Measuring what came back and asking again is the same
+   * answer the ring generator reached for the same reason.
+   */
+  const assemble = async (aimMetres: number) => {
+    const slack = Math.max(0, aimMetres - backbone)
+    const perGap = slack / gapCount
 
-  // A few ways of spending part of the slack in each gap, routed once each.
-  const byGap: SegmentOption[][] = []
-  const routed = new Map<string, RoutedLeg[]>()
-  for (let gap = 0; gap < gapCount; gap++) {
-    const forThisGap: SegmentOption[] = [{
-      gap,
-      id: `${gap}-direct`,
-      guides: [],
-      distanceMeters: directs[gap].distanceMeters,
-      durationSeconds: directs[gap].durationSeconds,
-    }]
-    routed.set(`${gap}-direct`, [directs[gap]])
-
-    const crow = haversine(anchors[gap], anchors[gap + 1])
-    const stretch = crow > 0 ? directs[gap].distanceMeters / crow : 1
-    for (const plan of planSegmentOptions(gap, anchors[gap], anchors[gap + 1], perGap, stretch)) {
-      if (!plan.guides.length) continue
-      const legs = await routeThrough(
-        options.route,
-        [anchors[gap], ...plan.guides, anchors[gap + 1]],
-        options.signal,
-        (kind, kept) => metrics?.countFixup(kind, kept),
-        flags.guidePointPullback,
-      )
-      if (!legs) continue
-      routed.set(plan.id, legs)
-      forThisGap.push({
+    // A few ways of spending part of the slack in each gap, routed once each.
+    const byGap: SegmentOption[][] = []
+    const routed = new Map<string, RoutedLeg[]>()
+    for (let gap = 0; gap < gapCount; gap++) {
+      const forThisGap: SegmentOption[] = [{
         gap,
-        id: plan.id,
-        guides: plan.guides,
-        distanceMeters: legs.reduce((total, leg) => total + leg.distanceMeters, 0),
-        durationSeconds: legs.reduce((total, leg) => total + leg.durationSeconds, 0),
-      })
-    }
-    byGap.push(forThisGap)
-  }
+        id: `${gap}-direct`,
+        guides: [],
+        distanceMeters: directs[gap].distanceMeters,
+        durationSeconds: directs[gap].durationSeconds,
+      }]
+      routed.set(`${gap}-direct`, [directs[gap]])
 
-  const allocations = allocateSlack(byGap, {
-    anchors,
-    target: targetMetres,
-    bucketMetres: Math.max(25, targetMetres * BACKBONE_BUCKET_SHARE),
-    limit: BACKBONE_ASSEMBLY_LIMIT,
-  })
-  if (!allocations.length) return handOver('no-allocation', rejections)
-  // Reported on every exit from here on: if `enclosing` is zero the shape
-  // preference had nothing to prefer, and the problem is where the shaping
-  // points are put rather than which combination is chosen.
-  const shapes: Diagnostics['backboneShapes'] = {
-    assembled: allocations.length,
-    enclosing: allocations.filter(allocation => allocation.shape >= DEFAULT_ALLOCATION.minShape).length,
-    best: Number(Math.max(...allocations.map(allocation => allocation.shape)).toFixed(3)),
-  }
-
-  const analysed = allocations.map(allocation => {
-    const legs = allocation.chosen.flatMap(option => routed.get(option.id) ?? [])
-    const joined = joinAndTrimLegs(legs)
-    const candidate: RoutedCandidate = {
-      attemptId: `backbone-${allocation.chosen.map(option => option.id).join('_')}`,
-      legs,
-      ...joined,
-      legDistances: legs.map(leg => leg.distanceMeters),
+      const crow = haversine(anchors[gap], anchors[gap + 1])
+      const stretch = crow > 0 ? directs[gap].distanceMeters / crow : 1
+      for (const plan of planSegmentOptions(gap, anchors[gap], anchors[gap + 1], perGap, stretch)) {
+        if (!plan.guides.length) continue
+        const legs = await routeThrough(
+          options.route,
+          [anchors[gap], ...plan.guides, anchors[gap + 1]],
+          options.signal,
+          (kind, kept) => metrics?.countFixup(kind, kept),
+          flags.guidePointPullback,
+        )
+        if (!legs) continue
+        routed.set(plan.id, legs)
+        forThisGap.push({
+          gap,
+          id: plan.id,
+          guides: plan.guides,
+          distanceMeters: legs.reduce((total, leg) => total + leg.distanceMeters, 0),
+          durationSeconds: legs.reduce((total, leg) => total + leg.durationSeconds, 0),
+        })
+      }
+      byGap.push(forThisGap)
     }
-    const durationSeconds = durationFor(candidate.distanceMeters, candidate.durationSeconds)
-    const traversals = flags.edgeOverlap ? measureTraversals(candidate.coordinates, candidate.edges) : undefined
-    const quality = analyseRouteQuality({
-      traversals,
-      coordinates: candidate.coordinates,
-      start,
-      distanceMeters: candidate.distanceMeters,
-      durationSeconds,
-      targetMetres,
-      targetSeconds,
-      legDistances: candidate.legDistances,
-      maneuverSigns: candidate.steps.map(step => step.sign),
-      // A pin can split an otherwise excellent walk one metre from a corner,
-      // so leg balance says where the walker tapped rather than whether the
-      // walk is good. Everything about the walk's own shape still applies.
-      thresholds: {
-        ...request.overrides?.quality,
-        maxDistanceError: request.overrides?.quality?.maxDistanceError ?? WAYPOINT_DISTANCE_TOLERANCE,
-        maxDurationError: request.overrides?.quality?.maxDurationError ?? WAYPOINT_DISTANCE_TOLERANCE,
-        maxLegShare: 1,
-        minLegShare: 0,
-      },
+
+    // The shaping points were placed in metres either way — a guide is a place
+    // on the ground, not a duration — but which combination of them adds up to
+    // the walk that was asked for is a question about the thing that was asked
+    // for. The resolution scales with the target, so the table is the same size
+    // and the same shape whichever unit it is counting in.
+    const bucketMetres = Math.max(25, aimMetres * BACKBONE_BUCKET_SHARE)
+    const allocations = allocateSlack(byGap, {
+      anchors,
+      target: targetSeconds ?? aimMetres,
+      measure: targetSeconds
+        ? option => durationFor(option.distanceMeters, option.durationSeconds)
+        : option => option.distanceMeters,
+      bucketSize: targetSeconds ? bucketMetres / aimMetres * targetSeconds : bucketMetres,
+      limit: BACKBONE_ASSEMBLY_LIMIT,
     })
-    if (flags.edgeOverlap) metrics?.countOverlapSource(quality.overlapSource)
-    assembled++
-    if (quality.pass) passed++
-    for (const reason of quality.rejections) {
-      rejections[reason] = (rejections[reason] ?? 0) + 1
-      metrics?.countRejection(reason)
+    if (!allocations.length) return undefined
+    // Reported on every exit from here on: if `enclosing` is zero the shape
+    // preference had nothing to prefer, and the problem is where the shaping
+    // points are put rather than which combination is chosen.
+    const shapes: Diagnostics['backboneShapes'] = {
+      assembled: allocations.length,
+      enclosing: allocations.filter(allocation => allocation.shape >= DEFAULT_ALLOCATION.minShape).length,
+      best: Number(Math.max(...allocations.map(allocation => allocation.shape)).toFixed(3)),
     }
-    return {
-      candidate,
-      report: quality,
-      coordinates: candidate.coordinates,
-      quality: quality.quality,
-      bearing: bearingOf(candidate.coordinates, start),
-      traversals,
-      totalMetres: candidate.distanceMeters,
-      durationSeconds,
-    }
-  })
 
+    const analysed = allocations.map(allocation => {
+      const legs = allocation.chosen.flatMap(option => routed.get(option.id) ?? [])
+      // The anchors either end are the start, which the trim never touches
+      // anyway; everything between them is a place the walker chose.
+      const joined = joinAndTrimLegs(legs, anchors.slice(1, -1))
+      const candidate: RoutedCandidate = {
+        attemptId: `backbone-${allocation.chosen.map(option => option.id).join('_')}`,
+        legs,
+        ...joined,
+        legDistances: legs.map(leg => leg.distanceMeters),
+      }
+      const durationSeconds = durationFor(candidate.distanceMeters, candidate.durationSeconds)
+      const traversals = flags.edgeOverlap ? measureTraversals(candidate.coordinates, candidate.edges) : undefined
+      const quality = analyseRouteQuality({
+        traversals,
+        coordinates: candidate.coordinates,
+        start,
+        distanceMeters: candidate.distanceMeters,
+        durationSeconds,
+        targetMetres,
+        targetSeconds,
+        legDistances: candidate.legDistances,
+        maneuverSigns: candidate.steps.map(step => step.sign),
+        // A pin can split an otherwise excellent walk one metre from a corner,
+        // so leg balance says where the walker tapped rather than whether the
+        // walk is good. Everything about the walk's own shape still applies.
+        thresholds: {
+          ...request.overrides?.quality,
+          maxDistanceError: request.overrides?.quality?.maxDistanceError ?? WAYPOINT_DISTANCE_TOLERANCE,
+          maxDurationError: request.overrides?.quality?.maxDurationError ?? WAYPOINT_DISTANCE_TOLERANCE,
+          maxLegShare: 1,
+          minLegShare: 0,
+        },
+      })
+      if (flags.edgeOverlap) metrics?.countOverlapSource(quality.overlapSource)
+      assembled++
+      if (quality.pass) passed++
+      for (const reason of quality.rejections) {
+        rejections[reason] = (rejections[reason] ?? 0) + 1
+        metrics?.countRejection(reason)
+      }
+      return {
+        candidate,
+        report: quality,
+        coordinates: candidate.coordinates,
+        quality: quality.quality,
+        bearing: bearingOf(candidate.coordinates, start),
+        traversals,
+        totalMetres: candidate.distanceMeters,
+        durationSeconds,
+      }
+    })
+
+    return { shapes, analysed }
+  }
+
+  let built = await assemble(targetMetres)
+  if (!built) return handOver('no-allocation', rejections)
+
+  // Clean walks that took the wrong amount of time: the pace this ground was
+  // sized at was wrong for it, so re-aim the distance from what was measured
+  // and assemble once more. The target the walks are *judged* against never
+  // moves — that is what the walker asked for.
+  if (targetSeconds && !built.analysed.some(entry => entry.report.pass)) {
+    const durationMisses = built.analysed.filter(entry => entry.report.durationOnly)
+    if (durationMisses.length) {
+      const observed = median(durationMisses.map(entry => entry.durationSeconds))
+      const again = await assemble(targetMetres * clampScale(targetSeconds / observed))
+      metrics?.countReaim()
+      retry = 'duration'
+      if (again) built = again
+    }
+  }
+
+  const { shapes, analysed } = built
   const offerable = analysed.filter(entry => entry.report.pass)
   // Every assembled walk failed a gate. `rejections` says which, which is the
   // only thing that makes this case debuggable from a log line.
@@ -1523,6 +1722,8 @@ async function routeWaypointCandidate(
   avoidWalkedGround: boolean,
   signal?: AbortSignal,
   basePurpose: RoutePurpose = 'waypoint-leg',
+  /** The walker's pins — never simply `points`, which may hold a guide too. */
+  protectedPoints: LngLat[] = [],
 ): Promise<RoutedCandidate | undefined> {
   const legs: RoutedLeg[] = []
   const walked: LngLat[][] = []
@@ -1548,7 +1749,7 @@ async function routeWaypointCandidate(
       }
     }
   }
-  const joined = joinAndTrimLegs(legs)
+  const joined = joinAndTrimLegs(legs, protectedPoints)
   return {
     attemptId: `waypoints-${points.length}`,
     legs,

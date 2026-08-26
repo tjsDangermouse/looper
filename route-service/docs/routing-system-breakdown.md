@@ -143,6 +143,12 @@ shortest-path search itself is GraphHopper's, per leg.
    there-and-back is **6% of all engine calls** for no change to what is
    offered. `LOOPER_NARROW_CORNER_SWEEP` narrows this to `[3, 2]` — a further
    26%, at about one walk in twenty and some separation; off, see §11.
+   `LOOPER_PROGRESSIVE_CORNER_SWEEP` instead makes the sweep the *outer* loop:
+   every bearing at three corners, then only the bearings that failed get two,
+   and only what still fails gets one and four. Same shapes, same order, but a
+   bearing that never works no longer pays for all four before any other
+   bearing is asked a question. −8.7% calls, or −11.1% alongside
+   `diversityAwareEarlyStop`, with no walk lost anywhere; off, see §11.
 2. **Leg-by-leg construction** — remaining budget ÷ legs left decides how far
    the next leg aims, on a heading stepped round the compass. Live planning;
    the shape is not decided up front.
@@ -405,9 +411,10 @@ together produce a regression nobody can attribute.
 |---|---|
 | `guidePointPullback` | −35% calls and eliminates U-turn rejections, but one fixture drops 3 walks → 1. A product trade; see §12 |
 | `narrowCornerSweep` | −26% calls, costs ~1 walk in 20 and some separation |
+| `progressiveCornerSweep` | −8.7% calls alone, −11.1% with `diversityAwareEarlyStop`, identical walks offered. Off pending a production probe: it is a clear win on every synthetic network and a clear loss on a uniform straight-line fixture, so the ground decides |
 | `networkAwareSeeds` | −13% coastal, +1 call elsewhere, −0.5% net |
 | `localRepair` | 4 in 5 repairs succeed for +1.7% calls, and the *offered* walks get no better |
-| `diversityAwareEarlyStop` | +30% calls for half a point of separation |
+| `diversityAwareEarlyStop` | +30% calls for half a point of separation on its own — but see `progressiveCornerSweep`, which reverses the sign: alongside it the same flag *saves* a further 2.6% |
 | `paretoArchive` | correct and harmless; candidate pools too small for a front to bind |
 | `twoStageScreening` | HTTP calls flat, **path searches +37%** — one request for a whole ring saves round trips, not the engine's work |
 | `requestCache` | correct by construction; deliberately not enabled |
@@ -464,7 +471,21 @@ probe.**
   levers are closed one by one: the engine saturates at ~90 legs/s, per-call
   cost is a ~40 ms floor, the fix-ups earn 60–69% of their calls, and the
   corner sweep is now ordered. What remains is that a 5 km loop needs ~400
-  point-to-point searches.
+  point-to-point searches. `progressiveCornerSweep` is the first structural
+  answer to that and takes 8.7% off the synthetic mix; whether it does the same
+  at Douglas is the next thing to measure.
+- **415 and 162 were never the same measurement**, and the gap is not a
+  discrepancy to reconcile. 415 is a production Douglas probe; 162 is the
+  synthetic straight-line fixture in `test/generate.test.ts`, on different
+  ground with `DEFAULT_ATTEMPT_COUNT = 16` rather than production's 24. The
+  candidate count is not the difference either: `urban-5km-production-width`
+  raises the cap to 24 and costs **exactly** what `urban-5km` costs, because
+  the early stop fires long before the cap binds. The difference is the ground.
+- **Neither waypoint correctness fix shows on the synthetic bench.** Pin
+  preservation through trimming and the duration-mode re-aim are both exactly
+  neutral across all 21 scenarios, because the synthetic networks never put a
+  pin at the tip of a sub-80 m spur and walk at almost exactly the assumed
+  pace. Their evidence is the unit tests and the production probe.
 - `GRAPHHOPPER_MAX_CONCURRENCY` / `GRAPHHOPPER_MAX_QUEUE` remain untuned
   against a load test.
 - Horizontal GraphHopper replicas + a service-level admission queue.

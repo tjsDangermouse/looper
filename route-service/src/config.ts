@@ -23,6 +23,7 @@ const flags: AlgorithmFlags = {
   networkAwareSeeds: flag(process.env.LOOPER_NETWORK_AWARE_SEEDS, DEFAULT_FLAGS.networkAwareSeeds),
   twoStageScreening: flag(process.env.LOOPER_TWO_STAGE_SCREENING, DEFAULT_FLAGS.twoStageScreening),
   narrowCornerSweep: flag(process.env.LOOPER_NARROW_CORNER_SWEEP, DEFAULT_FLAGS.narrowCornerSweep),
+  progressiveCornerSweep: flag(process.env.LOOPER_PROGRESSIVE_CORNER_SWEEP, DEFAULT_FLAGS.progressiveCornerSweep),
   budgetDetourGate: flag(process.env.LOOPER_BUDGET_DETOUR_GATE, DEFAULT_FLAGS.budgetDetourGate),
   pullbackTurnOnly: flag(process.env.LOOPER_PULLBACK_TURN_ONLY, DEFAULT_FLAGS.pullbackTurnOnly),
   guidePointPullback: flag(process.env.LOOPER_GUIDE_POINT_PULLBACK, DEFAULT_FLAGS.guidePointPullback),

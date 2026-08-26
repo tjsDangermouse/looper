@@ -543,3 +543,85 @@ describe('joining legs into a walk somebody would recognise', () => {
     expect(trimmed.distanceMeters).toBeLessThan(first.distanceMeters + second.distanceMeters)
   })
 })
+
+describe('keeping the places the walker chose', () => {
+  const leg = (coordinates: LngLat[]) => {
+    let metres = 0
+    for (let index = 1; index < coordinates.length; index++) {
+      metres += Math.hypot(
+        (coordinates[index][0] - coordinates[index - 1][0]) * 65000,
+        (coordinates[index][1] - coordinates[index - 1][1]) * 111320,
+      )
+    }
+    return { coordinates, distanceMeters: metres, durationSeconds: metres / 1.39, steps: [] }
+  }
+
+  /** A pin twenty metres up a cul-de-sac: out to it, and back the way we came. */
+  const toThePin = leg([...polyline([[0, 0], [200, 0]]), ...polyline([[200, 0], [200, 20]])])
+  const onFromThePin = leg([...polyline([[200, 20], [200, 0]]), ...polyline([[200, 0], [400, 0]])])
+  const pin = at(200, 20)
+
+  it('cuts the cul-de-sac out when nothing says a walker asked for it', () => {
+    const trimmed = joinAndTrimLegs([toThePin, onFromThePin])
+    expect(trimmed.distanceMeters).toBeLessThan(toThePin.distanceMeters + onFromThePin.distanceMeters)
+    expect(nearestMetres(trimmed.coordinates, pin)).toBeGreaterThan(15)
+  })
+
+  it('keeps it when the walker did', () => {
+    const trimmed = joinAndTrimLegs([toThePin, onFromThePin], [pin])
+    expect(nearestMetres(trimmed.coordinates, pin)).toBeLessThan(1)
+    expect(trimmed.distanceMeters).toBeCloseTo(toThePin.distanceMeters + onFromThePin.distanceMeters, 0)
+  })
+
+  /**
+   * A driveway off a cul-de-sac, with the pin at the head of the cul-de-sac.
+   * The trim runs to a fixed point, so the driveway goes on the first pass and
+   * the cul-de-sac only becomes short enough to catch on the second — which is
+   * exactly where a protected point carried from the first pass would have gone
+   * stale.
+   */
+  const nested = [
+    leg([
+      ...polyline([[0, 0], [200, 0]]),
+      ...polyline([[200, 0], [200, 35]]),
+    ]),
+    leg([
+      ...polyline([[200, 35], [215, 35]]),
+      ...polyline([[215, 35], [200, 35]]),
+      ...polyline([[200, 35], [200, 0]]),
+      ...polyline([[200, 0], [400, 0]]),
+    ]),
+  ]
+  const head = at(200, 35)
+  const driveway = at(215, 35)
+
+  it('trims the driveway off a cul-de-sac but not the cul-de-sac with a pin at its head', () => {
+    // Left to itself: the driveway goes on the first pass, and the cul-de-sac
+    // only becomes short enough to catch on the second.
+    const loose = joinAndTrimLegs(nested)
+    expect(nearestMetres(loose.coordinates, driveway)).toBeGreaterThan(10)
+    expect(nearestMetres(loose.coordinates, head)).toBeGreaterThan(15)
+
+    // With the pin at the head, the driveway is still ours to lose and the
+    // walk out to the pin is not — including on the second pass, which is
+    // where an index carried from the first would have gone stale.
+    const kept = joinAndTrimLegs(nested, [head])
+    expect(nearestMetres(kept.coordinates, driveway)).toBeGreaterThan(10)
+    expect(nearestMetres(kept.coordinates, head)).toBeLessThan(1)
+    expect(kept.distanceMeters).toBeGreaterThan(loose.distanceMeters)
+  })
+
+  it('leaves a walk with nothing to trim alone whether or not it has pins', () => {
+    const clean = leg(polyline([[0, 0], [400, 0], [400, 400]]))
+    expect(joinAndTrimLegs([clean], [at(400, 0)]).coordinates)
+      .toEqual(joinAndTrimLegs([clean]).coordinates)
+  })
+})
+
+/** How close a finished walk comes to a place, in metres. */
+function nearestMetres(coordinates: LngLat[], point: LngLat): number {
+  return Math.min(...coordinates.map(vertex => Math.hypot(
+    (vertex[0] - point[0]) * 65000,
+    (vertex[1] - point[1]) * 111320,
+  )))
+}

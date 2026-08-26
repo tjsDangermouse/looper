@@ -576,3 +576,103 @@ one — one walk in half a second against three in seven — so it ships off, wi
 the flag there to settle it against real ground. The case to watch is
 `wp-one`/`wp-two`, which currently offer two walks and one: if the repair takes
 those to three, it pays for the suburban regression several times over.
+
+---
+
+# Phase 8 — pins through the trim, minutes through the table, and the sweep turned inside out
+
+Three things the post-Phase-7 review raised, checked against the code before
+anything was built. Two were real, one was not.
+
+## What the review got right
+
+**Trimming was pin-blind.** `trimTinySpikes()` splices any reversal under 80 m
+out of the *joined* geometry and never saw the anchors. Since Phase 4 put
+`joinAndTrimLegs()` in front of all three builders, a pin at the tip of a short
+cul-de-sac could be routed through correctly and then spliced back out — and
+nothing downstream would notice, because every check on what we *asked for*
+still passed. The trim now takes the walker's pins and refuses any splice that
+would remove one. Guides are deliberately not protected: moving and trimming
+round a guide is the whole point of the exercise.
+
+The protected points are found again on every pass rather than carried and
+remapped alongside the steps and edges. The trim runs to a fixed point, and a
+pin is never what gets trimmed, so looking it up again cannot go stale the way
+a carried index quietly can — which the nested driveway-off-a-cul-de-sac test
+exists to hold in place.
+
+**The slack table added up the wrong quantity.** `allocateSlack()` summed
+`distanceMeters` and was handed `targetMetres` even in time mode. It now takes
+a `measure` selector and adds up whichever quantity the walker asked for; every
+option already carried both figures. The shaping *points* are still placed in
+metres — a guide is a place on the ground, not a duration — which is the one
+boundary where the two units legitimately meet.
+
+## What the review got wrong, and it mattered
+
+**The duration defect was narrower than described, and worse.** With a
+walker-supplied pace, duration is a strict linear function of distance, so
+bucketing distance was already exactly equivalent — no bug. The defect was
+confined to time mode *without* a pace. And the real gap was not the bucket
+unit at all: the ring generator re-aims once when the 5 km/h estimate proves
+wrong for the terrain, and the backbone path had no equivalent. It assembled to
+the wrong metres and then failed its own candidates on the `duration` gate. It
+now re-aims the same way, and says so in the diagnostics.
+
+Measured honestly: the `measure` selector changes **nothing** end-to-end on any
+fixture tried. Every allocation the table returns is routed and gated anyway,
+so the right-duration combination is found whatever order the table ranked them
+in. It is kept because ranking by the wrong quantity is a latent bug that binds
+as soon as the combination count exceeds `BACKBONE_ASSEMBLY_LIMIT`, and because
+it costs ten lines — not because it earned a number. The re-aim is what does
+the work, and only when the pace is wrong enough to put the answer outside the
+reach of the options offered.
+
+**"415 vs 162 is a discrepancy to reconcile."** It is not. 415 is a production
+Douglas probe; 162 is the synthetic straight-line fixture, on different ground
+at a different candidate count. The obvious suspect — production's
+`candidateCount` of 24 against the bench's 16 — is not it either:
+`urban-5km-production-width` raises the cap and costs *exactly* what
+`urban-5km` costs, because the early stop fires long before the cap binds. The
+difference is the ground, which is the one thing the synthetic bench cannot
+lend the live engine.
+
+## The sweep turned inside out
+
+`CORNER_COUNTS_TO_TRY = [3, 2, 1, 4]` was a loop *inside* each candidate, so a
+bearing that never works paid for all four shapes before any other bearing was
+asked a single question. `progressiveCornerSweep` makes it the outer loop:
+every bearing at three corners, then only the bearings that failed get two, and
+only what still fails gets one and four. Same shapes, same order, and — unlike
+`narrowCornerSweep` — the awkward tail is delayed rather than dropped.
+
+| | `diversityAwareEarlyStop` off | on |
+| --- | --- | --- |
+| **`progressiveCornerSweep` off** | 5,753 | 6,427 (+11.7%) |
+| **on** | 5,250 (**−8.7%**) | **5,114 (−11.1%)** |
+
+55 walks offered and 21/21 scenarios valid in every cell — no scenario lost a
+route, and every scenario whose cost moved, moved down: `rural-6km` −133,
+`waypoint-suburban` −103, `suburban-5km` −66, `coastal-5km` −60.
+
+The interaction is the interesting half, and it was worth measuring rather than
+assuming. `diversityAwareEarlyStop` was shelved in Phase 1 at +30% calls for
+half a point of separation. Under waves it reverses sign: the pool is being
+evaluated at each wave boundary anyway, so asking it the stricter question is
+nearly free, and the pair together beat either alone.
+
+### Two things that did not work, recorded so they are not retried
+
+**Splitting the waves as `[3,2]` then `[1,4]`** — the intuitive reading of
+"delay the awkward shapes" — is *worse* than `[3] [2] [1,4]`: 5,512 against
+5,250, and 5,546 against 5,114 with diversity on. Separating three from two
+matters as much as separating out the tail.
+
+**On a uniform straight-line fixture progressive costs +74%** (162 → 282
+calls), and this is a real property rather than a bug. Where every bearing is
+equally good and shape two rescues what shape three missed, trying another
+*shape* on a bearing already paid for is much cheaper than starting a fresh
+bearing — and sweeping across the batch does the opposite. That fixture has no
+street network at all, and every synthetic network with one says the reverse.
+Which is why the flag ships off: this is a question about ground, and the
+production probe is the only thing that can answer it for Douglas.
