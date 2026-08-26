@@ -4,7 +4,7 @@ import type { LoopDirection } from './candidates.js'
 import { bearingBetween, destination, distanceBetween, haversine, normaliseBearing, pathLength, resample, type LngLat } from './geo.js'
 import { MIN_BACKTRACK_METRES, sharedCorridorMetres } from './quality.js'
 import { GraphHopperError, type GraphHopperLeg, type GraphHopperStep } from '../graphhopper.js'
-import type { RoutePurpose } from './metrics.js'
+import type { FixupKind, RoutePurpose } from './metrics.js'
 import type { EdgeSpan } from './edges.js'
 
 /**
@@ -92,6 +92,12 @@ const DEFAULT_CORNER_COUNT = 3
 const DEFAULT_MAX_LEG_ATTEMPTS = 2
 /** How far over its planned length a leg may run before it is worth retrying. */
 const DEFAULT_LEG_OVERSHOOT_TOLERANCE = 1.4
+/**
+ * How far past the straight line between its ends a leg has to run before it
+ * looks like it went round something. Below this it is simply a long way to
+ * a far-off corner, and a weaker penalty will not shorten it.
+ */
+const BUDGET_DETOUR_RATIO = 2
 /** Degrees swung further round the loop on each local retry, so a retry is a genuinely different guess. */
 const LEG_RETRY_BEARING_STEP_DEGREES = 20
 /** Fraction the planned length is shortened by on each local retry. */
@@ -148,6 +154,16 @@ export type SequentialRoutingOptions = {
   waypointPullbackScale?: number
   /** How this leg's own first call is attributed in metrics. Fixups keep their own tags. */
   basePurpose?: RoutePurpose
+  /** See AlgorithmFlags.budgetDetourGate. */
+  budgetDetourGate?: boolean
+  /** See AlgorithmFlags.pullbackTurnOnly. */
+  pullbackTurnOnly?: boolean
+  /**
+   * Told whenever a speculative reroute finishes, and whether its result was
+   * kept. A fix-up that is attempted far more often than it is kept is paying
+   * for information rather than for a better walk.
+   */
+  onFixup?: (kind: FixupKind, kept: boolean) => void
   signal?: AbortSignal
 }
 
@@ -217,10 +233,18 @@ export async function routeLegAttempt(
   // can be six kilometres to dodge nine hundred metres, and the loop comes
   // back at twice the length asked for and is thrown away for it. So the one
   // retry each leg gets is spent here too, not only on an outright failure.
-  if (!relaxed && areas.length && options.legBudgetMetres && leg.distanceMeters > options.legBudgetMetres) {
+  // A leg only gets shorter under a weaker penalty if the penalty is what
+  // made it long. One that runs close to the straight line between its ends
+  // did not go round anything, and rerouting it is two-thirds likely to come
+  // back with the same answer at the cost of a call.
+  const detoursRoundSomething = !options.budgetDetourGate
+    || leg.distanceMeters > haversine(fromPoint, toPoint) * BUDGET_DETOUR_RATIO
+  if (!relaxed && areas.length && detoursRoundSomething && options.legBudgetMetres && leg.distanceMeters > options.legBudgetMetres) {
     try {
       const cheaper = await route(pair, avoidanceCustomModel(areas, options.relaxedPriority ?? RELAXED_AVOID_PRIORITY), 'leg-budget')
-      if (cheaper.distanceMeters < leg.distanceMeters) {
+      const better = cheaper.distanceMeters < leg.distanceMeters
+      options.onFixup?.('leg-budget', better)
+      if (better) {
         leg = cheaper
         relaxed = true
       }
@@ -239,7 +263,9 @@ export async function routeLegAttempt(
     try {
       const rerouted = await route(pair, avoidanceCustomModel(spikeAreas, relaxed ? (options.relaxedPriority ?? RELAXED_AVOID_PRIORITY) : (options.strongPriority ?? AVOID_PRIORITY)), 'spike')
       const stillSpiked = findLegSpike(rerouted.coordinates)
-      if (!stillSpiked && rerouted.distanceMeters < leg.distanceMeters * 1.5) {
+      const better = !stillSpiked && rerouted.distanceMeters < leg.distanceMeters * 1.5
+      options.onFixup?.('spike', better)
+      if (better) {
         leg = rerouted
       }
     } catch (error) {
@@ -284,7 +310,13 @@ export async function applyJoinPullback(
   // leg rather than exactly on the join: the same branch a single leg's own
   // spike check looks for, just spanning the seam between two legs instead of
   // sitting inside one.
-  const boundarySpike = findLegSpike([...previous.coordinates, ...leg.coordinates])
+  // A short branch straddling the seam is already removed from the finished
+  // walk for free by the tiny-spike trim, which reaches further than this
+  // detector does. Paying two engine calls to route around one buys nothing
+  // the walker would ever see.
+  const boundarySpike = options.pullbackTurnOnly
+    ? undefined
+    : findLegSpike([...previous.coordinates, ...leg.coordinates])
   if (turn <= (options.joinTurnThresholdDegrees ?? JOIN_TURN_THRESHOLD_DEGREES) && !boundarySpike) {
     return { leg, relaxed }
   }
@@ -319,7 +351,9 @@ export async function applyJoinPullback(
     // actually cleared the branch that sent us here; a still-sharp turn or
     // still-present branch would only be trading one dead end for another,
     // for the price of two extra requests.
-    if (redoneTurn < turn || (boundarySpike && !redoneSpike)) {
+    const better = redoneTurn < turn || Boolean(boundarySpike && !redoneSpike)
+    options.onFixup?.('join-pullback', better)
+    if (better) {
       return {
         leg: redoneCurrent,
         relaxed,

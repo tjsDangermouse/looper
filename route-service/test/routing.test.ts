@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon'
 import { AVOID_PRIORITY, RELAXED_AVOID_PRIORITY } from '../src/loops/avoidance.js'
 import { buildRouteBody, GraphHopperError, parseLeg, maneuverName, isUTurnSign, type GraphHopperLeg } from '../src/graphhopper.js'
-import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinLegGeometries } from '../src/loops/routing.js'
+import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinLegGeometries, routeLegAttempt } from '../src/loops/routing.js'
 import type { LngLat } from '../src/loops/geo.js'
 import { FIXTURE_ORIGIN, at, polyline } from './fixtures/routes.js'
 
@@ -420,5 +420,78 @@ describe('carrying edge ids through a joined walk', () => {
   it('leaves the joined walk without edges when no leg had any', () => {
     const plain = { ...leg([at(0, 0), at(100, 0)], []), edges: undefined }
     expect(joinLegGeometries([plain, plain]).edges).toBeUndefined()
+  })
+})
+
+/**
+ * Each leg can pay for a speculative reroute and throw the answer away. On
+ * real ground those retries are 43% of every engine call the service makes, so
+ * what decides whether one is worth attempting is worth testing directly.
+ */
+describe('paying for a reroute only when it can help', () => {
+  /** Records every pair routed, and answers with a leg of a chosen length. */
+  const recordingRouter = (metresFor: (points: LngLat[], attempt: number) => number) => {
+    const asked: Array<{ points: LngLat[]; priority?: string }> = []
+    let attempt = 0
+    const route = async (points: LngLat[], model: any): Promise<GraphHopperLeg> => {
+      asked.push({ points, priority: model?.priority?.[0]?.multiply_by })
+      const metres = metresFor(points, attempt++)
+      const coordinates = [points[0], points[1]] as LngLat[]
+      return {
+        coordinates,
+        distanceMeters: metres,
+        durationSeconds: metres / 1.39,
+        steps: [{ instruction: 'Continue', distanceMeters: metres, durationSeconds: metres / 1.39, sign: 0, startIndex: 0, endIndex: 1 }],
+      }
+    }
+    return { route, asked }
+  }
+
+  const walked = [polyline([[0, 0], [0, 600]])]
+  const from: LngLat = at(0, 0)
+  const to: LngLat = at(600, 0)
+
+  it('reroutes an over-long leg that clearly went round something', async () => {
+    // Six hundred metres apart, two kilometres walked: it went round something.
+    const { route, asked } = recordingRouter(() => 2000)
+    await routeLegAttempt(route, START, walked, from, to, { legBudgetMetres: 1000, budgetDetourGate: true })
+    expect(asked).toHaveLength(2)
+    expect(asked[1].priority).toBe(String(RELAXED_AVOID_PRIORITY))
+  })
+
+  it('does not reroute a leg that is long simply because its target is far', async () => {
+    // Long against the budget, but barely longer than the straight line — the
+    // penalty is not what made it long, so a weaker one will not shorten it.
+    const { route, asked } = recordingRouter(() => 700)
+    await routeLegAttempt(route, START, walked, from, to, { legBudgetMetres: 500, budgetDetourGate: true })
+    expect(asked).toHaveLength(1)
+  })
+
+  it('still reroutes it when the gate is off, exactly as before', async () => {
+    const { route, asked } = recordingRouter(() => 700)
+    await routeLegAttempt(route, START, walked, from, to, { legBudgetMetres: 500, budgetDetourGate: false })
+    expect(asked).toHaveLength(2)
+  })
+
+  it('says whether the reroute was worth keeping', async () => {
+    const outcomes: Array<[string, boolean]> = []
+    const { route } = recordingRouter((_, attempt) => (attempt === 0 ? 2000 : 1200))
+    await routeLegAttempt(route, START, walked, from, to, {
+      legBudgetMetres: 1000,
+      budgetDetourGate: true,
+      onFixup: (kind, kept) => outcomes.push([kind, kept]),
+    })
+    expect(outcomes).toEqual([['leg-budget', true]])
+  })
+
+  it('says so when it was not', async () => {
+    const outcomes: Array<[string, boolean]> = []
+    const { route } = recordingRouter((_, attempt) => (attempt === 0 ? 2000 : 2400))
+    await routeLegAttempt(route, START, walked, from, to, {
+      legBudgetMetres: 1000,
+      budgetDetourGate: true,
+      onFixup: (kind, kept) => outcomes.push([kind, kept]),
+    })
+    expect(outcomes).toEqual([['leg-budget', false]])
   })
 })

@@ -603,3 +603,33 @@ describe('waypoint walks built from the backbone out', () => {
     expect(result.routes).toHaveLength(3)
     expect(result.warning).toBeUndefined()
   })
+
+describe('not undoing two legs for a branch that gets trimmed anyway', () => {
+  it('leaves the offered walks alone while doing less work', async () => {
+    const before = new RequestMetrics()
+    const after = new RequestMetrics()
+    const full = await generateLoops(request(), {
+      route: fakeEngine(), metrics: before, flags: { pullbackTurnOnly: false },
+    })
+    const lean = await generateLoops(request(), {
+      route: fakeEngine(), metrics: after, flags: { pullbackTurnOnly: true },
+    })
+    // Never more work, and the walk quality gates are unchanged either way.
+    expect(after.snapshot().graphhopperCalls).toBeLessThanOrEqual(before.snapshot().graphhopperCalls)
+    for (const route of lean.routes) {
+      expect(route.quality.uTurnCount).toBeLessThanOrEqual(1)
+      expect(route.quality.repeatedPercent).toBeLessThanOrEqual(12)
+    }
+    expect(lean.routes.length).toBeGreaterThan(0)
+    expect(full.routes.length).toBeGreaterThan(0)
+  })
+
+  it('counts every fix-up it attempts and whether it kept the answer', async () => {
+    const metrics = new RequestMetrics()
+    await generateLoops(request(), { route: fakeEngine({ detour: 1.66 }), metrics })
+    const fixups = metrics.snapshot().fixups
+    for (const kind of ['join-pullback', 'leg-budget', 'spike'] as const) {
+      expect(fixups[kind].kept).toBeLessThanOrEqual(fixups[kind].attempted)
+    }
+  })
+})

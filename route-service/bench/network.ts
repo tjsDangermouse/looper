@@ -250,10 +250,11 @@ export function syntheticEngine(network: Network) {
     // Every point is honoured, not just the first and last: GraphHopper routes
     // a multi-point request as one path through all of them, and a benchmark
     // that quietly dropped the middle would make a whole strategy look cheap.
+    const snapped = points.map(point => snapToNetwork(network, point))
     const legs: Path[] = []
     for (let index = 1; index < points.length; index++) {
       stats.routedLegs++
-      const leg = shortestPath(network, nearestNode(network, points[index - 1]), nearestNode(network, points[index]), priority, stats)
+      const leg = shortestPathBetweenSnaps(network, snapped[index - 1], snapped[index], priority, stats)
       if (!leg) throw new GraphHopperError('Connection between locations not found', 400, 'unreachable')
       legs.push(leg)
     }
@@ -268,8 +269,8 @@ export function syntheticEngine(network: Network) {
   const reachFrom = async (start: LngLat, distanceLimitMetres: number) => {
     stats.calls++
     stats.byPurpose.set('network-summary', (stats.byPurpose.get('network-summary') ?? 0) + 1)
-    const from = nearestNode(network, start)
-    const reached = reachableWithin(network, from, distanceLimitMetres, stats)
+    const from = snapToNetwork(network, start)
+    const reached = from.edgeId < 0 ? [] : reachableWithin(network, network.edges[from.edgeId].a, distanceLimitMetres, stats)
     return reached.length ? reached : undefined
   }
 
@@ -306,30 +307,71 @@ function reachableWithin(network: Network, from: number, limitMetres: number, st
 /** Several consecutive path searches presented as the one path they describe. */
 function concatenatePaths(legs: Path[]): Path {
   if (legs.length === 1) return legs[0]
-  const nodes: number[] = [...legs[0].nodes]
-  const edges: number[] = [...legs[0].edges]
+  const coordinates: LngLat[] = [...legs[0].coordinates]
+  const edges: Path['edges'] = [...legs[0].edges]
   let metres = legs[0].metres
   for (const leg of legs.slice(1)) {
-    // The joining node is the same node twice; keep it once.
-    nodes.push(...(nodes[nodes.length - 1] === leg.nodes[0] ? leg.nodes.slice(1) : leg.nodes))
-    edges.push(...leg.edges)
+    // The joining point is the same point twice; keep it once.
+    const joins = samePlace(coordinates[coordinates.length - 1], leg.coordinates[0])
+    const offset = joins ? coordinates.length - 1 : coordinates.length
+    coordinates.push(...(joins ? leg.coordinates.slice(1) : leg.coordinates))
+    for (const span of leg.edges) {
+      edges.push({ id: span.id, startIndex: span.startIndex + offset, endIndex: span.endIndex + offset })
+    }
     metres += leg.metres
   }
-  return { nodes, edges, metres }
+  return { coordinates, edges, metres }
 }
+
+const samePlace = (a: LngLat, b: LngLat) => Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9
 
 function midpoint(a: LngLat, b: LngLat): LngLat {
   return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
 }
 
-function nearestNode(network: Network, point: LngLat): number {
-  let best = 0
-  let bestDistance = Infinity
-  for (let index = 0; index < network.nodes.length; index++) {
-    const distance = haversine(network.nodes[index], point)
-    if (distance < bestDistance) { bestDistance = distance; best = index }
+/**
+ * Where a requested point actually joins the network.
+ *
+ * GraphHopper snaps to the nearest point *on an edge*, not to the nearest
+ * junction, and that difference is not a detail — it is the source of most of
+ * the expensive fix-ups this service performs. A generated corner that lands
+ * halfway along a street means the leg arriving there stops mid-street and the
+ * leg leaving there starts mid-street, and if the cheapest continuation is
+ * back the way it came, the walk has a dead-end join. Snapping to junctions
+ * quietly makes that impossible, and a benchmark that cannot produce a dead-end
+ * join cannot measure what it costs to fix one.
+ */
+export type Snap = {
+  edgeId: number
+  /** Distance along the edge from its `a` end, in metres. */
+  alongMetres: number
+  point: LngLat
+}
+
+function snapToNetwork(network: Network, point: LngLat): Snap {
+  let best: Snap | undefined
+  let bestAway = Infinity
+  for (const edge of network.edges) {
+    const a = network.nodes[edge.a]
+    const b = network.nodes[edge.b]
+    // Local flat frame: these edges are tens of metres long.
+    const scale = Math.cos((a[1] * Math.PI) / 180)
+    const ax = a[0] * scale, ay = a[1]
+    const bx = b[0] * scale, by = b[1]
+    const px = point[0] * scale, py = point[1]
+    const dx = bx - ax, dy = by - ay
+    const lengthSquared = dx * dx + dy * dy
+    const t = lengthSquared > 0 ? Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / lengthSquared)) : 0
+    const onEdge: LngLat = [(ax + dx * t) / scale, ay + dy * t]
+    const away = haversine(onEdge, point)
+    if (away < bestAway) {
+      bestAway = away
+      best = { edgeId: edge.id, alongMetres: edge.lengthMetres * t, point: onEdge }
+    }
   }
-  return best
+  // A network with no edges cannot be routed on; callers treat that as
+  // unreachable, which is the truthful answer.
+  return best ?? { edgeId: -1, alongMetres: 0, point }
 }
 
 /**
@@ -375,27 +417,88 @@ function boundingBox(area: Feature<Polygon>): [number, number, number, number] {
   return [west, south, east, north]
 }
 
-type Path = { nodes: number[]; edges: number[]; metres: number }
+/**
+ * A routed path, as geometry rather than as a list of junctions: with mid-edge
+ * snapping the walk starts and ends between junctions, so the node positions
+ * are no longer the whole line.
+ */
+type Path = {
+  coordinates: LngLat[]
+  /** Which edge each stretch of the line ran on, as index ranges into it. */
+  edges: Array<{ id: number; startIndex: number; endIndex: number }>
+  metres: number
+}
+
+/** Where along an edge a snap sits, from each of its ends. */
+const fromEndsOf = (network: Network, snap: Snap) => {
+  const edge = network.edges[snap.edgeId]
+  return { edge, toA: snap.alongMetres, toB: Math.max(0, edge.lengthMetres - snap.alongMetres) }
+}
 
 /**
- * Dijkstra over `length / priority`, which is GraphHopper's own weight for a
- * custom model at constant speed. Zero priority means impassable.
+ * The shortest walk between two points that each sit somewhere along an edge.
+ *
+ * Both ends are handled the way a router handles them: from a snapped point
+ * you may set off toward either end of the edge you are on, paying for the
+ * part of it you walk. The search itself is an ordinary Dijkstra over the
+ * junctions in between.
  */
-function shortestPath(network: Network, from: number, to: number, priority: Float64Array, stats: EngineStats): Path | undefined {
+function shortestPathBetweenSnaps(
+  network: Network,
+  from: Snap,
+  to: Snap,
+  priority: Float64Array,
+  stats: EngineStats,
+): Path | undefined {
+  if (from.edgeId < 0 || to.edgeId < 0) return undefined
+
+  const source = fromEndsOf(network, from)
+  const target = fromEndsOf(network, to)
+
+  // Both ends on the same edge: walking along it is a candidate in its own
+  // right, and often the answer. It still has to beat going round.
+  let best: Path | undefined
+  if (from.edgeId === to.edgeId && priority[from.edgeId] > 0) {
+    const metres = Math.abs(to.alongMetres - from.alongMetres)
+    if (metres > 0) {
+      best = {
+        coordinates: [from.point, to.point],
+        edges: [{ id: from.edgeId, startIndex: 0, endIndex: 1 }],
+        metres,
+      }
+    }
+  }
+
   const count = network.nodes.length
   const cost = new Float64Array(count).fill(Infinity)
   const cameFromEdge = new Int32Array(count).fill(-1)
   const settled = new Uint8Array(count)
-  cost[from] = 0
   const queue = new BinaryHeap()
-  queue.push(from, 0)
+
+  const sourceFactor = priority[from.edgeId]
+  if (sourceFactor > 0) {
+    for (const [node, metres] of [[source.edge.a, source.toA], [source.edge.b, source.toB]] as const) {
+      const weight = metres / sourceFactor
+      if (weight < cost[node]) { cost[node] = weight; queue.push(node, weight) }
+    }
+  }
+
+  const targetFactor = priority[to.edgeId]
+  const tailFor = (node: number): number | undefined => {
+    if (targetFactor <= 0) return undefined
+    if (node === target.edge.a) return target.toA
+    if (node === target.edge.b) return target.toB
+    return undefined
+  }
 
   while (queue.size) {
     const node = queue.pop()!
     if (settled[node]) continue
     settled[node] = 1
     stats.nodesVisited++
-    if (node === to) break
+    // Both ways onto the target edge have been costed; nothing further out can
+    // beat them, because every remaining node is at least this far away.
+    if (settled[target.edge.a] && settled[target.edge.b]) break
     for (const edgeId of network.adjacency[node]) {
       const edge = network.edges[edgeId]
       const next = edge.a === node ? edge.b : edge.a
@@ -409,24 +512,58 @@ function shortestPath(network: Network, from: number, to: number, priority: Floa
       queue.push(next, candidate)
     }
   }
-  if (!Number.isFinite(cost[to])) return undefined
 
-  const nodes: number[] = [to]
-  const edges: number[] = []
-  let metres = 0
-  let cursor = to
-  while (cursor !== from) {
+  // Whichever end of the target edge is cheaper to arrive at, all in.
+  let arriveAt = -1
+  let arriveWeight = Infinity
+  for (const node of [target.edge.a, target.edge.b]) {
+    const tail = tailFor(node)
+    if (tail === undefined || !Number.isFinite(cost[node])) continue
+    const weight = cost[node] + tail / targetFactor
+    if (weight < arriveWeight) { arriveWeight = weight; arriveAt = node }
+  }
+  if (arriveAt < 0) return best
+
+  // Walk the predecessors back to whichever source end was actually used.
+  const nodes: number[] = [arriveAt]
+  const edgeIds: number[] = []
+  let cursor = arriveAt
+  while (cameFromEdge[cursor] >= 0) {
     const edgeId = cameFromEdge[cursor]
-    if (edgeId < 0) return undefined
+    edgeIds.push(edgeId)
     const edge = network.edges[edgeId]
-    edges.push(edgeId)
-    metres += edge.lengthMetres
     cursor = edge.a === cursor ? edge.b : edge.a
     nodes.push(cursor)
   }
   nodes.reverse()
-  edges.reverse()
-  return { nodes, edges, metres }
+  edgeIds.reverse()
+
+  const departFrom = nodes[0]
+  const headMetres = departFrom === source.edge.a ? source.toA : source.toB
+  const tailMetres = arriveAt === target.edge.a ? target.toA : target.toB
+
+  const coordinates: LngLat[] = [from.point]
+  const edges: Path['edges'] = []
+  let metres = 0
+
+  const push = (point: LngLat, edgeId: number, length: number) => {
+    const startIndex = coordinates.length - 1
+    coordinates.push(point)
+    edges.push({ id: edgeId, startIndex, endIndex: coordinates.length - 1 })
+    metres += length
+  }
+
+  // Out of the edge we snapped onto, then junction to junction, then into the
+  // edge we are snapping off. A zero-length stretch is not a stretch.
+  if (headMetres > 0) push(network.nodes[departFrom], from.edgeId, headMetres)
+  for (let index = 0; index < edgeIds.length; index++) {
+    push(network.nodes[nodes[index + 1]], edgeIds[index], network.edges[edgeIds[index]].lengthMetres)
+  }
+  if (tailMetres > 0) push(to.point, to.edgeId, tailMetres)
+
+  if (coordinates.length < 2) return best
+  const viaNetwork: Path = { coordinates, edges, metres }
+  return best && best.metres <= viaNetwork.metres ? best : viaNetwork
 }
 
 /** A pairing heap would be tidier; an array heap is fewer lines and fast enough. */
@@ -483,15 +620,13 @@ class BinaryHeap {
  * payload than the engine sends.
  */
 function toGraphHopperPayload(network: Network, path: Path) {
-  const coordinates = path.nodes.map(node => network.nodes[node])
-  const edgeDetails: Array<[number, number, number]> = path.edges.map((edgeId, index) => [index, index + 1, edgeId])
-  const instructions = path.edges.map((edgeId, index) => ({
-    text: `Continue on lane ${edgeId}`,
-    distance: network.edges[edgeId].lengthMetres,
-    time: Math.round((network.edges[edgeId].lengthMetres / SPEED_METRES_PER_SECOND) * 1000),
+  const instructions = path.edges.map(span => ({
+    text: `Continue on lane ${span.id}`,
+    distance: haversine(path.coordinates[span.startIndex], path.coordinates[span.endIndex]),
+    time: Math.round((haversine(path.coordinates[span.startIndex], path.coordinates[span.endIndex]) / SPEED_METRES_PER_SECOND) * 1000),
     sign: 0,
-    street_name: `Lane ${edgeId}`,
-    interval: [index, index + 1],
+    street_name: `Lane ${span.id}`,
+    interval: [span.startIndex, span.endIndex],
   }))
   instructions.push({
     text: 'Arrive at destination',
@@ -499,18 +634,19 @@ function toGraphHopperPayload(network: Network, path: Path) {
     time: 0,
     sign: 4,
     street_name: '',
-    interval: [coordinates.length - 1, coordinates.length - 1],
+    interval: [path.coordinates.length - 1, path.coordinates.length - 1],
   })
+  const triples = path.edges.map(span => [span.startIndex, span.endIndex, span.id] as [number, number, number])
   return {
     paths: [{
-      points: { type: 'LineString', coordinates },
+      points: { type: 'LineString', coordinates: path.coordinates },
       distance: path.metres,
       time: Math.round((path.metres / SPEED_METRES_PER_SECOND) * 1000),
       instructions,
       details: {
-        edge_id: edgeDetails,
-        street_name: edgeDetails.map(([from, to, id]) => [from, to, `Lane ${id}`] as [number, number, string]),
-        road_class: edgeDetails.map(([from, to]) => [from, to, 'residential'] as [number, number, string]),
+        edge_id: triples,
+        street_name: triples.map(([from, to, id]) => [from, to, `Lane ${id}`] as [number, number, string]),
+        road_class: triples.map(([from, to]) => [from, to, 'residential'] as [number, number, string]),
       },
     }],
   }

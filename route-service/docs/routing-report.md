@@ -347,3 +347,120 @@ One at a time, checking the `cost` log line between each.
    needs a pool nothing currently produces.
 
 Rollback is a flag per change; nothing here requires a redeploy to undo.
+
+---
+
+# Addendum: what production actually said
+
+Written after the above shipped and real traffic was measured. It corrects two
+claims in it.
+
+## The benchmark was measuring the wrong thing
+
+Five production requests across the Isle of Man, against the deployed service:
+
+| start | wall | calls | `leg` | `join-pullback` | `leg-budget` | `spike` |
+| --- | --- | --- | --- | --- | --- | --- |
+| Douglas 5 km | 4.8 s | 472 | 262 | 126 (27%) | 74 | 10 |
+| Douglas 3 km | 1.8 s | 230 | 135 | 64 (28%) | 29 | 2 |
+| Douglas 10 km | 4.9 s | 284 | 166 | 82 (29%) | 33 | 3 |
+| Peel 5 km | 10.1 s | 961 | 551 | 258 (27%) | 114 | 35 |
+| Onchan 5 km | 4.5 s | 401 | 238 | 102 (25%) | 54 | 7 |
+
+**Fix-up retries are 43% of every engine call**, consistently, everywhere. The
+synthetic fixtures produced 3.2% and no spikes at all, because the synthetic
+engine snapped requested points to *junctions*. GraphHopper snaps to the
+nearest point **on an edge**, and that single difference is what creates the
+dead-end joins the fix-ups exist to repair. A benchmark that cannot produce a
+dead-end join cannot measure what fixing one costs — so every phase above was
+tuned against a fixture set blind to nearly half the real work.
+
+`bench/network.ts` now snaps to edges. The fixtures reproduce production's
+profile (24.3% pullback against 25–29%), and the numbers below were measured
+on that.
+
+## Which fix-ups earn their calls
+
+| fix-up | attempted | kept | calls each | wasted calls |
+| --- | --- | --- | --- | --- |
+| `join-pullback` | 765 | **72%** | 2 | 428 |
+| `leg-budget` | 607 | **34%** | 1 | 399 |
+| `spike` | 24 | **0%** | 1 | 24 |
+
+`join-pullback` is the biggest line item and mostly earns it — the opposite of
+what I assumed when I called it "the obvious target". `leg-budget` is the
+waster: two calls in three come back no shorter.
+
+Two gates, both on by default:
+
+- **`pullbackTurnOnly`** — a short branch straddling a leg seam is spliced out
+  of the finished walk for free by the tiny-spike trim, which reaches further
+  (80 m round trip) than the detector that triggers the pullback (~40 m). Two
+  engine calls were being spent to route around something already removed for
+  nothing. **−6.4% calls, identical walks, and better-separated alternatives**
+  (27.0% → 23.3% mean overlap).
+- **`budgetDetourGate`** — a leg only shortens under a weaker penalty if the
+  penalty is what made it long. One running under twice its straight-line
+  distance did not go round anything. **−1.8% calls**, and it raises the
+  fix-up's own keep rate from 34% to 39%.
+
+Together: **−8.2% engine calls, 50 routes offered either way, no gate changed.**
+
+## The largest remaining lever is not an algorithm
+
+| start | engine time | wall | achieved parallelism |
+| --- | --- | --- | --- |
+| Douglas 5 km | 21.5 s | 4.8 s | 4.4× |
+| Douglas 3 km | 7.1 s | 1.8 s | 3.9× |
+| Peel 5 km | 49.5 s | 10.1 s | 4.9× |
+
+GraphHopper answers a foot leg in **30–65 ms**. The wait is almost entirely
+serialisation, not engine speed, and achieved parallelism is 3.8–4.9 against a
+`ROUTING_CONCURRENCY` limit of 6 — the shortfall is that each candidate's legs
+must be routed in order, and the tail of a batch runs with fewer than six in
+flight.
+
+Doubling per-request concurrency projects **Douglas 5 km at ~1.8 s (from 4.8 s)
+and Peel at ~4.1 s (from 10.1 s)** — far more than any algorithm change here
+delivered. It is a projection from measured engine time, not a measurement:
+per-call latency may rise under load. It costs one environment variable to
+find out, and `GRAPHHOPPER_MAX_CONCURRENCY` should rise with it.
+
+## Waypoint mode does not work on real ground
+
+Three waypoint requests around Douglas, all well inside their plans, all
+returned **no routes at all**, taking 5.5–10.3 s to do so:
+
+```
+wp-near-6km   5.5s  routes=0  "We couldn't make a clean loop through those waypoints"
+wp-far-8km    7.5s  routes=0  same
+wp-two-8km   10.3s  routes=0  same
+```
+
+That message comes from the *old* generator, so the backbone path produced
+nothing that passed the gates and fell through to code whose behaviour has not
+changed — which means waypoint mode was very likely already failing this way
+before Phase 4, and Phase 4 now adds wasted calls ahead of the same failure.
+It is not established either way, because **waypoint mode reports no
+`diagnostics` at all**, so there is no way to see which stage gave up.
+
+The most likely cause, from the design: each anchor gap's alternatives are
+routed independently, so nothing stops the return gap retracing the outward
+one, and the assembled walk is refused on `repeated-corridor`. The synthetic
+grid had enough parallel streets for the DP to find combinations that missed
+each other; a real town does not.
+
+**This is the most important open item in this document**, and it is
+user-visible in a way none of the call-count work is. It needs, in order:
+diagnostics on the waypoint path so the failing stage is visible; then almost
+certainly routing later gaps against the earlier gaps' chosen ground.
+
+## What this changes about the recommendations above
+
+The rollout order in §7 stands, with two corrections:
+
+- Raising `ROUTING_CONCURRENCY` should come **first**. It is the only change
+  measured here that a walker would notice.
+- Every "off, no measured benefit" verdict above was reached against fixtures
+  that missed 40% of real engine work. `localRepair` in particular deserves
+  re-measuring against the edge-snapping fixtures before it is written off.

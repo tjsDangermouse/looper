@@ -60,6 +60,11 @@ export type EarlyStopReason =
   /** The batch simply ran out of attempts. */
   | 'exhausted'
 
+/** The three speculative retries a leg can pay for, and whether they earned it. */
+export type FixupKind = 'join-pullback' | 'leg-budget' | 'spike'
+
+export type FixupTally = { attempted: number; kept: number }
+
 export type MetricsSnapshot = {
   graphhopperCalls: number
   callsByPurpose: Record<RoutePurpose, number>
@@ -92,6 +97,12 @@ export type MetricsSnapshot = {
    */
   overlapFromEdges: number
   overlapFromGeometry: number
+  /**
+   * Each fix-up reroutes speculatively and keeps the result only if it turned
+   * out better. `attempted` minus `kept` is work the engine did for nothing —
+   * the number that says whether a fix-up is worth what it costs.
+   */
+  fixups: Record<FixupKind, FixupTally>
   /** Populated once the offered set is known. */
   offered: OfferedMetrics | undefined
   totalMs: number
@@ -133,6 +144,7 @@ export class RequestMetrics {
   private cacheMisses = 0
   private overlapFromEdges = 0
   private overlapFromGeometry = 0
+  private readonly fixups = new Map<FixupKind, FixupTally>()
   private earlyStop: EarlyStopReason = 'none'
   private fallbackRetracing = false
   private offered: OfferedMetrics | undefined
@@ -159,6 +171,13 @@ export class RequestMetrics {
   countReaim() { this.reaims++ }
   countCacheHit() { this.cacheHits++ }
   countCacheMiss() { this.cacheMisses++ }
+  countFixup(kind: FixupKind, kept: boolean) {
+    const tally = this.fixups.get(kind) ?? { attempted: 0, kept: 0 }
+    tally.attempted++
+    if (kept) tally.kept++
+    this.fixups.set(kind, tally)
+  }
+
   countOverlapSource(source: 'edges' | 'geometry') {
     if (source === 'edges') this.overlapFromEdges++
     else this.overlapFromGeometry++
@@ -211,6 +230,11 @@ export class RequestMetrics {
       cacheMisses: this.cacheMisses,
       overlapFromEdges: this.overlapFromEdges,
       overlapFromGeometry: this.overlapFromGeometry,
+      fixups: {
+        'join-pullback': this.fixups.get('join-pullback') ?? { attempted: 0, kept: 0 },
+        'leg-budget': this.fixups.get('leg-budget') ?? { attempted: 0, kept: 0 },
+        spike: this.fixups.get('spike') ?? { attempted: 0, kept: 0 },
+      },
       offered: this.offered,
       totalMs: Math.round(this.now() - this.startedAt),
       candidateMs: percentiles(this.candidateDurations),

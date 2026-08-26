@@ -5,7 +5,7 @@ import { DEFAULT_ATTEMPT_COUNT, generateLoopAttempts, spreadAcrossCompass, type 
 import { MAX_SHARED_FRACTION, bearingOctant, initialBearing as bearingOf, labelRoutes, selectDiverseRoutes, selectPreferredDiverseRoutes } from './diversity.js'
 import { destination, distanceBetween, haversine, projector, type LngLat, type Metric } from './geo.js'
 import { MAX_REPEATED_FRACTION, analyseRouteQuality, sharedCorridorMetres, type QualityReport, type QualityThresholds } from './quality.js'
-import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinLegGeometries, routeLegAttempt, type LegRouter, type RoutedCandidate, type RoutedLeg } from './routing.js'
+import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinLegGeometries, routeLegAttempt, type LegRouter, type RoutedCandidate, type RoutedLeg, type SequentialRoutingOptions } from './routing.js'
 import { avoidanceCustomModel, shortestPathCustomModel } from './avoidance.js'
 import { seedFor } from './random.js'
 import { countingRouter, RequestMetrics, type MetricsSnapshot, type OfferedMetrics, type RoutePurpose } from './metrics.js'
@@ -595,6 +595,9 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
           legBudgetMetres: qualityTarget * LEG_BUDGET_SHARE,
           joinTurnThresholdDegrees: overrides?.joinTurnThresholdDegrees,
           waypointPullbackScale: overrides?.waypointPullbackScale,
+          onFixup: (kind, kept) => metrics?.countFixup(kind, kept),
+          budgetDetourGate: flags.budgetDetourGate,
+          pullbackTurnOnly: flags.pullbackTurnOnly,
           cornerCount: shape.cornerCount,
           preAvoidGeometries: shape.preAvoid,
           signal: options.signal,
@@ -1008,7 +1011,7 @@ async function generateBackboneWaypointLoops(
     const stretch = crow > 0 ? directs[gap].distanceMeters / crow : 1
     for (const plan of planSegmentOptions(gap, anchors[gap], anchors[gap + 1], perGap, stretch)) {
       if (!plan.guides.length) continue
-      const legs = await routeThrough(options.route, [anchors[gap], ...plan.guides, anchors[gap + 1]], options.signal)
+      const legs = await routeThrough(options.route, [anchors[gap], ...plan.guides, anchors[gap + 1]], options.signal, (kind, kept) => metrics?.countFixup(kind, kept))
       if (!legs) continue
       routed.set(plan.id, legs)
       forThisGap.push({
@@ -1205,7 +1208,12 @@ async function routeSegment(
  * before it within this gap, so an out-and-back to a guide point is pushed
  * back off itself the same way the ring generator's legs are.
  */
-async function routeThrough(route: LegRouter, points: LngLat[], signal: AbortSignal | undefined): Promise<RoutedLeg[] | undefined> {
+async function routeThrough(
+  route: LegRouter,
+  points: LngLat[],
+  signal: AbortSignal | undefined,
+  onFixup?: SequentialRoutingOptions['onFixup'],
+): Promise<RoutedLeg[] | undefined> {
   const legs: RoutedLeg[] = []
   const walked: LngLat[][] = []
   for (let index = 1; index < points.length; index++) {
@@ -1213,6 +1221,7 @@ async function routeThrough(route: LegRouter, points: LngLat[], signal: AbortSig
     const result = await routeLegAttempt(route, points[0], walked, points[index - 1], points[index], {
       signal,
       basePurpose: 'waypoint-leg',
+      onFixup,
     })
     if (!result) return undefined
     legs.push({ ...result.leg, relaxed: result.relaxed, avoidanceAreaCount: walked.length })
