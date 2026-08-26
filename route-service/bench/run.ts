@@ -74,7 +74,7 @@ async function runScenario(scenario: Scenario, repeats: number, flags: Algorithm
       route: engine.route,
       reachFrom: engine.reachFrom,
       candidateCount: 24,
-      concurrency: 6,
+      concurrency: Number(argument('concurrency') ?? 6),
       metrics,
       flags,
     })

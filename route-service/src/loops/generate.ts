@@ -178,9 +178,36 @@ export type Diagnostics = {
   /** True when nothing clean existed and the walks offered double back. */
   retracing: boolean
   targetMetres: number
+  /**
+   * Where a waypoint request ended up, which is otherwise invisible: waypoint
+   * mode has several ways of giving up and they all reach the walker as the
+   * same sentence. Absent for ordinary loops, which only have one path.
+   */
+  stage?: WaypointStage
   /** What the request cost. Internal; the API contract allows extra fields. */
   metrics?: MetricsSnapshot
 }
+
+/** Every way a waypoint request can finish, named so a log line can say which. */
+export type WaypointStage =
+  /** An anchor the engine could not reach on foot at all. */
+  | 'unreachable'
+  /** The shortest ordered walk through the pins is longer than the plan allows. */
+  | 'over-plan'
+  /** The pins barely constrain anything; handed to the ordinary loop generator. */
+  | 'doorstep-pin'
+  /** The slack could not be spent to reach anything near the requested length. */
+  | 'no-allocation'
+  /** Walks were assembled and every one of them failed a quality gate. */
+  | 'all-rejected'
+  /** Built from the backbone, as intended. */
+  | 'backbone'
+  /** Ordinary loops that already passed the pins were reused. */
+  | 'reused-natural'
+  /** The older shaped-guide generator answered. */
+  | 'legacy-guides'
+  /** The older generator found nothing either. */
+  | 'legacy-empty'
 
 export type Retry = 'none' | 'duration' | 'radius' 
 
@@ -713,6 +740,26 @@ async function generateWaypointLoops(
   // same path out and back, which is not a loop.
   const metrics = options.metrics
   const flags = withFlags(options.flags)
+  const legacyRejections: Record<string, number> = {}
+  let legacyAssembled = 0
+  let legacyPassed = 0
+  /** As in the backbone path: no way of giving up goes unreported. */
+  const reportLegacy = (stage: WaypointStage, offered: number): Diagnostics => {
+    const diagnostics: Diagnostics = {
+      candidates: legacyAssembled,
+      routed: legacyAssembled,
+      passed: legacyPassed,
+      offered,
+      rejections: legacyRejections,
+      retry: 'none',
+      retracing: false,
+      targetMetres,
+      stage,
+      ...(metrics ? { metrics: metrics.snapshot() } : {}),
+    }
+    options.onDiagnostics?.(diagnostics)
+    return diagnostics
+  }
   if (flags.waypointBackbone) {
     const built = await generateBackboneWaypointLoops(request, options, start, targetMetres, targetSeconds, flags, metrics)
     if (built) return built
@@ -721,7 +768,9 @@ async function generateWaypointLoops(
     // that was here before rather than telling the walker nothing works.
   }
   const direct = await routeWaypointCandidate(points, options.route, false, options.signal, 'waypoint-direct')
-  if (!direct) return { routes: [], warning: 'One or more waypoints cannot be reached on foot.' }
+  if (!direct) {
+    return { routes: [], warning: 'One or more waypoints cannot be reached on foot.', diagnostics: reportLegacy('unreachable', 0) }
+  }
 
   const durationFor = (candidate: RoutedCandidate) => request.walkingPaceMinutesPerKm === undefined
     ? candidate.durationSeconds
@@ -739,6 +788,7 @@ async function generateWaypointLoops(
       routes: [],
       expectationExceeded: true,
       warning: `These waypoints need at least ${actual}, which is more than 25% over your ${asked} plan. Increase your plan or remove a waypoint.`,
+      diagnostics: reportLegacy('over-plan', 0),
     }
   }
 
@@ -762,7 +812,7 @@ async function generateWaypointLoops(
       kept.map(route => ({ coordinates: route.geometry.coordinates as LngLat[], distanceMeters: route.distanceMeters, quality: route.quality })),
       targetMetres,
     ))
-    return { routes: kept }
+    return { routes: kept, diagnostics: reportLegacy('reused-natural', kept.length) }
   }
 
   // Try the pins themselves with avoidance on the return legs. A waypoint on
@@ -820,6 +870,12 @@ async function generateWaypointLoops(
         },
       })
       if (flags.edgeOverlap) metrics?.countOverlapSource(report.overlapSource)
+      legacyAssembled++
+      if (report.pass) legacyPassed++
+      for (const reason of report.rejections) {
+        legacyRejections[reason] = (legacyRejections[reason] ?? 0) + 1
+        metrics?.countRejection(reason)
+      }
       return {
         candidate,
         report,
@@ -846,11 +902,13 @@ async function generateWaypointLoops(
       return {
         routes: naturalRoutes,
         warning: `We found only ${naturalRoutes.length} clean ${naturalRoutes.length === 1 ? 'loop' : 'loops'} through those waypoints. Try moving a waypoint for more choices.`,
+        diagnostics: reportLegacy('reused-natural', naturalRoutes.length),
       }
     }
     return {
       routes: [],
       warning: 'We couldn’t make a clean loop through those waypoints. Move or remove a waypoint, or increase your plan.',
+      diagnostics: reportLegacy('legacy-empty', 0),
     }
   }
 
@@ -890,6 +948,7 @@ async function generateWaypointLoops(
   ))
   return {
     routes,
+    diagnostics: reportLegacy('legacy-guides', routes.length),
     ...(routes.length < 3
       ? { warning: `We found only ${routes.length} clean ${routes.length === 1 ? 'loop' : 'loops'} through those waypoints. Try moving a waypoint for more choices.` }
       : {}),
@@ -952,6 +1011,26 @@ async function generateBackboneWaypointLoops(
   flags: AlgorithmFlags,
   metrics: RequestMetrics | undefined,
 ): Promise<LoopResponse | undefined> {
+  const rejections: Record<string, number> = {}
+  let assembled = 0
+  let passed = 0
+  /** Emitted on every exit, so no way of giving up is silent. */
+  const report = (stage: WaypointStage, offered: number): Diagnostics => {
+    const diagnostics: Diagnostics = {
+      candidates: assembled,
+      routed: assembled,
+      passed,
+      offered,
+      rejections,
+      retry: 'none',
+      retracing: false,
+      targetMetres,
+      stage,
+      ...(metrics ? { metrics: metrics.snapshot() } : {}),
+    }
+    options.onDiagnostics?.(diagnostics)
+    return diagnostics
+  }
   const anchors: LngLat[] = [start, ...request.waypoints!.map(point => [point.lng, point.lat] as LngLat), start]
   const gapCount = anchors.length - 1
   const durationFor = (metres: number, seconds: number) => request.walkingPaceMinutesPerKm === undefined
@@ -964,7 +1043,9 @@ async function generateBackboneWaypointLoops(
   for (let gap = 0; gap < gapCount; gap++) {
     options.signal?.throwIfAborted()
     const leg = await routeSegment(options.route, anchors[gap], anchors[gap + 1], [], options.signal, 'waypoint-direct')
-    if (!leg) return { routes: [], warning: 'One or more waypoints cannot be reached on foot.' }
+    if (!leg) {
+      return { routes: [], warning: 'One or more waypoints cannot be reached on foot.', diagnostics: report('unreachable', 0) }
+    }
     directs.push(leg)
   }
   const backbone = directs.reduce((total, leg) => total + leg.distanceMeters, 0)
@@ -974,7 +1055,10 @@ async function generateBackboneWaypointLoops(
   // into "invent a loop", which is the ring generator's job and it is better
   // at it. Hand those back to the generator that reuses an ordinary loop
   // already passing the pins.
-  if (backbone < targetMetres * PIN_CONSTRAINT_SHARE) return undefined
+  if (backbone < targetMetres * PIN_CONSTRAINT_SHARE) {
+    report('doorstep-pin', 0)
+    return undefined
+  }
   const requested = targetSeconds ?? targetMetres
   const measuredBackbone = targetSeconds
     ? directs.reduce((total, leg) => total + durationFor(leg.distanceMeters, leg.durationSeconds), 0)
@@ -987,7 +1071,7 @@ async function generateBackboneWaypointLoops(
   if (!fitsInPlan(measuredBackbone, requested, maxError)) {
     const floor = await trueLowerBound(options, anchors, targetSeconds ? durationFor : undefined, measuredBackbone)
     if (!fitsInPlan(floor, requested, maxError)) {
-      return refuseWaypoints(request, floor, targetSeconds !== undefined)
+      return { ...refuseWaypoints(request, floor, targetSeconds !== undefined), diagnostics: report('over-plan', 0) }
     }
   }
 
@@ -1030,7 +1114,10 @@ async function generateBackboneWaypointLoops(
     bucketMetres: Math.max(25, targetMetres * BACKBONE_BUCKET_SHARE),
     limit: BACKBONE_ASSEMBLY_LIMIT,
   })
-  if (!allocations.length) return undefined
+  if (!allocations.length) {
+    report('no-allocation', 0)
+    return undefined
+  }
 
   const analysed = allocations.map(allocation => {
     const legs = allocation.chosen.flatMap(option => routed.get(option.id) ?? [])
@@ -1043,7 +1130,7 @@ async function generateBackboneWaypointLoops(
     }
     const durationSeconds = durationFor(candidate.distanceMeters, candidate.durationSeconds)
     const traversals = flags.edgeOverlap ? measureTraversals(candidate.coordinates, candidate.edges) : undefined
-    const report = analyseRouteQuality({
+    const quality = analyseRouteQuality({
       traversals,
       coordinates: candidate.coordinates,
       start,
@@ -1064,12 +1151,18 @@ async function generateBackboneWaypointLoops(
         minLegShare: 0,
       },
     })
-    if (flags.edgeOverlap) metrics?.countOverlapSource(report.overlapSource)
+    if (flags.edgeOverlap) metrics?.countOverlapSource(quality.overlapSource)
+    assembled++
+    if (quality.pass) passed++
+    for (const reason of quality.rejections) {
+      rejections[reason] = (rejections[reason] ?? 0) + 1
+      metrics?.countRejection(reason)
+    }
     return {
       candidate,
-      report,
+      report: quality,
       coordinates: candidate.coordinates,
-      quality: report.quality,
+      quality: quality.quality,
       bearing: bearingOf(candidate.coordinates, start),
       traversals,
       totalMetres: candidate.distanceMeters,
@@ -1078,7 +1171,12 @@ async function generateBackboneWaypointLoops(
   })
 
   const offerable = analysed.filter(entry => entry.report.pass)
-  if (!offerable.length) return undefined
+  if (!offerable.length) {
+    // Every assembled walk failed a gate. `rejections` says which, which is
+    // the only thing that makes this case debuggable from a log line.
+    report('all-rejected', 0)
+    return undefined
+  }
 
   // Pins constrain a walk in a way a plain loop is not: every alternative has
   // to visit the same places, and between two pins there is often only one
@@ -1124,6 +1222,7 @@ async function generateBackboneWaypointLoops(
 
   return {
     routes,
+    diagnostics: report('backbone', routes.length),
     ...(routes.length < 3
       ? { warning: `We found only ${routes.length} clean ${routes.length === 1 ? 'loop' : 'loops'} through those waypoints. Try moving a waypoint for more choices.` }
       : {}),

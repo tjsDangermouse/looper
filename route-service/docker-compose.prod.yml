@@ -52,6 +52,23 @@ services:
       NODE_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-info}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-20}
+      # How many of one walker's routing calls run at once.
+      #
+      # Measured against this stack on 2026-08-26: GraphHopper answers a foot
+      # leg in 30-65 ms, and a 5 km request spent 21 s of engine time inside
+      # 4.8 s of wall clock — an achieved parallelism of 4.4 against the old
+      # limit of 6. The wait is serialisation, not engine speed.
+      #
+      # The trade is real and worth stating: more candidates in flight when
+      # the early stop trips means roughly 16% more engine calls per request,
+      # bought for roughly half the wall time. At current traffic that is the
+      # right way round. Set it back to 6 if the engine starts queueing.
+      ROUTING_CONCURRENCY: ${ROUTING_CONCURRENCY:-12}
+      # The ceiling across all walkers at once, which is what actually protects
+      # the single JVM. Left where it was: with 12 per request, two walkers
+      # fill it and a third queues, which is the intended behaviour rather
+      # than an oversight. Raise it only from a load test.
+      GRAPHHOPPER_MAX_CONCURRENCY: ${GRAPHHOPPER_MAX_CONCURRENCY:-24}
     ports:
       # Nginx is the public HTTPS entry point; keep the service local to this host.
       - "127.0.0.1:${ROUTE_SERVICE_PORT:-8988}:8080"

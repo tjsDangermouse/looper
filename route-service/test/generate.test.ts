@@ -633,3 +633,56 @@ describe('not undoing two legs for a branch that gets trimmed anyway', () => {
     }
   })
 })
+
+/**
+ * Waypoint mode has several ways of giving up and they all reach the walker as
+ * the same sentence. Which one happened is the only thing that makes a failure
+ * in production debuggable, so every exit has to say.
+ */
+describe('waypoint mode saying where it got to', () => {
+  const pins = [{ lng: -4.4746, lat: 54.1546 }]
+
+  const stageOf = async (overrides: Partial<LoopRequest>, flags = {}) => {
+    const result = await generateLoops(request({ waypoints: pins, ...overrides }), { route: fakeEngine(), flags })
+    return { result, diagnostics: result.diagnostics }
+  }
+
+  it('reports a stage on a successful waypoint walk', async () => {
+    const { result, diagnostics } = await stageOf({ distanceKm: 6 })
+    expect(diagnostics).toBeDefined()
+    expect(diagnostics!.stage).toBeDefined()
+    expect(result.routes.length).toBeGreaterThan(0)
+  })
+
+  it('says the plan was too short rather than just refusing', async () => {
+    const faraway = [{ lng: -4.4816, lat: 54.2206 }]
+    const { result, diagnostics } = await stageOf({ waypoints: faraway, distanceKm: 2 })
+    expect(result.expectationExceeded).toBe(true)
+    expect(diagnostics!.stage).toBe('over-plan')
+  })
+
+  it('says when a pin on the doorstep was handed to the ordinary generator', async () => {
+    const { diagnostics } = await stageOf({ waypoints: [{ lng: START.lng, lat: START.lat }] })
+    expect(diagnostics!.stage).toBe('reused-natural')
+  })
+
+  it('says which gate killed the walks it assembled', async () => {
+    const { diagnostics } = await stageOf({ distanceKm: 6 })
+    // Whatever the outcome, a rejection tally is the thing that explains it.
+    expect(diagnostics!.rejections).toBeDefined()
+    expect(diagnostics!.candidates).toBeGreaterThanOrEqual(diagnostics!.passed)
+  })
+
+  it('says a waypoint could not be reached at all', async () => {
+    const unreachable = async () => { throw new GraphHopperError('Connection between locations not found', 400, 'unreachable') }
+    const result = await generateLoops(request({ waypoints: pins, distanceKm: 6 }), { route: unreachable })
+    expect(result.routes).toHaveLength(0)
+    expect(result.diagnostics!.stage).toBe('unreachable')
+  })
+
+  it('carries the cost of a waypoint request, which used to be invisible', async () => {
+    const metrics = new RequestMetrics()
+    const result = await generateLoops(request({ waypoints: pins, distanceKm: 6 }), { route: fakeEngine(), metrics })
+    expect(result.diagnostics!.metrics!.graphhopperCalls).toBeGreaterThan(0)
+  })
+})
