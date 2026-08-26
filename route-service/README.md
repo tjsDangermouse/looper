@@ -66,6 +66,15 @@ Compose reads `.env` from the compose file's own directory automatically, on
 every host and in every shell. Delete or comment the line and run the same
 `up -d` to put it back.
 
+On Windows, write that file as ASCII. PowerShell 5.1's `>` and `Set-Content`
+default to UTF-16 with a byte-order mark, which Compose cannot read at all —
+it fails with `unexpected character` and a variable name with a null byte
+between every letter:
+
+```powershell
+Set-Content -Path .env -Value 'LOOPER_PROGRESSIVE_CORNER_SWEEP=true' -Encoding ascii
+```
+
 Prefer this to setting the variable in the shell. It survives a reboot, a new
 terminal and whoever runs the next deployment, none of which a shell variable
 does — and a shell variable that has quietly expired looks exactly like a flag
