@@ -4,6 +4,8 @@ import type { LoopDirection } from './candidates.js'
 import { bearingBetween, destination, distanceBetween, haversine, normaliseBearing, pathLength, resample, type LngLat } from './geo.js'
 import { MIN_BACKTRACK_METRES, sharedCorridorMetres } from './quality.js'
 import { GraphHopperError, type GraphHopperLeg, type GraphHopperStep } from '../graphhopper.js'
+import type { RoutePurpose } from './metrics.js'
+import type { EdgeSpan } from './edges.js'
 
 /**
  * Building a loop, a leg at a time.
@@ -95,7 +97,16 @@ const LEG_RETRY_BEARING_STEP_DEGREES = 20
 /** Fraction the planned length is shortened by on each local retry. */
 const LEG_RETRY_LENGTH_STEP = 0.2
 
-export type LegRouter = (points: LngLat[], customModel: ReturnType<typeof avoidanceCustomModel>) => Promise<GraphHopperLeg>
+/**
+ * `purpose` is metrics only: it says which fixup is paying for this call, so a
+ * high call count can be attributed rather than merely observed. A router that
+ * ignores it behaves exactly as before.
+ */
+export type LegRouter = (
+  points: LngLat[],
+  customModel: ReturnType<typeof avoidanceCustomModel>,
+  purpose?: RoutePurpose,
+) => Promise<GraphHopperLeg>
 
 export type RoutedLeg = GraphHopperLeg & {
   /** True when the leg was routed under the reduced penalty after a failure. */
@@ -112,6 +123,8 @@ export type RoutedCandidate = {
   distanceMeters: number
   durationSeconds: number
   legDistances: number[]
+  /** Network edges of the joined walk, when every leg reported them. */
+  edges?: EdgeSpan[]
 }
 
 export type SequentialRoutingOptions = {
@@ -133,10 +146,22 @@ export type SequentialRoutingOptions = {
   joinTurnThresholdDegrees?: number
   /** See WAYPOINT_PULLBACK_SCALE. Overridable for the tuning panel only. */
   waypointPullbackScale?: number
+  /** How this leg's own first call is attributed in metrics. Fixups keep their own tags. */
+  basePurpose?: RoutePurpose
   signal?: AbortSignal
 }
 
 export type BuildLoopOptions = SequentialRoutingOptions & {
+  /**
+   * Ground to treat as already walked before the first leg is routed.
+   *
+   * Used by a repair to hand the builder the stretch a previous attempt
+   * doubled back on, so the rebuild is pushed off it the same way a later leg
+   * is pushed off an earlier one — one mechanism, not a second one. It is a
+   * penalty, not a prohibition: where there is genuinely no other way, the
+   * rebuild walks it again and is judged on that as before.
+   */
+  preAvoidGeometries?: LngLat[][]
   /** See DEFAULT_CORNER_COUNT. */
   cornerCount?: number
   /** See DEFAULT_MAX_LEG_ATTEMPTS. */
@@ -173,14 +198,14 @@ export async function routeLegAttempt(
   let leg: GraphHopperLeg | undefined
   let relaxed = false
   try {
-    leg = await route(pair, avoidanceCustomModel(areas, options.strongPriority ?? AVOID_PRIORITY))
+    leg = await route(pair, avoidanceCustomModel(areas, options.strongPriority ?? AVOID_PRIORITY), options.basePurpose ?? 'leg')
   } catch (error) {
     if (!(error instanceof GraphHopperError) || error.kind === 'transport') throw error
     // One retry for this leg only, still penalised, just less absolutely.
     if (!areas.length) return undefined
     relaxed = true
     try {
-      leg = await route(pair, avoidanceCustomModel(areas, options.relaxedPriority ?? RELAXED_AVOID_PRIORITY))
+      leg = await route(pair, avoidanceCustomModel(areas, options.relaxedPriority ?? RELAXED_AVOID_PRIORITY), 'leg-relaxed')
     } catch (retryError) {
       if (!(retryError instanceof GraphHopperError) || retryError.kind === 'transport') throw retryError
       return undefined
@@ -194,7 +219,7 @@ export async function routeLegAttempt(
   // retry each leg gets is spent here too, not only on an outright failure.
   if (!relaxed && areas.length && options.legBudgetMetres && leg.distanceMeters > options.legBudgetMetres) {
     try {
-      const cheaper = await route(pair, avoidanceCustomModel(areas, options.relaxedPriority ?? RELAXED_AVOID_PRIORITY))
+      const cheaper = await route(pair, avoidanceCustomModel(areas, options.relaxedPriority ?? RELAXED_AVOID_PRIORITY), 'leg-budget')
       if (cheaper.distanceMeters < leg.distanceMeters) {
         leg = cheaper
         relaxed = true
@@ -212,7 +237,7 @@ export async function routeLegAttempt(
   if (spike) {
     const spikeAreas = [...areas, buildSpikeAvoidanceArea(spike, SPIKE_AVOID_RADIUS_METRES)]
     try {
-      const rerouted = await route(pair, avoidanceCustomModel(spikeAreas, relaxed ? (options.relaxedPriority ?? RELAXED_AVOID_PRIORITY) : (options.strongPriority ?? AVOID_PRIORITY)))
+      const rerouted = await route(pair, avoidanceCustomModel(spikeAreas, relaxed ? (options.relaxedPriority ?? RELAXED_AVOID_PRIORITY) : (options.strongPriority ?? AVOID_PRIORITY)), 'spike')
       const stillSpiked = findLegSpike(rerouted.coordinates)
       if (!stillSpiked && rerouted.distanceMeters < leg.distanceMeters * 1.5) {
         leg = rerouted
@@ -276,6 +301,7 @@ export async function applyJoinPullback(
     const redonePrevious = await route(
       [previousPoint, pulledIn],
       avoidanceCustomModel(areasBeforePrevious, previous.relaxed ? (options.relaxedPriority ?? RELAXED_AVOID_PRIORITY) : (options.strongPriority ?? AVOID_PRIORITY)),
+      'join-pullback',
     )
     const walkedWithRedone = [...walkedBeforePrevious, redonePrevious.coordinates]
     const areasForCurrent = buildAvoidanceAreas(walkedWithRedone, start, {
@@ -285,6 +311,7 @@ export async function applyJoinPullback(
     const redoneCurrent = await route(
       [pulledIn, currentTarget],
       avoidanceCustomModel(areasForCurrent, relaxed ? (options.relaxedPriority ?? RELAXED_AVOID_PRIORITY) : (options.strongPriority ?? AVOID_PRIORITY)),
+      'join-pullback',
     )
     const redoneTurn = turnAngleDegrees(edgeBearing(redonePrevious.coordinates, false), edgeBearing(redoneCurrent.coordinates, true))
     const redoneSpike = findLegSpike([...redonePrevious.coordinates, ...redoneCurrent.coordinates])
@@ -331,7 +358,9 @@ export async function buildLoopIncrementally(
 
   const points: LngLat[] = [start]
   const legs: RoutedLeg[] = []
-  const walked: LngLat[][] = []
+  // Seeded ground is never popped, because it was never pushed by a leg: the
+  // undo in the join fix-up below only ever removes what this loop added.
+  const walked: LngLat[][] = [...(options.preAvoidGeometries ?? [])]
   let running = 0
   let heading = initialBearing
 
@@ -436,6 +465,7 @@ function trimTinySpikes(joined: {
   steps: GraphHopperStep[]
   distanceMeters: number
   durationSeconds: number
+  edges?: EdgeSpan[]
 }): typeof joined {
   const originalDistanceMeters = joined.distanceMeters
   let current = joined
@@ -452,6 +482,7 @@ function trimTinySpikesOnce(joined: {
   steps: GraphHopperStep[]
   distanceMeters: number
   durationSeconds: number
+  edges?: EdgeSpan[]
 }): typeof joined {
   const { coordinates, steps, distanceMeters, durationSeconds } = joined
   const n = coordinates.length
@@ -507,6 +538,17 @@ function trimTinySpikesOnce(joined: {
   // Measured from the geometry itself, not attributed step by step: a step
   // spanning far more ground than the one spike inside it would otherwise
   // hide almost all of what was actually cut.
+  // Edge spans index the line, so trimming has to move them with it. A span
+  // that lay entirely inside a trimmed spike describes ground the walk no
+  // longer covers, and is dropped rather than collapsed onto a point — the
+  // walk did not walk it, so it must not count as having walked it.
+  const newEdges: EdgeSpan[] = []
+  for (const span of joined.edges ?? []) {
+    const startIndex = remapIndex(span.startIndex)
+    const endIndex = remapIndex(span.endIndex)
+    if (endIndex > startIndex) newEdges.push({ id: span.id, startIndex, endIndex })
+  }
+
   const newCoordinates = coordinates.filter((_, index) => keep[index])
   const removedMetres = Math.max(0, pathLength(coordinates) - pathLength(newCoordinates))
   const trimmedFraction = distanceMeters > 0 ? removedMetres / distanceMeters : 0
@@ -515,6 +557,7 @@ function trimTinySpikesOnce(joined: {
     steps: newSteps,
     distanceMeters: Math.max(0, distanceMeters - removedMetres),
     durationSeconds: durationSeconds * (1 - trimmedFraction),
+    ...(joined.edges ? { edges: newEdges } : {}),
   }
 }
 
@@ -574,14 +617,20 @@ function overlapMetres(a: LngLat[], b: LngLat[]): number {
  * last, where arriving is the point. Step point indices are rebased onto the
  * joined line so the walk screen can still find a turn's position.
  */
-export function joinLegGeometries(legs: Array<Pick<GraphHopperLeg, 'coordinates' | 'steps' | 'distanceMeters' | 'durationSeconds'>>): {
+export function joinLegGeometries(legs: Array<Pick<GraphHopperLeg, 'coordinates' | 'steps' | 'distanceMeters' | 'durationSeconds' | 'edges'>>): {
   coordinates: LngLat[]
   steps: GraphHopperStep[]
   distanceMeters: number
   durationSeconds: number
+  edges?: EdgeSpan[]
 } {
   const coordinates: LngLat[] = []
   const steps: GraphHopperStep[] = []
+  const edges: EdgeSpan[] = []
+  // One leg without edge details makes the whole joined walk unmeasurable on
+  // the network: a half-covered edge list would silently under-report
+  // retracing, which is worse than falling back to geometry for this route.
+  let everyLegHasEdges = true
   let distanceMeters = 0
   let durationSeconds = 0
 
@@ -601,11 +650,19 @@ export function joinLegGeometries(legs: Array<Pick<GraphHopperLeg, 'coordinates'
         endIndex: step.endIndex === undefined ? undefined : step.endIndex + offset,
       })
     }
+    if (leg.edges?.length) {
+      for (const span of leg.edges) {
+        edges.push({ id: span.id, startIndex: span.startIndex + offset, endIndex: span.endIndex + offset })
+      }
+    } else {
+      everyLegHasEdges = false
+    }
+
     distanceMeters += leg.distanceMeters
     durationSeconds += leg.durationSeconds
   })
 
-  return { coordinates, steps, distanceMeters, durationSeconds }
+  return { coordinates, steps, distanceMeters, durationSeconds, ...(everyLegHasEdges && edges.length ? { edges } : {}) }
 }
 
 const samePoint = (a: LngLat, b: LngLat) => Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9

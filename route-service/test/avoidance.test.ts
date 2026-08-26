@@ -106,3 +106,35 @@ describe('corridor width', () => {
     expect(inside(areas, destination(at(0, 400), 40, 90))).toBe(false)
   })
 })
+
+/**
+ * The clipping library is not total: a walk that doubles back along exactly
+ * the same line buffers into corridors sharing a whole edge, which it can
+ * refuse outright. An avoidance corridor is a preference, so a preference
+ * that cannot be merged must degrade to a weaker preference — never to an
+ * exception that abandons the walker's whole request.
+ */
+describe('corridors the clipping library cannot merge', () => {
+  const there = polyline([[0, 0], [0, 900]])
+  const andBack = polyline([[0, 900], [0, 0]])
+
+  it('still describes the ground when two corridors lie exactly on top of each other', () => {
+    const areas = buildAvoidanceAreas([there, andBack], START)
+    expect(areas.length).toBeGreaterThan(0)
+    expect(inside(areas, at(0, 500))).toBe(true)
+  })
+
+  it('never throws, whatever the legs look like', () => {
+    const degenerate = [
+      [there, andBack, there],
+      [polyline([[0, 0], [0, 400]]), polyline([[0, 400], [0, 0]]), polyline([[0, 0], [0, 400]])],
+      [polyline([[0, 0], [600, 0], [0, 0]])],
+    ]
+    for (const legs of degenerate) expect(() => buildAvoidanceAreas(legs, START)).not.toThrow()
+  })
+
+  it('still keeps the doorstep clear when the corridors could not be merged', () => {
+    const areas = buildAvoidanceAreas([there, andBack], START)
+    expect(inside(areas, at(0, 20))).toBe(false)
+  })
+})

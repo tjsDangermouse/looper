@@ -382,3 +382,43 @@ describe('joining the legs into one walk', () => {
 
 const midpoint = (a: LngLat, b: LngLat): LngLat => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
 void polyline
+
+/**
+ * Edge spans index into the line they came from. Every operation that changes
+ * the line has to move them with it, or the retrace measurement is being taken
+ * against a walk that no longer exists.
+ */
+describe('carrying edge ids through a joined walk', () => {
+  const leg = (coordinates: LngLat[], edges: Array<[number, number, number]>) => ({
+    coordinates,
+    distanceMeters: 100 * (coordinates.length - 1),
+    durationSeconds: 72 * (coordinates.length - 1),
+    steps: [],
+    edges: edges.map(([startIndex, endIndex, id]) => ({ id, startIndex, endIndex })),
+  })
+
+  it('rebases every span onto the joined line', () => {
+    const first = leg([at(0, 0), at(100, 0), at(200, 0)], [[0, 1, 10], [1, 2, 11]])
+    const second = leg([at(200, 0), at(300, 0)], [[0, 1, 12]])
+    const joined = joinLegGeometries([first, second])
+    // The shared point at the seam is dropped, so the second leg starts at 2.
+    expect(joined.edges).toEqual([
+      { id: 10, startIndex: 0, endIndex: 1 },
+      { id: 11, startIndex: 1, endIndex: 2 },
+      { id: 12, startIndex: 2, endIndex: 3 },
+    ])
+  })
+
+  it('reports no edges at all when any one leg could not report its own', () => {
+    const withEdges = leg([at(0, 0), at(100, 0)], [[0, 1, 10]])
+    const without = { ...leg([at(100, 0), at(200, 0)], []), edges: undefined }
+    // Half a picture of which edges were walked would under-report retracing,
+    // which is worse than falling back to geometry for the whole walk.
+    expect(joinLegGeometries([withEdges, without]).edges).toBeUndefined()
+  })
+
+  it('leaves the joined walk without edges when no leg had any', () => {
+    const plain = { ...leg([at(0, 0), at(100, 0)], []), edges: undefined }
+    expect(joinLegGeometries([plain, plain]).edges).toBeUndefined()
+  })
+})

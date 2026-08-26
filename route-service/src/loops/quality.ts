@@ -8,6 +8,7 @@ import {
   type Sample,
 } from './geo.js'
 import { isUTurnSign } from '../graphhopper.js'
+import { edgeRepeatReport, type EdgeTraversal } from './edges.js'
 
 /**
  * Route quality.
@@ -335,6 +336,12 @@ export type QualityInput = {
   legDistances: number[]
   maneuverSigns?: Array<number | undefined>
   /**
+   * The network edges this route traversed, when the engine reported them.
+   * Supplying them measures retracing on the network instead of by geometric
+   * proximity; leaving them out keeps today's geometric measure exactly.
+   */
+  traversals?: EdgeTraversal[]
+  /**
    * Every threshold above, individually overridable. Exists for the tuning
    * panel: a walker experimenting with these live is how we find out which
    * one is actually the wall at their address, rather than guessing from
@@ -394,6 +401,15 @@ export type QualityReport = {
   quality: QualityScore
   distanceErrorFraction: number
   durationErrorFraction?: number
+  /**
+   * What was measured and what was asked for. Echoed back because a repair
+   * needs to know *which side* of the target a candidate missed on, and an
+   * error fraction is an absolute value.
+   */
+  distanceMeters: number
+  targetMetres: number
+  durationSeconds: number
+  targetSeconds?: number
   boundingBoxRatio: number
   legShares: number[]
   /** Out-and-back length at the door before the loop proper begins. */
@@ -403,6 +419,8 @@ export type QualityReport = {
   durationOnly: boolean
   /** True when the only thing wrong is the length, which a resized ring may fix. */
   distanceOnly: boolean
+  /** Which measure decided the retracing figures above. */
+  overlapSource: 'edges' | 'geometry'
   /**
    * Right length, right place, but the shape is compromised — it retraces, or
    * doubles back, or is a long thin corridor. Offered only where nothing clean
@@ -416,7 +434,8 @@ export function analyseRouteQuality(input: QualityInput): QualityReport {
   const t: QualityThresholds = { ...DEFAULT_QUALITY_THRESHOLDS, ...input.thresholds }
   const rejections: string[] = []
 
-  const repeats = findRepeatedCorridors(coordinates)
+  const measured = repeatsFor(coordinates, input.traversals, distanceMeters)
+  const repeats = measured.repeats
   const uTurnCount = countUTurns(coordinates, input.maneuverSigns)
   const shape = isoperimetricCompactness(coordinates)
   const { longMetres, shortMetres } = boundingBoxSides(coordinates)
@@ -488,13 +507,46 @@ export function analyseRouteQuality(input: QualityInput): QualityReport {
     },
     distanceErrorFraction,
     durationErrorFraction,
+    distanceMeters,
+    targetMetres,
+    durationSeconds,
+    targetSeconds,
     boundingBoxRatio,
     legShares,
     startStubMetres: stubMetres,
     longestReverseRunMetres: repeats.longestReverseRunMetres,
     durationOnly: rejections.length === 1 && rejections[0] === 'duration',
     distanceOnly: rejections.length === 1 && rejections[0] === 'distance',
+    overlapSource: measured.source,
     passesEssentials: !rejections.some(reason => (ESSENTIAL_REJECTIONS as readonly string[]).includes(reason)),
+  }
+}
+
+/**
+ * Retracing, from the network where the network is known and from the geometry
+ * where it is not. The two measures answer the same question and are used
+ * interchangeably by everything downstream, so both must produce the same
+ * shape of answer — including the reverse-run length, which is what decides
+ * whether a long backtrack is a pier or a mistake.
+ */
+function repeatsFor(
+  coordinates: LngLat[],
+  traversals: EdgeTraversal[] | undefined,
+  distanceMeters: number,
+): { repeats: RepeatReport; source: 'edges' | 'geometry' } {
+  if (!traversals?.length) return { repeats: findRepeatedCorridors(coordinates), source: 'geometry' }
+  const report = edgeRepeatReport(traversals, distanceMeters)
+  return {
+    source: 'edges',
+    repeats: {
+      repeatedMeters: report.repeatedMeters,
+      repeatedPercent: report.repeatedPercent,
+      weightedRepeatedMeters: report.weightedRepeatedMeters,
+      // The individual runs exist only for the aggregates above, which the
+      // network measure produces directly.
+      runs: [],
+      longestReverseRunMetres: report.longestReverseRunMetres,
+    },
   }
 }
 

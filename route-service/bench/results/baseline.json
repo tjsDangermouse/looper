@@ -1,0 +1,1309 @@
+{
+  "label": "baseline",
+  "at": "2026-08-26T11:23:37.646Z",
+  "scenarios": [
+    {
+      "id": "urban-5km",
+      "about": "Dense town grid, 5 km, no waypoints — the easy case everything else is measured against",
+      "network": "dense-grid",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 137,
+      "callsByPurpose": {
+        "leg": 135,
+        "leg-budget": 2
+      },
+      "nodesVisited": 121172,
+      "wallMs": 517,
+      "metrics": {
+        "graphhopperCalls": 137,
+        "callsByPurpose": {
+          "leg": 135,
+          "leg-relaxed": 0,
+          "leg-budget": 2,
+          "spike": 0,
+          "join-pullback": 0,
+          "waypoint-direct": 0,
+          "waypoint-leg": 0,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 684,
+        "candidatesBuilt": 10,
+        "candidatesRouted": 10,
+        "candidatesPassed": 9,
+        "candidatesRejected": 1,
+        "rejectionReasons": {
+          "distance": 1
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 4.4,
+          "maxDistanceErrorPercent": 4.4,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 28
+        },
+        "totalMs": 517,
+        "candidateMs": {
+          "median": 233,
+          "p95": 399,
+          "max": 399
+        }
+      }
+    },
+    {
+      "id": "urban-2km-short",
+      "about": "Dense town grid, 2 km — short loops have less room to absorb a bad corner",
+      "network": "dense-grid",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 100,
+      "callsByPurpose": {
+        "leg": 98,
+        "leg-budget": 2
+      },
+      "nodesVisited": 16159,
+      "wallMs": 222,
+      "metrics": {
+        "graphhopperCalls": 100,
+        "callsByPurpose": {
+          "leg": 98,
+          "leg-relaxed": 0,
+          "leg-budget": 2,
+          "spike": 0,
+          "join-pullback": 0,
+          "waypoint-direct": 0,
+          "waypoint-leg": 0,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 236,
+        "candidatesBuilt": 10,
+        "candidatesRouted": 10,
+        "candidatesPassed": 8,
+        "candidatesRejected": 2,
+        "rejectionReasons": {
+          "distance": 2
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 1,
+          "maxDistanceErrorPercent": 1,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 28.8
+        },
+        "totalMs": 222,
+        "candidateMs": {
+          "median": 70,
+          "p95": 200,
+          "max": 200
+        }
+      }
+    },
+    {
+      "id": "urban-12km-long",
+      "about": "Dense town grid, 12 km — long loops cost the most engine calls per candidate",
+      "network": "dense-grid",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 68,
+      "callsByPurpose": {
+        "leg": 68
+      },
+      "nodesVisited": 181845,
+      "wallMs": 270,
+      "metrics": {
+        "graphhopperCalls": 68,
+        "callsByPurpose": {
+          "leg": 68,
+          "leg-relaxed": 0,
+          "leg-budget": 0,
+          "spike": 0,
+          "join-pullback": 0,
+          "waypoint-direct": 0,
+          "waypoint-leg": 0,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 401,
+        "candidatesBuilt": 10,
+        "candidatesRouted": 10,
+        "candidatesPassed": 10,
+        "candidatesRejected": 0,
+        "rejectionReasons": {},
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 2,
+          "maxDistanceErrorPercent": 6.5,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 28.3
+        },
+        "totalMs": 270,
+        "candidateMs": {
+          "median": 119,
+          "p95": 203,
+          "max": 203
+        }
+      }
+    },
+    {
+      "id": "urban-time-60min",
+      "about": "Dense town grid, duration mode, 60 minutes at the default pace",
+      "network": "dense-grid",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 137,
+      "callsByPurpose": {
+        "leg": 135,
+        "leg-budget": 2
+      },
+      "nodesVisited": 121172,
+      "wallMs": 391,
+      "metrics": {
+        "graphhopperCalls": 137,
+        "callsByPurpose": {
+          "leg": 135,
+          "leg-relaxed": 0,
+          "leg-budget": 2,
+          "spike": 0,
+          "join-pullback": 0,
+          "waypoint-direct": 0,
+          "waypoint-leg": 0,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 491,
+        "candidatesBuilt": 10,
+        "candidatesRouted": 10,
+        "candidatesPassed": 9,
+        "candidatesRejected": 2,
+        "rejectionReasons": {
+          "distance": 1,
+          "duration": 1
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 4.4,
+          "maxDistanceErrorPercent": 4.4,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 28
+        },
+        "totalMs": 391,
+        "candidateMs": {
+          "median": 181,
+          "p95": 288,
+          "max": 288
+        }
+      }
+    },
+    {
+      "id": "urban-time-paced",
+      "about": "Duration mode with a walker-supplied pace, which moves the distance target",
+      "network": "dense-grid",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 137,
+      "callsByPurpose": {
+        "leg": 135,
+        "leg-budget": 2
+      },
+      "nodesVisited": 121172,
+      "wallMs": 399,
+      "metrics": {
+        "graphhopperCalls": 137,
+        "callsByPurpose": {
+          "leg": 135,
+          "leg-relaxed": 0,
+          "leg-budget": 2,
+          "spike": 0,
+          "join-pullback": 0,
+          "waypoint-direct": 0,
+          "waypoint-leg": 0,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 504,
+        "candidatesBuilt": 10,
+        "candidatesRouted": 10,
+        "candidatesPassed": 9,
+        "candidatesRejected": 2,
+        "rejectionReasons": {
+          "distance": 1,
+          "duration": 1
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 4.4,
+          "maxDistanceErrorPercent": 4.4,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 28
+        },
+        "totalMs": 399,
+        "candidateMs": {
+          "median": 183,
+          "p95": 295,
+          "max": 295
+        }
+      }
+    },
+    {
+      "id": "urban-variation-3",
+      "about": "Same request, third refresh — a different deterministic candidate set",
+      "network": "dense-grid",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 105,
+      "callsByPurpose": {
+        "leg": 105
+      },
+      "nodesVisited": 102168,
+      "wallMs": 294,
+      "metrics": {
+        "graphhopperCalls": 105,
+        "callsByPurpose": {
+          "leg": 105,
+          "leg-relaxed": 0,
+          "leg-budget": 0,
+          "spike": 0,
+          "join-pullback": 0,
+          "waypoint-direct": 0,
+          "waypoint-leg": 0,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 318,
+        "candidatesBuilt": 10,
+        "candidatesRouted": 10,
+        "candidatesPassed": 9,
+        "candidatesRejected": 1,
+        "rejectionReasons": {
+          "distance": 1
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 8,
+          "maxDistanceErrorPercent": 8,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 19.3
+        },
+        "totalMs": 294,
+        "candidateMs": {
+          "median": 143,
+          "p95": 235,
+          "max": 235
+        }
+      }
+    },
+    {
+      "id": "suburban-5km",
+      "about": "Suburban lattice with cul-de-sacs, 5 km — where spurs and join pullbacks come from",
+      "network": "suburban",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 93,
+      "callsByPurpose": {
+        "leg": 85,
+        "leg-budget": 6,
+        "join-pullback": 2
+      },
+      "nodesVisited": 18385,
+      "wallMs": 162,
+      "metrics": {
+        "graphhopperCalls": 93,
+        "callsByPurpose": {
+          "leg": 85,
+          "leg-relaxed": 0,
+          "leg-budget": 6,
+          "spike": 0,
+          "join-pullback": 2,
+          "waypoint-direct": 0,
+          "waypoint-leg": 0,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 116,
+        "candidatesBuilt": 8,
+        "candidatesRouted": 8,
+        "candidatesPassed": 6,
+        "candidatesRejected": 2,
+        "rejectionReasons": {
+          "distance": 1,
+          "shapeless": 1
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 5.1,
+          "maxDistanceErrorPercent": 6.4,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 24.8
+        },
+        "totalMs": 162,
+        "candidateMs": {
+          "median": 32,
+          "p95": 158,
+          "max": 158
+        }
+      }
+    },
+    {
+      "id": "suburban-8km",
+      "about": "Suburban lattice, 8 km",
+      "network": "suburban",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 123,
+      "callsByPurpose": {
+        "leg": 107,
+        "leg-budget": 8,
+        "join-pullback": 8
+      },
+      "nodesVisited": 45322,
+      "wallMs": 243,
+      "metrics": {
+        "graphhopperCalls": 123,
+        "callsByPurpose": {
+          "leg": 107,
+          "leg-relaxed": 0,
+          "leg-budget": 8,
+          "spike": 0,
+          "join-pullback": 8,
+          "waypoint-direct": 0,
+          "waypoint-leg": 0,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 229,
+        "candidatesBuilt": 10,
+        "candidatesRouted": 10,
+        "candidatesPassed": 9,
+        "candidatesRejected": 1,
+        "rejectionReasons": {
+          "distance": 1
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 4,
+          "maxDistanceErrorPercent": 4,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 39.1
+        },
+        "totalMs": 243,
+        "candidateMs": {
+          "median": 117,
+          "p95": 190,
+          "max": 190
+        }
+      }
+    },
+    {
+      "id": "rural-6km",
+      "about": "Sparse rural lanes, 6 km — few circuits exist and they have to be found",
+      "network": "sparse-rural",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 989,
+      "callsByPurpose": {
+        "leg": 633,
+        "leg-relaxed": 43,
+        "leg-budget": 227,
+        "join-pullback": 86
+      },
+      "nodesVisited": 36962,
+      "wallMs": 1453,
+      "metrics": {
+        "graphhopperCalls": 989,
+        "callsByPurpose": {
+          "leg": 633,
+          "leg-relaxed": 43,
+          "leg-budget": 227,
+          "spike": 0,
+          "join-pullback": 86,
+          "waypoint-direct": 0,
+          "waypoint-leg": 0,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 1831,
+        "candidatesBuilt": 28,
+        "candidatesRouted": 28,
+        "candidatesPassed": 12,
+        "candidatesRejected": 18,
+        "rejectionReasons": {
+          "distance": 16,
+          "leg-too-long": 2
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 1,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 6.7,
+          "maxDistanceErrorPercent": 9.8,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 12.3,
+          "totalUTurns": 1,
+          "maxPairSharedPercent": 48.8
+        },
+        "totalMs": 1452,
+        "candidateMs": {
+          "median": 286,
+          "p95": 361,
+          "max": 390
+        }
+      }
+    },
+    {
+      "id": "rural-3km-tight",
+      "about": "Sparse rural lanes, 3 km — often genuinely has no clean loop at this length",
+      "network": "sparse-rural",
+      "routesOffered": 2,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 1291,
+      "callsByPurpose": {
+        "leg": 884,
+        "leg-relaxed": 197,
+        "leg-budget": 172,
+        "join-pullback": 38
+      },
+      "nodesVisited": 19432,
+      "wallMs": 1230,
+      "metrics": {
+        "graphhopperCalls": 1291,
+        "callsByPurpose": {
+          "leg": 884,
+          "leg-relaxed": 197,
+          "leg-budget": 172,
+          "spike": 0,
+          "join-pullback": 38,
+          "waypoint-direct": 0,
+          "waypoint-leg": 0,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 1715,
+        "candidatesBuilt": 56,
+        "candidatesRouted": 56,
+        "candidatesPassed": 16,
+        "candidatesRejected": 46,
+        "rejectionReasons": {
+          "distance": 39,
+          "leg-too-long": 5,
+          "shapeless": 2
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 2,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 2,
+          "medianDistanceErrorPercent": 6.7,
+          "maxDistanceErrorPercent": 6.7,
+          "medianRepeatedPercent": 23.3,
+          "maxRepeatedPercent": 46.6,
+          "totalUTurns": 1,
+          "maxPairSharedPercent": 0
+        },
+        "totalMs": 1229,
+        "candidateMs": {
+          "median": 131,
+          "p95": 230,
+          "max": 243
+        }
+      }
+    },
+    {
+      "id": "coastal-5km",
+      "about": "Seafront start: half the compass is sea, so half the candidate bearings are wasted",
+      "network": "coastal",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 211,
+      "callsByPurpose": {
+        "leg": 184,
+        "leg-relaxed": 1,
+        "leg-budget": 4,
+        "join-pullback": 22
+      },
+      "nodesVisited": 54922,
+      "wallMs": 542,
+      "metrics": {
+        "graphhopperCalls": 211,
+        "callsByPurpose": {
+          "leg": 184,
+          "leg-relaxed": 1,
+          "leg-budget": 4,
+          "spike": 0,
+          "join-pullback": 22,
+          "waypoint-direct": 0,
+          "waypoint-leg": 0,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 518,
+        "candidatesBuilt": 13,
+        "candidatesRouted": 13,
+        "candidatesPassed": 6,
+        "candidatesRejected": 10,
+        "rejectionReasons": {
+          "distance": 3,
+          "elongated": 3,
+          "leg-too-long": 1,
+          "shapeless": 3
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 1.2,
+          "maxDistanceErrorPercent": 10,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 44.8
+        },
+        "totalMs": 542,
+        "candidateMs": {
+          "median": 244,
+          "p95": 394,
+          "max": 394
+        }
+      }
+    },
+    {
+      "id": "bridge-4km",
+      "about": "Two banks, one bridge — any loop using both banks walks the bridge twice",
+      "network": "bridge-chokepoint",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 348,
+      "callsByPurpose": {
+        "leg": 274,
+        "leg-relaxed": 10,
+        "leg-budget": 54,
+        "join-pullback": 10
+      },
+      "nodesVisited": 144180,
+      "wallMs": 768,
+      "metrics": {
+        "graphhopperCalls": 348,
+        "callsByPurpose": {
+          "leg": 274,
+          "leg-relaxed": 10,
+          "leg-budget": 54,
+          "spike": 0,
+          "join-pullback": 10,
+          "waypoint-direct": 0,
+          "waypoint-leg": 0,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 844,
+        "candidatesBuilt": 15,
+        "candidatesRouted": 15,
+        "candidatesPassed": 6,
+        "candidatesRejected": 13,
+        "rejectionReasons": {
+          "distance": 2,
+          "elongated": 2,
+          "shapeless": 9
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 5,
+          "maxDistanceErrorPercent": 5,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 25.2
+        },
+        "totalMs": 769,
+        "candidateMs": {
+          "median": 271,
+          "p95": 429,
+          "max": 429
+        }
+      }
+    },
+    {
+      "id": "urban-exclusions",
+      "about": "Refresh that must avoid the three loops already on screen",
+      "network": "dense-grid",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 136,
+      "callsByPurpose": {
+        "leg": 132,
+        "leg-budget": 4
+      },
+      "nodesVisited": 126208,
+      "wallMs": 368,
+      "metrics": {
+        "graphhopperCalls": 136,
+        "callsByPurpose": {
+          "leg": 132,
+          "leg-relaxed": 0,
+          "leg-budget": 4,
+          "spike": 0,
+          "join-pullback": 0,
+          "waypoint-direct": 0,
+          "waypoint-leg": 0,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 492,
+        "candidatesBuilt": 10,
+        "candidatesRouted": 10,
+        "candidatesPassed": 8,
+        "candidatesRejected": 2,
+        "rejectionReasons": {
+          "distance": 2
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 4.4,
+          "maxDistanceErrorPercent": 4.4,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 24.7
+        },
+        "totalMs": 368,
+        "candidateMs": {
+          "median": 170,
+          "p95": 309,
+          "max": 309
+        }
+      }
+    },
+    {
+      "id": "waypoint-one-urban",
+      "about": "One pin, dense grid, comfortably inside the plan",
+      "network": "dense-grid",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 189,
+      "callsByPurpose": {
+        "leg": 135,
+        "leg-budget": 2,
+        "waypoint-direct": 2,
+        "waypoint-leg": 50
+      },
+      "nodesVisited": 151441,
+      "wallMs": 531,
+      "metrics": {
+        "graphhopperCalls": 189,
+        "callsByPurpose": {
+          "leg": 135,
+          "leg-relaxed": 0,
+          "leg-budget": 2,
+          "spike": 0,
+          "join-pullback": 0,
+          "waypoint-direct": 2,
+          "waypoint-leg": 50,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 668,
+        "candidatesBuilt": 10,
+        "candidatesRouted": 10,
+        "candidatesPassed": 9,
+        "candidatesRejected": 1,
+        "rejectionReasons": {
+          "distance": 1
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 20.8,
+          "maxDistanceErrorPercent": 20.8,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 31.4
+        },
+        "totalMs": 530,
+        "candidateMs": {
+          "median": 182,
+          "p95": 293,
+          "max": 293
+        }
+      }
+    },
+    {
+      "id": "waypoint-two-ordered",
+      "about": "Two ordered pins that must be visited in the order they were added",
+      "network": "dense-grid",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 196,
+      "callsByPurpose": {
+        "leg": 126,
+        "waypoint-direct": 3,
+        "waypoint-leg": 67
+      },
+      "nodesVisited": 191546,
+      "wallMs": 682,
+      "metrics": {
+        "graphhopperCalls": 196,
+        "callsByPurpose": {
+          "leg": 126,
+          "leg-relaxed": 0,
+          "leg-budget": 0,
+          "spike": 0,
+          "join-pullback": 0,
+          "waypoint-direct": 3,
+          "waypoint-leg": 67,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 771,
+        "candidatesBuilt": 10,
+        "candidatesRouted": 10,
+        "candidatesPassed": 8,
+        "candidatesRejected": 2,
+        "rejectionReasons": {
+          "distance": 2
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 8,
+          "maxDistanceErrorPercent": 13,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 47.1
+        },
+        "totalMs": 683,
+        "candidateMs": {
+          "median": 191,
+          "p95": 289,
+          "max": 289
+        }
+      }
+    },
+    {
+      "id": "waypoint-three-ordered",
+      "about": "Three ordered pins — the case a single global guide point handles worst",
+      "network": "dense-grid",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 228,
+      "callsByPurpose": {
+        "leg": 139,
+        "leg-budget": 1,
+        "waypoint-direct": 4,
+        "waypoint-leg": 84
+      },
+      "nodesVisited": 297646,
+      "wallMs": 963,
+      "metrics": {
+        "graphhopperCalls": 228,
+        "callsByPurpose": {
+          "leg": 139,
+          "leg-relaxed": 0,
+          "leg-budget": 1,
+          "spike": 0,
+          "join-pullback": 0,
+          "waypoint-direct": 4,
+          "waypoint-leg": 84,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 1114,
+        "candidatesBuilt": 11,
+        "candidatesRouted": 11,
+        "candidatesPassed": 6,
+        "candidatesRejected": 6,
+        "rejectionReasons": {
+          "distance": 3,
+          "elongated": 1,
+          "shapeless": 2
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 5.8,
+          "maxDistanceErrorPercent": 14.8,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 46
+        },
+        "totalMs": 963,
+        "candidateMs": {
+          "median": 219,
+          "p95": 340,
+          "max": 340
+        }
+      }
+    },
+    {
+      "id": "waypoint-suburban",
+      "about": "A pin in suburbia, where it may well land in a cul-de-sac",
+      "network": "suburban",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 260,
+      "callsByPurpose": {
+        "leg": 185,
+        "leg-relaxed": 1,
+        "leg-budget": 8,
+        "join-pullback": 14,
+        "waypoint-direct": 2,
+        "waypoint-leg": 50
+      },
+      "nodesVisited": 54841,
+      "wallMs": 578,
+      "metrics": {
+        "graphhopperCalls": 260,
+        "callsByPurpose": {
+          "leg": 185,
+          "leg-relaxed": 1,
+          "leg-budget": 8,
+          "spike": 0,
+          "join-pullback": 14,
+          "waypoint-direct": 2,
+          "waypoint-leg": 50,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 583,
+        "candidatesBuilt": 11,
+        "candidatesRouted": 11,
+        "candidatesPassed": 7,
+        "candidatesRejected": 4,
+        "rejectionReasons": {
+          "distance": 2,
+          "elongated": 1,
+          "shapeless": 1
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 4.9,
+          "maxDistanceErrorPercent": 13.5,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 38.9
+        },
+        "totalMs": 579,
+        "candidateMs": {
+          "median": 235,
+          "p95": 284,
+          "max": 284
+        }
+      }
+    },
+    {
+      "id": "waypoint-across-bridge",
+      "about": "A pin on the far bank: the out-and-back over the bridge is structural, not sloppy",
+      "network": "bridge-chokepoint",
+      "routesOffered": 0,
+      "valid": false,
+      "warning": "We couldn’t make a clean loop through those waypoints. Move or remove a waypoint, or increase your plan.",
+      "expectationExceeded": false,
+      "engineCalls": 362,
+      "callsByPurpose": {
+        "leg": 255,
+        "leg-relaxed": 3,
+        "leg-budget": 48,
+        "join-pullback": 4,
+        "waypoint-direct": 2,
+        "waypoint-leg": 50
+      },
+      "nodesVisited": 191139,
+      "wallMs": 828,
+      "metrics": {
+        "graphhopperCalls": 362,
+        "callsByPurpose": {
+          "leg": 255,
+          "leg-relaxed": 3,
+          "leg-budget": 48,
+          "spike": 0,
+          "join-pullback": 4,
+          "waypoint-direct": 2,
+          "waypoint-leg": 50,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 1029,
+        "candidatesBuilt": 15,
+        "candidatesRouted": 15,
+        "candidatesPassed": 6,
+        "candidatesRejected": 13,
+        "rejectionReasons": {
+          "distance": 1,
+          "elongated": 3,
+          "shapeless": 9
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 4,
+          "maxDistanceErrorPercent": 12,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 12.9,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 9.1
+        },
+        "totalMs": 828,
+        "candidateMs": {
+          "median": 226,
+          "p95": 415,
+          "max": 415
+        }
+      }
+    },
+    {
+      "id": "waypoint-narrow-spur",
+      "about": "A coastal pin at the end of a promenade, forcing a there-and-back section",
+      "network": "coastal",
+      "routesOffered": 0,
+      "valid": false,
+      "warning": "We couldn’t make a clean loop through those waypoints. Move or remove a waypoint, or increase your plan.",
+      "expectationExceeded": false,
+      "engineCalls": 261,
+      "callsByPurpose": {
+        "leg": 184,
+        "leg-relaxed": 3,
+        "leg-budget": 4,
+        "join-pullback": 22,
+        "waypoint-direct": 2,
+        "waypoint-leg": 46
+      },
+      "nodesVisited": 73370,
+      "wallMs": 643,
+      "metrics": {
+        "graphhopperCalls": 261,
+        "callsByPurpose": {
+          "leg": 184,
+          "leg-relaxed": 3,
+          "leg-budget": 4,
+          "spike": 0,
+          "join-pullback": 22,
+          "waypoint-direct": 2,
+          "waypoint-leg": 46,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 575,
+        "candidatesBuilt": 13,
+        "candidatesRouted": 13,
+        "candidatesPassed": 6,
+        "candidatesRejected": 10,
+        "rejectionReasons": {
+          "distance": 3,
+          "elongated": 3,
+          "leg-too-long": 1,
+          "shapeless": 3
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 1.2,
+          "maxDistanceErrorPercent": 10,
+          "medianRepeatedPercent": 0,
+          "maxRepeatedPercent": 0,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 44.8
+        },
+        "totalMs": 643,
+        "candidateMs": {
+          "median": 238,
+          "p95": 393,
+          "max": 393
+        }
+      }
+    },
+    {
+      "id": "waypoint-impossible",
+      "about": "A pin far beyond the plan — must refuse with expectationExceeded, not invent a walk",
+      "network": "dense-grid",
+      "routesOffered": 0,
+      "valid": true,
+      "warning": "These waypoints need at least 9.0 km, which is more than 25% over your 2.0 km plan. Increase your plan or remove a waypoint.",
+      "expectationExceeded": true,
+      "engineCalls": 2,
+      "callsByPurpose": {
+        "waypoint-direct": 2
+      },
+      "nodesVisited": 6198,
+      "wallMs": 2,
+      "metrics": {
+        "graphhopperCalls": 2,
+        "callsByPurpose": {
+          "leg": 0,
+          "leg-relaxed": 0,
+          "leg-budget": 0,
+          "spike": 0,
+          "join-pullback": 0,
+          "waypoint-direct": 2,
+          "waypoint-leg": 0,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "engineMs": 2,
+        "candidatesBuilt": 0,
+        "candidatesRouted": 0,
+        "candidatesPassed": 0,
+        "candidatesRejected": 0,
+        "rejectionReasons": {},
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "none",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "totalMs": 2,
+        "candidateMs": {
+          "median": 0,
+          "p95": 0,
+          "max": 0
+        }
+      }
+    }
+  ],
+  "totals": {
+    "scenarios": 20,
+    "validScenarios": 18,
+    "validRoutePercent": 90,
+    "engineCalls": 5373,
+    "routesOffered": 50,
+    "medianWallMs": 517,
+    "p95WallMs": 1230
+  }
+}

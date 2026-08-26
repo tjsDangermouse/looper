@@ -1,5 +1,6 @@
 import { bearingBetween, normaliseBearing, pathLength, type LngLat } from './geo.js'
 import { sharedCorridorMetres } from './quality.js'
+import { sharedEdgeMetres, type EdgeTraversal } from './edges.js'
 
 /**
  * Choosing what to offer.
@@ -63,7 +64,34 @@ export type Selectable = {
   coordinates: LngLat[]
   quality: { score: number }
   bearing: number
+  /**
+   * The network edges this route walked, when the engine reported them.
+   * Where both routes in a comparison have them, "the same ground" stops
+   * being a question about proximity — see loops/edges.ts.
+   */
+  traversals?: EdgeTraversal[]
+  /** Length of the route, needed to turn shared metres into a fraction. */
+  totalMetres?: number
 }
+
+/**
+ * How much of `a` runs along `b`, on the network where both routes know their
+ * edges and by geometric proximity where either does not.
+ *
+ * Deliberately one-directional: a two-kilometre walk entirely contained in a
+ * six-kilometre one shares all of itself and only a third of the other. Every
+ * caller that needs a symmetric answer asks twice and takes the worse.
+ */
+export function sharedFraction(a: Selectable, b: Selectable): number {
+  if (a.traversals?.length && b.traversals?.length && a.totalMetres) {
+    return sharedEdgeMetres(a.traversals, b.traversals, a.totalMetres).fraction
+  }
+  return sharedCorridorMetres(a.coordinates, b.coordinates).fraction
+}
+
+/** The worse of the two directions: "are these the same walk" has no favourite. */
+export const mutualSharedFraction = (a: Selectable, b: Selectable) =>
+  Math.max(sharedFraction(a, b), sharedFraction(b, a))
 
 /**
  * Best first, then the best that is a different walk from the ones already
@@ -72,18 +100,35 @@ export type Selectable = {
  * because two good loops beat one good loop and a rule.
  */
 export function selectDiverseRoutes<T extends Selectable>(candidates: T[], limit = 3, maxShared = MAX_SHARED_FRACTION): T[] {
+  return select(candidates, limit, maxShared, [true, false])
+}
+
+/**
+ * The first pass on its own: only loops that leave by genuinely different
+ * streets. This is what "we already have three good choices" means, and it is
+ * a stricter question than the one `selectDiverseRoutes` finally answers —
+ * which is the point. Stopping early on a set the second pass had to rescue
+ * would be stopping on the worse answer.
+ *
+ * Deliberately the same code path, not a second implementation of it: two
+ * subtly different diversity rules is exactly how a generator ends up
+ * stopping on a set the selector then refuses.
+ */
+export function selectPreferredDiverseRoutes<T extends Selectable>(candidates: T[], limit = 3, maxShared = MAX_SHARED_FRACTION): T[] {
+  return select(candidates, limit, maxShared, [true])
+}
+
+function select<T extends Selectable>(candidates: T[], limit: number, maxShared: number, passes: boolean[]): T[] {
   const ranked = [...candidates].sort((a, b) => b.quality.score - a.quality.score)
   const chosen: T[] = []
   const octants = new Set<number>()
 
-  for (const requireNewOctant of [true, false]) {
+  for (const requireNewOctant of passes) {
     for (const candidate of ranked) {
       if (chosen.length >= limit) break
       if (chosen.includes(candidate)) continue
       if (requireNewOctant && octants.has(bearingOctant(candidate.bearing))) continue
-      const tooSimilar = chosen.some(other =>
-        sharedCorridorMetres(candidate.coordinates, other.coordinates).fraction > maxShared
-        || sharedCorridorMetres(other.coordinates, candidate.coordinates).fraction > maxShared)
+      const tooSimilar = chosen.some(other => mutualSharedFraction(candidate, other) > maxShared)
       if (tooSimilar) continue
       chosen.push(candidate)
       octants.add(bearingOctant(candidate.bearing))

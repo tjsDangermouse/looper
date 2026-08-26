@@ -1,0 +1,9 @@
+{
+  // Typechecks the benchmark harness alongside the service. `test` is left out
+  // deliberately: vitest transpiles without checking, and the existing suite
+  // has never been type-clean, so pulling it in here would fail the build on
+  // pre-existing looseness rather than on anything this config is for.
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": ".", "types": ["node"] },
+  "include": ["src", "bench"]
+}

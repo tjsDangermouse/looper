@@ -1,5 +1,6 @@
 import type { LngLat } from './loops/geo.js'
 import type { CustomModel } from './loops/avoidance.js'
+import type { EdgeSpan } from './loops/edges.js'
 
 /**
  * The only thing that talks to GraphHopper.
@@ -28,6 +29,12 @@ export type GraphHopperLeg = {
   distanceMeters: number
   durationSeconds: number
   steps: GraphHopperStep[]
+  /**
+   * Which network edge each stretch of the line ran on, when the engine
+   * reported it. Absent is an ordinary outcome, not a fault: everything that
+   * uses these has a geometric fallback.
+   */
+  edges?: EdgeSpan[]
 }
 
 export class GraphHopperError extends Error {
@@ -60,9 +67,12 @@ export function buildRouteBody(points: LngLat[], options: Pick<RouteRequestOptio
     elevation: false,
     calc_points: true,
     locale: options.locale ?? 'en',
-    // street_name feeds the reversed-walk instructions; edge ids are a
-    // supporting signal for repeat detection, with geometry still the truth.
-    details: ['street_name', 'road_class'],
+    // street_name feeds the walk instructions. edge_id is what turns "these
+    // two stretches pass within seventeen metres of each other" into "these
+    // two stretches are the same piece of network" — see loops/edges.ts. It is
+    // a built-in GraphHopper detail needing no encoded value, and a build that
+    // does not return it simply falls back to geometry.
+    details: ['street_name', 'road_class', 'edge_id'],
     snap_preventions: ['ferry'],
   }
   if (options.customModel) body.custom_model = options.customModel
@@ -102,6 +112,39 @@ export class GraphHopperClient {
     const body = buildRouteBody(points, { profile: this.profile, customModel: options.customModel, locale: options.locale })
     const payload = await this.post('/route', body, options.timeoutMs ?? this.defaultTimeoutMs, options.signal)
     return parseLeg(payload)
+  }
+
+  /**
+   * How far the network goes from a point, within a walking budget.
+   *
+   * GraphHopper's shortest-path-tree endpoint, which is part of the standard
+   * open-source server but is not guaranteed to be enabled on every build. It
+   * is asked for as CSV, which is what it documents itself as returning, and
+   * anything it answers that is not a table of numbers is treated as "this
+   * build does not do this" rather than as an error worth propagating: every
+   * caller has a path that works without it.
+   */
+  async shortestPathTree(
+    point: LngLat,
+    distanceLimitMetres: number,
+    options: { timeoutMs?: number; signal?: AbortSignal } = {},
+  ): Promise<Array<{ point: LngLat; networkMetres: number }> | undefined> {
+    const query = new URLSearchParams({
+      point: `${point[1]},${point[0]}`,
+      profile: this.profile,
+      distance_limit: String(Math.round(distanceLimitMetres)),
+      time_limit: '0',
+      columns: 'longitude,latitude,distance',
+      reverse_flow: 'false',
+    })
+    try {
+      const response = await this.request(`/spt?${query}`, { method: 'GET' }, options.timeoutMs ?? 4000, options.signal)
+      return parseShortestPathTree(await response.text())
+    } catch {
+      // Not available, not reachable, or not answering in time. All three mean
+      // the same thing to a caller that has to work without it.
+      return undefined
+    }
   }
 
   async info(timeoutMs = 3000): Promise<{ version?: string; profiles: string[]; bbox?: number[] }> {
@@ -148,6 +191,27 @@ export class GraphHopperClient {
   }
 }
 
+/**
+ * `longitude,latitude,distance` with a header row. Rows that are not three
+ * finite numbers are skipped rather than guessed at; a probe is a hint, and a
+ * hint assembled from misread rows is worse than no hint.
+ */
+export function parseShortestPathTree(body: string): Array<{ point: LngLat; networkMetres: number }> | undefined {
+  const lines = body.split('\n')
+  const reached: Array<{ point: LngLat; networkMetres: number }> = []
+  for (const line of lines) {
+    const fields = line.split(',')
+    if (fields.length < 3) continue
+    const lng = Number(fields[0])
+    const lat = Number(fields[1])
+    const metres = Number(fields[2])
+    if (!Number.isFinite(lng) || !Number.isFinite(lat) || !Number.isFinite(metres)) continue
+    if (Math.abs(lng) > 180 || Math.abs(lat) > 90 || metres < 0) continue
+    reached.push({ point: [lng, lat], networkMetres: metres })
+  }
+  return reached.length ? reached : undefined
+}
+
 async function readMessage(response: Response): Promise<string> {
   try {
     const data = (await response.json()) as any
@@ -176,12 +240,35 @@ export function parseLeg(payload: any): GraphHopperLeg {
     startIndex: instruction?.interval?.[0],
     endIndex: instruction?.interval?.[1],
   }))
+  const edges = parseEdgeSpans(path?.details?.edge_id, coordinates.length)
   return {
     coordinates: coordinates.map(([lng, lat]: number[]) => [lng, lat] as LngLat),
     distanceMeters: Number(path.distance ?? 0),
     durationSeconds: Number(path.time ?? 0) / 1000,
     steps,
+    ...(edges ? { edges } : {}),
   }
+}
+
+/**
+ * GraphHopper reports a path detail as `[startIndex, endIndex, value]` triples
+ * indexing into the returned line. Anything that is not a well-formed triple
+ * pointing at a real stretch of that line is dropped: a detail we cannot trust
+ * is missing data, and missing data has a fallback. A detail we half-trust
+ * produces a wrong number that looks like a right one.
+ */
+function parseEdgeSpans(details: unknown, pointCount: number): EdgeSpan[] | undefined {
+  if (!Array.isArray(details) || !details.length) return undefined
+  const spans: EdgeSpan[] = []
+  for (const entry of details) {
+    if (!Array.isArray(entry) || entry.length < 3) continue
+    const [startIndex, endIndex, id] = entry
+    if (typeof startIndex !== 'number' || typeof endIndex !== 'number' || typeof id !== 'number') continue
+    if (!Number.isInteger(startIndex) || !Number.isInteger(endIndex) || !Number.isInteger(id)) continue
+    if (startIndex < 0 || endIndex >= pointCount || endIndex <= startIndex) continue
+    spans.push({ id, startIndex, endIndex })
+  }
+  return spans.length ? spans : undefined
 }
 
 function detailFor(instruction: any, details: Array<[number, number, string]>): string | undefined {

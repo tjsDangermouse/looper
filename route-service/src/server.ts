@@ -6,6 +6,8 @@ import { coarseLocation, log } from './log.js'
 import { createRateLimiter } from './http/rateLimit.js'
 import { ValidationError, parseLoopRequest } from './http/validate.js'
 import { generateLoops, type Diagnostics } from './loops/generate.js'
+import { RequestMetrics } from './loops/metrics.js'
+import { RouteCache, cacheKeyFor, type CacheContext } from './loops/cache.js'
 import type { LngLat } from './loops/geo.js'
 import { graphForLocation, REGION_BOUNDS, type RegionalGraph } from './regions.js'
 
@@ -25,6 +27,8 @@ const MAX_BODY_BYTES = 32 * 1024
 const GENERIC_ERROR = 'Routes are unavailable right now. Please try again.'
 const BUSY_ERROR = 'The route service is busy. Please try again in a moment.'
 const UNSUPPORTED_LOCATION = 'Looper is not available for this location yet.'
+/** How long a region's graph identity is trusted before the engine is asked again. */
+const GRAPH_VERSION_TTL_MS = 5 * 60 * 1000
 
 export function createApp(options: { graphhopper?: GraphHopperClient; regionalGraphs?: RegionalGraph[] } = {}): Server {
   const graphhopper = options.graphhopper ?? new GraphHopperClient(config.graphhopperIomUrl, config.graphhopperProfile, config.legTimeoutMs)
@@ -33,6 +37,14 @@ export function createApp(options: { graphhopper?: GraphHopperClient; regionalGr
     { id: 'england' as const, bounds: REGION_BOUNDS.england, graphhopper: new GraphHopperClient(config.graphhopperEnglandUrl, config.graphhopperProfile, config.legTimeoutMs) },
   ]
   const limiter = createRateLimiter(config.rateLimitPerMinute)
+  // Finished answers only, and only for as long as the map behind them is the
+  // map they were generated from — see loops/cache.ts.
+  const cache = new RouteCache({
+    maxEntries: config.cacheMaxEntries,
+    ttlMs: config.cacheTtlMs,
+    emptyTtlMs: config.cacheEmptyTtlMs,
+  })
+  const graphVersions = new Map<string, { version: string; askedAt: number }>()
   // One ceiling per GraphHopper client, shared across every walker's request —
   // unlike `config.concurrency`, which only bounds one request's own fan-out.
   const engineLimiters = new WeakMap<GraphHopperClient, ConcurrencyLimiter>(
@@ -40,7 +52,7 @@ export function createApp(options: { graphhopper?: GraphHopperClient; regionalGr
   )
 
   return createServer((request, response) => {
-    void handle(request, response, regionalGraphs, limiter, engineLimiters).catch(error => {
+    void handle(request, response, regionalGraphs, limiter, engineLimiters, cache, graphVersions).catch(error => {
       log('error', 'unhandled', { error: String(error) })
       if (!response.headersSent) send(response, 500, { error: GENERIC_ERROR })
     })
@@ -53,6 +65,8 @@ async function handle(
   regionalGraphs: RegionalGraph[],
   limiter: ReturnType<typeof createRateLimiter>,
   engineLimiters: WeakMap<GraphHopperClient, ConcurrencyLimiter>,
+  cache: RouteCache,
+  graphVersions: Map<string, { version: string; askedAt: number }>,
 ) {
   applyCors(request, response)
   if (request.method === 'OPTIONS') { response.writeHead(204); response.end(); return }
@@ -91,13 +105,62 @@ async function handle(
   request.on('close', () => controller.abort(new Error('client-gone')))
   const startedAt = Date.now()
 
+  // The key has to name the graph the answer came from, or a rebuilt map keeps
+  // serving routes over streets that moved. The engine is asked once per
+  // region and the answer kept; a version we cannot establish disables the
+  // cache for that region rather than guessing at one.
+  let cacheKey: string | undefined
+  if (config.flags.requestCache) {
+    const graphVersion = await graphVersionFor(regionalGraph, graphVersions)
+    if (graphVersion) {
+      const context: CacheContext = {
+        graphVersion,
+        region: regionalGraph.id,
+        profile: config.graphhopperProfile,
+        profileVersion: config.profileVersion,
+        flags: config.flags,
+        generation: { candidateCount: config.candidateCount, concurrency: config.concurrency },
+      }
+      cacheKey = cacheKeyFor(parsed, context)
+      const hit = cache.get(cacheKey)
+      if (hit) {
+        log('info', 'loops', {
+          mode: parsed.mode,
+          activity: parsed.activity ?? 'walking',
+          km: parsed.distanceKm,
+          minutes: parsed.durationMinutes,
+          near: coarseLocation(parsed.start.lng, parsed.start.lat),
+          region: regionalGraph.id,
+          ms: Date.now() - startedAt,
+          cache: 'hit',
+          cacheAgeMs: hit.ageMs,
+        })
+        return send(response, 200, hit.value)
+      }
+    }
+  }
+
+  // Cost telemetry for this one request. Counters only — no coordinate ever
+  // reaches it, so it is safe to log in production as it stands.
+  const metrics = new RequestMetrics()
+
   try {
     let diagnostics: Diagnostics | undefined
     const result = await generateLoops(parsed, {
       candidateCount: config.candidateCount,
       concurrency: config.concurrency,
       signal: controller.signal,
+      metrics,
+      flags: config.flags,
       onDiagnostics: value => { diagnostics = value },
+      // One optional reachability probe per request, on a short leash of its
+      // own: it is an optimisation, and an optimisation is not allowed to be
+      // the slowest thing in the request.
+      reachFrom: (point, distanceLimitMetres) =>
+        regionalGraph.graphhopper.shortestPathTree(point, distanceLimitMetres, {
+          signal: controller.signal,
+          timeoutMs: config.networkProbeTimeoutMs,
+        }),
       route: (points, customModel) => {
         const call = () => regionalGraph.graphhopper.route(points as LngLat[], { customModel, signal: controller.signal, timeoutMs: config.legTimeoutMs })
         if (!engineLimiter) return call()
@@ -116,7 +179,14 @@ async function handle(
       region: regionalGraph.id,
       ms: Date.now() - startedAt,
       ...diagnostics,
+      // Set after the spread: waypoint mode reports no `diagnostics` at all,
+      // and the cost of a waypoint request is exactly what we want to see.
+      cost: metrics.snapshot(),
+      cache: cacheKey ? 'miss' : 'off',
     })
+    // Stored only here, on the way to the walker: everything that failed,
+    // timed out, or was abandoned took one of the paths below instead.
+    if (cacheKey && !controller.signal.aborted) cache.set(cacheKey, result)
     return send(response, 200, result)
   } catch (error) {
     if (controller.signal.aborted && request.destroyed) return
@@ -132,6 +202,29 @@ async function handle(
     return send(response, 500, { error: GENERIC_ERROR })
   } finally {
     clearTimeout(deadline)
+  }
+}
+
+/**
+ * Which graph a region is serving, asked once and remembered. GraphHopper's
+ * `/info` carries the engine version and the imported extract's bounding box;
+ * together they change whenever the data behind the routes changes.
+ */
+async function graphVersionFor(graph: RegionalGraph, known: Map<string, { version: string; askedAt: number }>): Promise<string | undefined> {
+  const remembered = known.get(graph.id)
+  // Re-asked periodically rather than remembered for the life of the process:
+  // a graph can be reimported under a running service, and a version fixed at
+  // start-up would go on serving routes over streets that have since moved.
+  if (remembered && Date.now() - remembered.askedAt < GRAPH_VERSION_TTL_MS) return remembered.version
+  try {
+    const info = await graph.graphhopper.info()
+    const version = `${info.version ?? 'unknown'}:${(info.bbox ?? []).map(edge => edge.toFixed(4)).join(',')}`
+    known.set(graph.id, { version, askedAt: Date.now() })
+    return version
+  } catch {
+    // No version, no cache. Serving a route from a graph we cannot identify is
+    // exactly the mistake the key exists to prevent.
+    return undefined
   }
 }
 

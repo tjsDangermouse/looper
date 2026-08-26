@@ -53,3 +53,42 @@ export function generateLoopAttempts(seed: number, count: number = DEFAULT_ATTEM
   }
   return attempts
 }
+
+/**
+ * Reorder attempts so that any prefix of them already covers the compass.
+ *
+ * `generateLoopAttempts` emits bearings in order round the dial, which is the
+ * right thing when every attempt is going to run. It is the wrong thing the
+ * moment the generator can stop partway: the first six attempts of twenty-four
+ * are then the first quarter of the compass and nothing else, so the pool a
+ * stopping rule looks at is not a sample of the ground, it is a sample of one
+ * side of it — and a rule asking "do we have three walks setting off in
+ * different directions" can never answer yes.
+ *
+ * Bit-reversal gives the property wanted: take the pairs in the order their
+ * indices read backwards in binary, and every prefix is spread as evenly round
+ * the dial as a prefix of that length can be. Mirrored pairs stay adjacent —
+ * the same bearing clockwise and anticlockwise is one question asked twice,
+ * and separating them buys nothing.
+ *
+ * Deterministic, and a permutation: the same attempts, in a different order.
+ */
+export function spreadAcrossCompass(attempts: LoopAttempt[]): LoopAttempt[] {
+  const pairs = attempts.length / 2
+  if (pairs < 2) return attempts
+  const bits = Math.ceil(Math.log2(pairs))
+  const order: number[] = []
+  for (let reversed = 0; reversed < 1 << bits; reversed++) {
+    const pair = reverseBits(reversed, bits)
+    if (pair < pairs) order.push(pair)
+  }
+  return order
+    .flatMap(pair => [attempts[pair * 2], attempts[pair * 2 + 1]])
+    .map((attempt, index) => ({ ...attempt, index }))
+}
+
+function reverseBits(value: number, bits: number): number {
+  let out = 0
+  for (let bit = 0; bit < bits; bit++) out |= ((value >> bit) & 1) << (bits - 1 - bit)
+  return out
+}

@@ -69,24 +69,53 @@ export function buildAvoidanceAreas(
   }
   if (!corridors.length) return []
 
-  let merged: AnyPolygon | null = corridors.length === 1
-    ? corridors[0]
-    : (union(featureCollection(corridors as never)) as AnyPolygon | null)
-  if (!merged) return []
+  // Merging is an optimisation — fewer, larger areas in the request — not a
+  // requirement. Where it cannot be done, the separate corridors describe
+  // exactly the same ground and are sent as they are.
+  const merged = corridors.length === 1 ? corridors : (tryUnion(corridors) ?? corridors)
 
-  if (exclusion > 0) {
-    const keepClear = circle(start, exclusion, { units: 'meters', steps: 32 })
-    merged = (difference(featureCollection([merged, keepClear] as never)) as AnyPolygon | null)
-    // The whole corridor sitting inside the start circle is a legitimate
-    // outcome for a very short first leg: there is then nothing to avoid.
-    if (!merged) return []
-  }
+  const keepClear = exclusion > 0 ? circle(start, exclusion, { units: 'meters', steps: 32 }) : undefined
+  const shapes = keepClear
+    // A corridor entirely inside the start circle is a legitimate outcome for
+    // a very short first leg: there is then nothing left of it to avoid.
+    ? merged.flatMap(shape => { const cut = trySubtract(shape, keepClear); return cut ? [cut] : [] })
+    : merged
 
-  return explodeToPolygons(merged)
+  return shapes
+    .flatMap(explodeToPolygons)
     .map(polygon => simplify(polygon, { tolerance: SIMPLIFY_TOLERANCE_DEGREES, highQuality: false, mutate: true }))
     .filter(polygon => polygon.geometry.coordinates.length > 0 && polygon.geometry.coordinates[0].length >= 4)
     .sort((a, b) => area(b) - area(a))
     .slice(0, maxAreas)
+}
+
+/**
+ * Polygon clipping is not total.
+ *
+ * A walk that doubles back along exactly the same line — the only bridge, a
+ * promenade with no second path — buffers into two corridors sharing a whole
+ * edge, and the clipping library can fail outright on that degeneracy rather
+ * than returning a shape. Letting it throw would abandon the entire request
+ * over one candidate's geometry, which is the opposite of what an avoidance
+ * hint is for: it is a preference, and a preference that cannot be expressed
+ * is not an error, it is a weaker preference.
+ */
+function tryUnion(corridors: AnyPolygon[]): AnyPolygon[] | undefined {
+  try {
+    const merged = union(featureCollection(corridors as never)) as AnyPolygon | null
+    return merged ? [merged] : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** As `tryUnion`: a start circle that cannot be cut out simply is not cut out. */
+function trySubtract(shape: AnyPolygon, keepClear: AnyPolygon): AnyPolygon | undefined {
+  try {
+    return (difference(featureCollection([shape, keepClear] as never)) as AnyPolygon | null) ?? undefined
+  } catch {
+    return shape
+  }
 }
 
 /** Turf refuses a line with a repeated vertex; GraphHopper emits them at joins. */
@@ -118,7 +147,32 @@ export function buildSpikeAvoidanceArea(tip: LngLat, radiusMetres: number): Feat
 export type CustomModel = {
   priority?: Array<Record<string, string>>
   areas?: { type: 'FeatureCollection'; features: Feature<Polygon>[] }
+  /**
+   * GraphHopper adds `distance * distance_influence / 1000` to an edge's
+   * weight. Large enough, and that term dominates the profile's own
+   * preferences, so the route returned is very nearly the shortest one on the
+   * ground rather than the one the profile likes best.
+   */
+  distance_influence?: number
 }
+
+/**
+ * A model that asks for the shortest walk rather than the nicest one.
+ *
+ * Looper's profile expresses preferences as priority multipliers at or below
+ * one, and GraphHopper divides by priority — so the route it returns can be
+ * physically longer than the shortest path, and is therefore *not* a lower
+ * bound on how far a walk through some places must be. Anything that refuses
+ * a walker's request for being too long needs a real floor, and this is how
+ * one is asked for. See docs/routing-baseline.md §7.
+ *
+ * "Very nearly" rather than "exactly": the preference term does not vanish, it
+ * is only outweighed. Callers apply a tolerance on top rather than treating
+ * the answer as exact.
+ */
+export const LOWER_BOUND_DISTANCE_INFLUENCE = 2000
+
+export const shortestPathCustomModel = (): CustomModel => ({ distance_influence: LOWER_BOUND_DISTANCE_INFLUENCE })
 
 /**
  * The GraphHopper custom model that discourages the corridors. Area ids must be

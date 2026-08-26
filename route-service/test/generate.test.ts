@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { GraphHopperError, type GraphHopperLeg } from '../src/graphhopper.js'
 import { NO_CLEAN_LOOP_WARNING, RETRACES_WARNING, generateLoops, mapWithConcurrency, type LoopRequest } from '../src/loops/generate.js'
 import { haversine, type LngLat } from '../src/loops/geo.js'
+import { RequestMetrics } from '../src/loops/metrics.js'
 
 const START = { lng: -4.4816, lat: 54.1506 }
 
@@ -10,9 +11,15 @@ const START = { lng: -4.4816, lat: 54.1506 }
  * carries the detour a real street network adds — which is the whole reason the
  * ring radius is a target distance over 8.3 rather than over 2π.
  */
-function fakeEngine(options: { detour?: number | ((points: LngLat[]) => number); fail?: (points: LngLat[]) => boolean } = {}) {
+function fakeEngine(options: {
+  detour?: number | ((points: LngLat[]) => number)
+  fail?: (points: LngLat[]) => boolean
+  /** Milliseconds this call takes, so completion order can be shuffled on purpose. */
+  delayMs?: (points: LngLat[]) => number
+} = {}) {
   const detourFor = typeof options.detour === 'function' ? options.detour : () => options.detour ?? 1.52
   return async (points: LngLat[]): Promise<GraphHopperLeg> => {
+    if (options.delayMs) await new Promise(resolve => setTimeout(resolve, options.delayMs!(points)))
     if (options.fail?.(points)) throw new GraphHopperError('Connection between locations not found', 400, 'unreachable')
     const straight = haversine(points[0], points[1])
     const steps = Math.max(2, Math.round(straight / 30))
@@ -305,3 +312,294 @@ describe('concurrency', () => {
     expect(peak).toBeLessThanOrEqual(4)
   })
 })
+
+/**
+ * The generator can stop before it has tried everything. Which walks a walker
+ * is offered must not then depend on which routing calls happened to be quick:
+ * the same request on a busy afternoon and a quiet one is the same request.
+ */
+describe('stopping early without letting timing decide', () => {
+  const flags = { spreadCandidateBearings: true, diversityAwareEarlyStop: true }
+
+  it('offers the same walks however slowly individual calls came back', async () => {
+    const runs = await Promise.all([
+      () => 0,
+      // Later bearings answer first, which is the order that would bias a
+      // rule looking at whatever has finished so far.
+      (points: LngLat[]) => (points[0][0] > -4.4816 ? 0 : 4),
+      (points: LngLat[]) => Math.round(Math.abs(points[1][1] - 54.1506) * 2000) % 5,
+    ].map(delayMs => generateLoops(request(), { route: fakeEngine({ delayMs }), flags, concurrency: 6 })))
+
+    const shape = (result: Awaited<ReturnType<typeof generateLoops>>) =>
+      result.routes.map(route => [route.label, route.distanceMeters, route.geometry.coordinates.length])
+    expect(shape(runs[1])).toEqual(shape(runs[0]))
+    expect(shape(runs[2])).toEqual(shape(runs[0]))
+  })
+
+  it('offers the same walks whatever the concurrency is set to', async () => {
+    const delayMs = (points: LngLat[]) => Math.round(Math.abs(points[1][0] + 4.4816) * 3000) % 4
+    const [one, six] = await Promise.all([
+      generateLoops(request(), { route: fakeEngine({ delayMs }), flags, concurrency: 1 }),
+      generateLoops(request(), { route: fakeEngine({ delayMs }), flags, concurrency: 6 }),
+    ])
+    expect(six.routes.map(r => r.distanceMeters)).toEqual(one.routes.map(r => r.distanceMeters))
+  })
+
+  it('says why it stopped', async () => {
+    const result = await generateLoops(request(), { route: fakeEngine(), flags, metrics: new RequestMetrics() })
+    expect(['diversity-satisfied', 'passing-quota', 'exhausted']).toContain(result.diagnostics!.metrics!.earlyStop)
+  })
+})
+
+describe('measuring overlap on the network', () => {
+  it('falls back to geometry when the engine reports no edge ids, and says so', async () => {
+    const result = await generateLoops(request(), {
+      route: fakeEngine(),
+      flags: { edgeOverlap: true },
+      metrics: new RequestMetrics(),
+    })
+    const metrics = result.diagnostics!.metrics!
+    expect(metrics.overlapFromEdges).toBe(0)
+    expect(metrics.overlapFromGeometry).toBeGreaterThan(0)
+    expect(result.routes.length).toBeGreaterThan(0)
+  })
+
+  it('changes nothing at all when it is switched off', async () => {
+    const off = await generateLoops(request(), { route: fakeEngine() })
+    const on = await generateLoops(request(), { route: fakeEngine(), flags: { edgeOverlap: true } })
+    expect(on.routes.map(r => r.geometry)).toEqual(off.routes.map(r => r.geometry))
+  })
+})
+
+describe('repairing a candidate that was nearly right', () => {
+  it('spends engine calls on repairs and says how many it made', async () => {
+    const metrics = new RequestMetrics()
+    // A network that stretches a ring further than the generator expects,
+    // producing candidates that are only wrong about their length.
+    const uneven = fakeEngine({ detour: 1.66 })
+    const result = await generateLoops(request(), { route: uneven, flags: { localRepair: true }, metrics })
+    const cost = result.diagnostics!.metrics!
+    expect(cost.repairsAttempted).toBeGreaterThan(0)
+    expect(cost.callsByPurpose.repair).toBeGreaterThan(0)
+    expect(cost.repairsSucceeded).toBeLessThanOrEqual(cost.repairsAttempted)
+  })
+
+  it('never spends more on repairs than it was given', async () => {
+    const metrics = new RequestMetrics()
+    const uneven = fakeEngine({ detour: 1.66 })
+    await generateLoops(request(), {
+      route: uneven,
+      flags: { localRepair: true },
+      metrics,
+      repairBudget: { callsPerRequest: 6, attemptsPerRequest: 2, attemptsPerCandidate: 1 },
+    })
+    const cost = metrics.snapshot()
+    expect(cost.callsByPurpose.repair).toBeLessThanOrEqual(6)
+    expect(cost.repairsAttempted).toBeLessThanOrEqual(2)
+  })
+
+  it('spends nothing at all when it is switched off', async () => {
+    const metrics = new RequestMetrics()
+    const uneven = fakeEngine({ detour: 1.66 })
+    await generateLoops(request(), { route: uneven, metrics, flags: { localRepair: false } })
+    expect(metrics.snapshot().callsByPurpose.repair).toBe(0)
+    expect(metrics.snapshot().repairsAttempted).toBe(0)
+  })
+
+  it('gives the same answer twice, repairs and all', async () => {
+    const uneven = () => fakeEngine({ detour: 1.66 })
+    const one = await generateLoops(request(), { route: uneven(), flags: { localRepair: true } })
+    const two = await generateLoops(request(), { route: uneven(), flags: { localRepair: true } })
+    expect(two.routes.map(route => route.geometry)).toEqual(one.routes.map(route => route.geometry))
+  })
+})
+
+/**
+ * A waypoint is a place the walker chose. Every generated corner in this
+ * system is the generator's own guess and may be moved; a waypoint may not,
+ * whatever else is switched on.
+ */
+describe('places the walker chose', () => {
+  const pins = [{ lng: -4.4746, lat: 54.1546 }, { lng: -4.4886, lat: 54.1566 }]
+  const everything = { edgeOverlap: true, spreadCandidateBearings: true, localRepair: true, paretoArchive: true }
+
+  it('never moves or reorders them, whatever the algorithm is doing', async () => {
+    const asked = pins.map(pin => ({ ...pin }))
+    const result = await generateLoops(request({ waypoints: asked, distanceKm: 6 }), {
+      route: fakeEngine(),
+      flags: everything,
+    })
+    // The request object itself is untouched...
+    expect(asked).toEqual(pins)
+    // ...and every walk offered still passes them, in the order they were added.
+    for (const route of result.routes) {
+      const line = route.geometry.coordinates as LngLat[]
+      let reachedAt = -1
+      for (const pin of pins) {
+        const nearest = line.reduce(
+          (best, point, index) => {
+            const away = haversine(point, [pin.lng, pin.lat])
+            return away < best.away ? { away, index } : best
+          },
+          { away: Infinity, index: -1 },
+        )
+        expect(nearest.away).toBeLessThan(120)
+        expect(nearest.index).toBeGreaterThan(reachedAt)
+        reachedAt = nearest.index
+      }
+    }
+  })
+})
+
+describe('asking the network which way to look first', () => {
+  const flags = { networkAwareSeeds: true }
+
+  it('carries on exactly as before when the engine cannot answer', async () => {
+    const metrics = new RequestMetrics()
+    const withProbe = await generateLoops(request(), {
+      route: fakeEngine(),
+      reachFrom: async () => undefined,
+      flags,
+      metrics,
+    })
+    const without = await generateLoops(request(), { route: fakeEngine() })
+    expect(withProbe.routes.map(route => route.geometry)).toEqual(without.routes.map(route => route.geometry))
+    expect(metrics.snapshot().callsByPurpose['network-summary']).toBe(1)
+  })
+
+  it('carries on exactly as before when there is no probe to ask', async () => {
+    const withFlag = await generateLoops(request(), { route: fakeEngine(), flags })
+    const without = await generateLoops(request(), { route: fakeEngine() })
+    expect(withFlag.routes.map(route => route.geometry)).toEqual(without.routes.map(route => route.geometry))
+  })
+
+  it('counts the probe as the engine call it is', async () => {
+    const metrics = new RequestMetrics()
+    await generateLoops(request(), {
+      route: fakeEngine(),
+      reachFrom: async (start: LngLat) => [{ point: [start[0] + 0.02, start[1]] as LngLat, networkMetres: 1500 }],
+      flags,
+      metrics,
+    })
+    expect(metrics.snapshot().callsByPurpose['network-summary']).toBe(1)
+  })
+
+  it('does not ask at all when it is switched off', async () => {
+    let asked = 0
+    await generateLoops(request(), {
+      route: fakeEngine(),
+      reachFrom: async () => { asked++; return undefined },
+    })
+    expect(asked).toBe(0)
+  })
+
+  it('gives the same answer twice', async () => {
+    const reachFrom = async (start: LngLat) => Array.from({ length: 40 }, (_, index) => ({
+      point: [start[0] + 0.001 * (index % 8), start[1] + 0.001 * Math.floor(index / 8)] as LngLat,
+      networkMetres: 300 + index * 40,
+    }))
+    const one = await generateLoops(request(), { route: fakeEngine(), reachFrom, flags })
+    const two = await generateLoops(request(), { route: fakeEngine(), reachFrom, flags })
+    expect(two.routes.map(route => route.geometry)).toEqual(one.routes.map(route => route.geometry))
+  })
+})
+
+describe('waypoint walks built from the backbone out', () => {
+  const flags = { waypointBackbone: true }
+  const pins = [{ lng: -4.4746, lat: 54.1546 }, { lng: -4.4886, lat: 54.1566 }]
+
+  it('visits every pin, in order, and never moves one', async () => {
+    const asked = pins.map(pin => ({ ...pin }))
+    const result = await generateLoops(request({ waypoints: asked, distanceKm: 6 }), { route: fakeEngine(), flags })
+    expect(asked).toEqual(pins)
+    expect(result.routes.length).toBeGreaterThan(0)
+    for (const route of result.routes) {
+      const line = route.geometry.coordinates as LngLat[]
+      let reachedAt = -1
+      for (const pin of pins) {
+        const nearest = line.reduce((best, point, index) => {
+          const away = haversine(point, [pin.lng, pin.lat])
+          return away < best.away ? { away, index } : best
+        }, { away: Infinity, index: -1 })
+        expect(nearest.away).toBeLessThan(80)
+        expect(nearest.index).toBeGreaterThan(reachedAt)
+        reachedAt = nearest.index
+      }
+    }
+  })
+
+  it('starts and finishes at the walker’s own start point', async () => {
+    const result = await generateLoops(request({ waypoints: pins, distanceKm: 6 }), { route: fakeEngine(), flags })
+    for (const route of result.routes) {
+      const line = route.geometry.coordinates as LngLat[]
+      expect(haversine(line[0], line[line.length - 1])).toBeLessThan(40)
+    }
+  })
+
+  it('costs far less than routing a batch of shaped candidates', async () => {
+    const before = new RequestMetrics()
+    const after = new RequestMetrics()
+    await generateLoops(request({ waypoints: pins, distanceKm: 6 }), {
+      route: fakeEngine(),
+      metrics: before,
+      flags: { waypointBackbone: false },
+    })
+    await generateLoops(request({ waypoints: pins, distanceKm: 6 }), { route: fakeEngine(), metrics: after, flags })
+    expect(after.snapshot().graphhopperCalls).toBeLessThan(before.snapshot().graphhopperCalls)
+  })
+
+  it('refuses a pin that is plainly out of reach, and says why', async () => {
+    const faraway = [{ lng: -4.4816, lat: 54.2206 }]
+    const result = await generateLoops(request({ waypoints: faraway, distanceKm: 2 }), { route: fakeEngine(), flags })
+    expect(result.routes).toHaveLength(0)
+    expect(result.expectationExceeded).toBe(true)
+    expect(result.warning).toMatch(/more than 25% over/)
+  })
+
+  it('checks a real floor before refusing, not just the route it prefers', async () => {
+    const asked: Array<Record<string, unknown> | undefined> = []
+    const route = async (points: LngLat[], customModel: any) => {
+      asked.push(customModel)
+      return fakeEngine()(points)
+    }
+    const faraway = [{ lng: -4.4816, lat: 54.2206 }]
+    await generateLoops(request({ waypoints: faraway, distanceKm: 2 }), { route, flags })
+    // The profile's preferred route can be longer than the shortest one, so a
+    // refusal has to be checked against a model that asks for the shortest.
+    expect(asked.some(model => typeof model?.distance_influence === 'number')).toBe(true)
+  })
+
+  it('never asks for a shortest-path model when the walk plainly fits', async () => {
+    const asked: Array<Record<string, unknown> | undefined> = []
+    const route = async (points: LngLat[], customModel: any) => {
+      asked.push(customModel)
+      return fakeEngine()(points)
+    }
+    await generateLoops(request({ waypoints: pins, distanceKm: 6 }), { route, flags })
+    expect(asked.every(model => model?.distance_influence === undefined)).toBe(true)
+  })
+
+  it('gives the same walks for the same request', async () => {
+    const one = await generateLoops(request({ waypoints: pins, distanceKm: 6 }), { route: fakeEngine(), flags })
+    const two = await generateLoops(request({ waypoints: pins, distanceKm: 6 }), { route: fakeEngine(), flags })
+    expect(two.routes.map(route => route.geometry)).toEqual(one.routes.map(route => route.geometry))
+  })
+
+  it('answers the length that was asked for', async () => {
+    const result = await generateLoops(request({ waypoints: pins, distanceKm: 6 }), { route: fakeEngine(), flags })
+    for (const route of result.routes) expect(Math.abs(route.targetDifferencePercent)).toBeLessThanOrEqual(25)
+  })
+})
+
+  it('leaves a pin on the doorstep to the ordinary loop generator', async () => {
+    // A pin where the walker is standing constrains nothing. Treating it as a
+    // route through somewhere would turn an ordinary five-kilometre loop into
+    // a zero-length backbone and all slack, which is not a route problem.
+    const onTheDoorstep = [{ lng: START.lng, lat: START.lat }]
+    const result = await generateLoops(request({ waypoints: onTheDoorstep }), {
+      route: fakeEngine(),
+      flags: { waypointBackbone: true },
+    })
+    expect(result.routes).toHaveLength(3)
+    expect(result.warning).toBeUndefined()
+  })
