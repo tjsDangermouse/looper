@@ -123,6 +123,48 @@ for (const cell of CELLS) {
     console.log(`${cell.name.padEnd(22)}  failed: ${error.message}`)
   }
 }
+/**
+ * How the engine behaves when asked several things at once.
+ *
+ * This is the measurement that matters. A single leg costs about five
+ * milliseconds here and about fifty-three in production, and nothing about the
+ * request itself accounts for the difference — the search is 190 nodes either
+ * way, and stripping instructions, path details and geometry encoding moves it
+ * by a millisecond at most. So the gap is contention, and this says how much.
+ *
+ * Throughput is the column to read, not latency. An engine with cores to spare
+ * answers six at once in about the time it answers one, and calls per second
+ * climbs with concurrency. An engine with one core answers six at once in six
+ * times the time, and calls per second stays flat — the same shape as the
+ * finding already recorded in docker-compose.prod.yml, where raising
+ * ROUTING_CONCURRENCY from six to twelve doubled the time per call and
+ * *reduced* throughput.
+ */
+const CONCURRENCIES = [1, 2, 4, 6, 12]
+const CALLS_PER_LEVEL = Number(process.env.CONCURRENCY_CALLS ?? 60)
+
+console.log('\nconcurrency   ms/call   calls/sec   vs 1-at-a-time')
+console.log('-----------   -------   ---------   --------------')
+let solo
+for (const concurrency of CONCURRENCIES) {
+  const batches = Math.max(1, Math.round(CALLS_PER_LEVEL / concurrency))
+  const began = process.hrtime.bigint()
+  for (let batch = 0; batch < batches; batch++) {
+    await Promise.all(Array.from({ length: concurrency }, () => ask(AS_SENT)))
+  }
+  const seconds = Number(process.hrtime.bigint() - began) / 1e9
+  const calls = batches * concurrency
+  const perSecond = calls / seconds
+  solo ??= perSecond
+  console.log(`${String(concurrency).padStart(11)}   ${(seconds / calls * 1000).toFixed(1).padStart(7)}   ${perSecond.toFixed(1).padStart(9)}   ${(perSecond / solo).toFixed(2)}x`)
+}
+console.log(`
+If calls/sec is flat across that table, the engine is serialising and the
+ceiling is cores, not the algorithm: production's 53 ms a call is 5 ms of work
+and 48 ms of waiting, and no reduction in the number of calls fixes that as
+cheaply as giving it more CPU. If calls/sec climbs with concurrency, the engine
+scales fine and the contention is somewhere else in the stack.`)
+
 console.log(`
 Production settles only 200-1000 nodes a call, so the search is not the cost:
 at 60 ms a call that is 80 microseconds a node, and a Dijkstra does millions a
