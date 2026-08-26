@@ -1,7 +1,6 @@
 import buffer from '@turf/buffer'
 import circle from '@turf/circle'
 import difference from '@turf/difference'
-import union from '@turf/union'
 import simplify from '@turf/simplify'
 import area from '@turf/area'
 import { featureCollection, lineString, feature } from '@turf/helpers'
@@ -60,28 +59,37 @@ export function buildAvoidanceAreas(
   const exclusion = options.startExclusionMetres ?? START_EXCLUSION_RADIUS_METRES
   const maxAreas = options.maxAreas ?? MAX_AVOIDANCE_AREAS
 
+  const keepClear = exclusion > 0 ? circle(start, exclusion, { units: 'meters', steps: 32 }) : undefined
+
   const corridors: AnyPolygon[] = []
   for (const geometry of legGeometries) {
     const distinct = dropRepeatedPoints(geometry)
     if (distinct.length < 2) continue
-    const buffered = buffer(lineString(distinct), halfWidth, { units: 'meters' })
-    if (buffered) corridors.push(buffered as AnyPolygon)
+    // Thinned before it is buffered, not after.
+    //
+    // GraphHopper returns a vertex every few metres, so a routed leg arrives
+    // with hundreds of them, and every one becomes several vertices of the
+    // corridor — which then has to be clipped and merged. Thinning the line
+    // first costs nothing and takes a 1,400 m leg from 281 points to 35, and
+    // the corridor is twenty-five metres wide: detail finer than that was
+    // never going to survive the buffer, let alone matter to the answer.
+    // Safe to mutate, because `dropRepeatedPoints` returned a fresh array.
+    const line = simplify(lineString(distinct), { tolerance: SIMPLIFY_TOLERANCE_DEGREES, highQuality: false, mutate: true })
+    if (line.geometry.coordinates.length < 2) continue
+    const buffered = buffer(line, halfWidth, { units: 'meters' }) as AnyPolygon | undefined
+    if (!buffered) continue
+    // The start circle comes out of each corridor rather than out of the
+    // merged whole. Cutting every part and then merging describes the same
+    // ground as merging and then cutting once, and this way it is one clip per
+    // leg on a small shape instead of one clip per call on a large one.
+    // A corridor entirely inside the start circle is a legitimate outcome for
+    // a very short first leg: there is then nothing left of it to avoid.
+    const cut = keepClear ? trySubtract(buffered, keepClear) : buffered
+    if (cut) corridors.push(cut)
   }
   if (!corridors.length) return []
 
-  // Merging is an optimisation — fewer, larger areas in the request — not a
-  // requirement. Where it cannot be done, the separate corridors describe
-  // exactly the same ground and are sent as they are.
-  const merged = corridors.length === 1 ? corridors : (tryUnion(corridors) ?? corridors)
-
-  const keepClear = exclusion > 0 ? circle(start, exclusion, { units: 'meters', steps: 32 }) : undefined
-  const shapes = keepClear
-    // A corridor entirely inside the start circle is a legitimate outcome for
-    // a very short first leg: there is then nothing left of it to avoid.
-    ? merged.flatMap(shape => { const cut = trySubtract(shape, keepClear); return cut ? [cut] : [] })
-    : merged
-
-  return shapes
+  return corridors
     .flatMap(explodeToPolygons)
     .map(polygon => simplify(polygon, { tolerance: SIMPLIFY_TOLERANCE_DEGREES, highQuality: false, mutate: true }))
     .filter(polygon => polygon.geometry.coordinates.length > 0 && polygon.geometry.coordinates[0].length >= 4)
@@ -93,23 +101,14 @@ export function buildAvoidanceAreas(
  * Polygon clipping is not total.
  *
  * A walk that doubles back along exactly the same line — the only bridge, a
- * promenade with no second path — buffers into two corridors sharing a whole
- * edge, and the clipping library can fail outright on that degeneracy rather
- * than returning a shape. Letting it throw would abandon the entire request
- * over one candidate's geometry, which is the opposite of what an avoidance
- * hint is for: it is a preference, and a preference that cannot be expressed
- * is not an error, it is a weaker preference.
+ * promenade with no second path — buffers into corridors sharing a whole edge,
+ * and the clipping library can fail outright on that degeneracy rather than
+ * returning a shape. Letting it throw would abandon the entire request over
+ * one candidate's geometry, which is the opposite of what an avoidance hint is
+ * for: it is a preference, and a preference that cannot be expressed is not an
+ * error, it is a weaker preference. So a start circle that cannot be cut out
+ * simply is not cut out.
  */
-function tryUnion(corridors: AnyPolygon[]): AnyPolygon[] | undefined {
-  try {
-    const merged = union(featureCollection(corridors as never)) as AnyPolygon | null
-    return merged ? [merged] : undefined
-  } catch {
-    return undefined
-  }
-}
-
-/** As `tryUnion`: a start circle that cannot be cut out simply is not cut out. */
 function trySubtract(shape: AnyPolygon, keepClear: AnyPolygon): AnyPolygon | undefined {
   try {
     return (difference(featureCollection([shape, keepClear] as never)) as AnyPolygon | null) ?? undefined

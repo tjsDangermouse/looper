@@ -474,7 +474,8 @@ probe.**
   corner sweep is now ordered. What remains is that a 5 km loop needs ~400
   point-to-point searches. `progressiveCornerSweep` and `diversityAwareEarlyStop`
   now ship on and take a Douglas 5 km from 425 calls and 5.4 s to **343 and
-  4.0 s**; the remaining 343 is still the same structural question.
+  4.0 s**; the remaining 343 is still the same structural question — though see
+  §12 on why the call count was never what made a request slow.
 - **415 and 162 were never the same measurement**, and the gap is not a
   discrepancy to reconcile. 415 is a production Douglas probe; 162 is the
   synthetic straight-line fixture in `test/generate.test.ts`, on different
@@ -494,10 +495,9 @@ probe.**
   neutral there too, and production overturned it. Waypoint changes want the
   probe, not the bench.
 - **Peel 5 km is the worst ground measured**, at 787 calls and 8.6 s. It passes
-  only 4 candidates in 24, so it is the case both stopping rules serve worst,
-  and at 89 calls/second it sits exactly on the engine's ~90 legs/s ceiling —
-  it is throughput-bound, and the only thing that shortens it is fewer calls.
-  Fix-ups are 39% of them (`join-pullback` alone 206), which is where to look.
+  only 4 candidates in 24, so it is the case both stopping rules serve worst.
+  Fix-ups are 39% of its calls (`join-pullback` alone 206), which is where to
+  look next now that the corridor cost is down.
 - `GRAPHHOPPER_MAX_CONCURRENCY` / `GRAPHHOPPER_MAX_QUEUE` remain untuned
   against a load test.
 - Horizontal GraphHopper replicas + a service-level admission queue.

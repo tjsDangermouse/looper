@@ -62,13 +62,16 @@ services:
       #   throughput   92.6   -> 77.1   engine calls/second
       #   onchan 5 km   4.4 s -> 11.5 s
       #
-      # Concurrency up, latency up in proportion, throughput flat-to-worse: the
-      # engine is already saturated at six, so asking for more at once only
-      # moves the queue inside the JVM. The projection that this would halve
-      # the wait assumed per-call latency would hold, and it did not.
+      # That was read at the time as the engine being saturated at six. It is
+      # not: measured directly on 2026-08-26, GraphHopper answers 793 calls a
+      # second at this concurrency and 881 at twelve, and a single leg costs it
+      # about five milliseconds. The ~90 a second was *this service's* ceiling,
+      # not the engine's — the anti-retrace corridors were built synchronously
+      # in Node, at up to 85 ms a call, so the event loop was the queue and
+      # raising concurrency only interleaved more geometry on one thread.
       #
-      # The engine tops out around 90 foot-legs a second whatever this is set
-      # to. Going faster means sending fewer calls, or making each one cheaper.
+      # See bench/probe-engine.mjs, which measures both. Keep six until that
+      # script says the engine rather than the service is the thing in the way.
       ROUTING_CONCURRENCY: ${ROUTING_CONCURRENCY:-6}
       # The ceiling across all walkers at once, which is what actually protects
       # the single JVM. Raise it only from a load test — and note the finding
