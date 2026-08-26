@@ -184,9 +184,30 @@ export type Diagnostics = {
    * same sentence. Absent for ordinary loops, which only have one path.
    */
   stage?: WaypointStage
+  /**
+   * Where the backbone generator got to before handing over, when it did.
+   * Without this the older generator's own outcome overwrites it and the
+   * interesting failure — the one in the newer code — becomes invisible.
+   */
+  backboneStage?: WaypointStage
+  /** Which gates killed the walks the backbone generator assembled. */
+  backboneRejections?: Record<string, number>
   /** What the request cost. Internal; the API contract allows extra fields. */
   metrics?: MetricsSnapshot
 }
+
+/**
+ * The backbone generator declining to answer, and why. Deliberately not
+ * `undefined`: a hand-over carries the reason, and the reason is the whole
+ * point of having built the thing that gave up.
+ */
+type HandedOver = { handedOver: true; stage: WaypointStage; rejections: Record<string, number> }
+
+const handOver = (stage: WaypointStage, rejections: Record<string, number>): HandedOver =>
+  ({ handedOver: true, stage, rejections: { ...rejections } })
+
+const isHandedOver = (result: LoopResponse | HandedOver): result is HandedOver =>
+  (result as HandedOver).handedOver === true
 
 /** Every way a waypoint request can finish, named so a log line can say which. */
 export type WaypointStage =
@@ -743,6 +764,7 @@ async function generateWaypointLoops(
   const legacyRejections: Record<string, number> = {}
   let legacyAssembled = 0
   let legacyPassed = 0
+  let handedOver: HandedOver | undefined
   /** As in the backbone path: no way of giving up goes unreported. */
   const reportLegacy = (stage: WaypointStage, offered: number): Diagnostics => {
     const diagnostics: Diagnostics = {
@@ -755,6 +777,9 @@ async function generateWaypointLoops(
       retracing: false,
       targetMetres,
       stage,
+      // Carried through the hand-over, so the newer generator's failure is
+      // still readable behind the older one's outcome.
+      ...(handedOver ? { backboneStage: handedOver.stage, backboneRejections: handedOver.rejections } : {}),
       ...(metrics ? { metrics: metrics.snapshot() } : {}),
     }
     options.onDiagnostics?.(diagnostics)
@@ -762,10 +787,12 @@ async function generateWaypointLoops(
   }
   if (flags.waypointBackbone) {
     const built = await generateBackboneWaypointLoops(request, options, start, targetMetres, targetSeconds, flags, metrics)
-    if (built) return built
-    // The backbone route could not be built at all — an anchor the engine
-    // cannot reach, or nothing that assembles. Fall through to the generator
-    // that was here before rather than telling the walker nothing works.
+    if (!isHandedOver(built)) return built
+    // The backbone route could not be built — an anchor the engine cannot
+    // reach, or nothing that assembles. Fall through to the generator that was
+    // here before rather than telling the walker nothing works, but keep hold
+    // of why, or the newer code's failure is lost behind the older one's.
+    handedOver = built
   }
   const direct = await routeWaypointCandidate(points, options.route, false, options.signal, 'waypoint-direct')
   if (!direct) {
@@ -1010,7 +1037,7 @@ async function generateBackboneWaypointLoops(
   targetSeconds: number | undefined,
   flags: AlgorithmFlags,
   metrics: RequestMetrics | undefined,
-): Promise<LoopResponse | undefined> {
+): Promise<LoopResponse | HandedOver> {
   const rejections: Record<string, number> = {}
   let assembled = 0
   let passed = 0
@@ -1055,10 +1082,7 @@ async function generateBackboneWaypointLoops(
   // into "invent a loop", which is the ring generator's job and it is better
   // at it. Hand those back to the generator that reuses an ordinary loop
   // already passing the pins.
-  if (backbone < targetMetres * PIN_CONSTRAINT_SHARE) {
-    report('doorstep-pin', 0)
-    return undefined
-  }
+  if (backbone < targetMetres * PIN_CONSTRAINT_SHARE) return handOver('doorstep-pin', rejections)
   const requested = targetSeconds ?? targetMetres
   const measuredBackbone = targetSeconds
     ? directs.reduce((total, leg) => total + durationFor(leg.distanceMeters, leg.durationSeconds), 0)
@@ -1114,10 +1138,7 @@ async function generateBackboneWaypointLoops(
     bucketMetres: Math.max(25, targetMetres * BACKBONE_BUCKET_SHARE),
     limit: BACKBONE_ASSEMBLY_LIMIT,
   })
-  if (!allocations.length) {
-    report('no-allocation', 0)
-    return undefined
-  }
+  if (!allocations.length) return handOver('no-allocation', rejections)
 
   const analysed = allocations.map(allocation => {
     const legs = allocation.chosen.flatMap(option => routed.get(option.id) ?? [])
@@ -1171,12 +1192,9 @@ async function generateBackboneWaypointLoops(
   })
 
   const offerable = analysed.filter(entry => entry.report.pass)
-  if (!offerable.length) {
-    // Every assembled walk failed a gate. `rejections` says which, which is
-    // the only thing that makes this case debuggable from a log line.
-    report('all-rejected', 0)
-    return undefined
-  }
+  // Every assembled walk failed a gate. `rejections` says which, which is the
+  // only thing that makes this case debuggable from a log line.
+  if (!offerable.length) return handOver('all-rejected', rejections)
 
   // Pins constrain a walk in a way a plain loop is not: every alternative has
   // to visit the same places, and between two pins there is often only one

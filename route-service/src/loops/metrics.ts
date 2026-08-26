@@ -65,6 +65,24 @@ export type FixupKind = 'join-pullback' | 'leg-budget' | 'spike'
 
 export type FixupTally = { attempted: number; kept: number }
 
+/**
+ * How long calls took, grouped by how many avoidance polygons they carried.
+ *
+ * Every leg after the first sends the ground already walked as custom-model
+ * areas, and GraphHopper tests edges against those polygons *during* the
+ * search — so the anti-retrace mechanism is not free, and the price is paid on
+ * every call rather than once. The engine tops out around ninety foot-legs a
+ * second, so if this shows latency climbing with polygon count then the areas
+ * are the ceiling, and fewer or simpler ones buy more than any change to how
+ * many calls are made.
+ */
+export const AREA_BUCKETS = ['0', '1-3', '4-7', '8+'] as const
+export type AreaBucket = (typeof AREA_BUCKETS)[number]
+export type AreaTiming = { calls: number; ms: number }
+
+export const areaBucketFor = (count: number): AreaBucket =>
+  count <= 0 ? '0' : count <= 3 ? '1-3' : count <= 7 ? '4-7' : '8+'
+
 export type MetricsSnapshot = {
   graphhopperCalls: number
   callsByPurpose: Record<RoutePurpose, number>
@@ -103,6 +121,8 @@ export type MetricsSnapshot = {
    * the number that says whether a fix-up is worth what it costs.
    */
   fixups: Record<FixupKind, FixupTally>
+  /** See AREA_BUCKETS. Engine time against avoidance-polygon count. */
+  engineMsByAreas: Record<AreaBucket, AreaTiming>
   /** Populated once the offered set is known. */
   offered: OfferedMetrics | undefined
   totalMs: number
@@ -145,6 +165,7 @@ export class RequestMetrics {
   private overlapFromEdges = 0
   private overlapFromGeometry = 0
   private readonly fixups = new Map<FixupKind, FixupTally>()
+  private readonly areaTimings = new Map<AreaBucket, AreaTiming>()
   private earlyStop: EarlyStopReason = 'none'
   private fallbackRetracing = false
   private offered: OfferedMetrics | undefined
@@ -154,10 +175,15 @@ export class RequestMetrics {
     this.startedAt = now()
   }
 
-  countCall(purpose: RoutePurpose, elapsedMs = 0, routedLegs = 1) {
+  countCall(purpose: RoutePurpose, elapsedMs = 0, routedLegs = 1, avoidanceAreas = 0) {
     this.counts.set(purpose, (this.counts.get(purpose) ?? 0) + 1)
     this.routedLegs += routedLegs
     this.engineMs += elapsedMs
+    const bucket = areaBucketFor(avoidanceAreas)
+    const timing = this.areaTimings.get(bucket) ?? { calls: 0, ms: 0 }
+    timing.calls++
+    timing.ms += elapsedMs
+    this.areaTimings.set(bucket, timing)
   }
 
   countCandidateBuilt() { this.candidatesBuilt++ }
@@ -235,6 +261,10 @@ export class RequestMetrics {
         'leg-budget': this.fixups.get('leg-budget') ?? { attempted: 0, kept: 0 },
         spike: this.fixups.get('spike') ?? { attempted: 0, kept: 0 },
       },
+      engineMsByAreas: Object.fromEntries(AREA_BUCKETS.map(bucket => {
+        const timing = this.areaTimings.get(bucket) ?? { calls: 0, ms: 0 }
+        return [bucket, { calls: timing.calls, ms: Math.round(timing.ms) }]
+      })) as Record<AreaBucket, AreaTiming>,
       offered: this.offered,
       totalMs: Math.round(this.now() - this.startedAt),
       candidateMs: percentiles(this.candidateDurations),
@@ -265,7 +295,7 @@ export function countingRouter(
     try {
       return await route(points, customModel, purpose)
     } finally {
-      metrics.countCall(purpose, now() - began, Math.max(1, points.length - 1))
+      metrics.countCall(purpose, now() - began, Math.max(1, points.length - 1), customModel?.areas?.features?.length ?? 0)
     }
   }
   Object.defineProperty(counted, COUNTED_BY, { value: metrics, enumerable: false })
