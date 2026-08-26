@@ -46,17 +46,34 @@ are documented in `src/config.ts`.
 
 Every `LOOPER_*` flag in `.env.example` ships at the default the benchmark or a
 production probe settled on, and both compose files pass them through from the
-host. To change one, put it in `.env` next to the compose file and restart just
-the service — GraphHopper keeps its imported graphs, so this is seconds rather
-than a reimport:
+host environment. There is no `.env` file in play unless you make one, and for
+most of these you do not want one — where a flag lives says what it means.
+
+**Trying one, to measure it.** Set it for the one command. Only the route
+service is recreated, so GraphHopper keeps its imported graphs and this is
+seconds rather than a reimport:
 
 ```bash
-echo 'LOOPER_PROGRESSIVE_CORNER_SWEEP=true' >> .env
-docker compose -f docker-compose.prod.yml up -d route-service
-curl -s localhost:8988/health          # or bench/probe-production.sh to measure it
+LOOPER_PROGRESSIVE_CORNER_SWEEP=true docker compose -f docker-compose.prod.yml up -d route-service
+bench/probe-production.sh
 ```
 
+To put it back, run the same `up -d` without the variable. Nothing persists:
+interpolation happens at `up` time, so the next deployment that does not name
+the flag gets the shipped default. Note that `docker compose restart` will
+*not* pick a change up — it restarts the container as it already stands.
+
+**Keeping one, because the measurement settled it.** Change `DEFAULT_FLAGS` in
+`src/loops/flags.ts` and commit it with the numbers, the way every flag that
+ships on got there. A decision that outlives a redeploy belongs in the file
+that records why it was taken, not in the environment of one host, where it is
+invisible to anyone reading the algorithm.
+
+A `.env` beside the compose file is read too, and suits a setting genuinely
+local to one host — but a flag held there is a fork of the algorithm that
+nothing in the repository mentions.
+
 A variable left unset arrives as an empty string, which is read as "leave it as
-it ships" — so an incomplete `.env` cannot quietly switch off the flags that
-ship on. Only an explicit `true` or `1` turns one on; anything else, a typo
-included, means the algorithm you already had.
+it ships", so an incomplete environment cannot quietly switch off the flags
+that ship on. Only an explicit `true` or `1` turns one on; anything else, a
+typo included, means the algorithm you already had.
