@@ -145,7 +145,14 @@ describe('generating loops', () => {
     expect(full.routes).toHaveLength(3)
     // Running every one of the 24 attempts to exhaustion against this fixture
     // costs 648 calls; stopping once enough loops pass should cut that sharply.
-    expect(calls).toBeLessThan(250)
+    //
+    // This fixture is the one place the shipped sweep is *worse* than sweeping
+    // inside each candidate — 378 calls against 162 — and it is worth knowing
+    // rather than tuning away. Its engine draws straight lines, so every
+    // bearing is as good as every other, and trying another shape on a bearing
+    // already paid for beats starting a fresh one. Real ground says the
+    // opposite by 15-24%; see the Phase 8 report.
+    expect(calls).toBeLessThan(450)
   })
 
   it('never asks the engine for a round trip', async () => {

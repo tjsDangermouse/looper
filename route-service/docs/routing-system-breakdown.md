@@ -404,6 +404,8 @@ together produce a regression nobody can attribute.
 | `pullbackTurnOnly` | −6.4% calls, identical walks |
 | `budgetDetourGate` | −1.8% calls, better fix-up keep rate |
 | `waypointBackbone` | −85% calls on waypoint requests; hits the target ~4× closer |
+| `progressiveCornerSweep` | −8.7% calls offline, **−15.2% on production**, identical walks |
+| `diversityAwareEarlyStop` | +11.7% on its own; **−8.3% more** on top of the sweep, and the only thing that helps the worst case (Peel, −16.4%) |
 
 **Off, with the evidence:**
 
@@ -412,10 +414,8 @@ together produce a regression nobody can attribute.
 | `guidePointPullback` | −35% calls and eliminates U-turn rejections, but one fixture drops 3 walks → 1. A product trade; see §12 |
 | `keepPinnedSpurs` | correct in isolation and it costs the walker every waypoint walk: production went 2–3 routes → **0**, `out-and-back-spur` refusing 20 of 24. Needs a structural-spur exemption in the gate first |
 | `narrowCornerSweep` | −26% calls, costs ~1 walk in 20 and some separation |
-| `progressiveCornerSweep` | −8.7% calls alone, −11.1% with `diversityAwareEarlyStop`, identical walks offered. Off pending a production probe: it is a clear win on every synthetic network and a clear loss on a uniform straight-line fixture, so the ground decides |
 | `networkAwareSeeds` | −13% coastal, +1 call elsewhere, −0.5% net |
 | `localRepair` | 4 in 5 repairs succeed for +1.7% calls, and the *offered* walks get no better |
-| `diversityAwareEarlyStop` | +30% calls for half a point of separation on its own — but see `progressiveCornerSweep`, which reverses the sign: alongside it the same flag *saves* a further 2.6% |
 | `paretoArchive` | correct and harmless; candidate pools too small for a front to bind |
 | `twoStageScreening` | HTTP calls flat, **path searches +37%** — one request for a whole ring saves round trips, not the engine's work |
 | `requestCache` | correct by construction; deliberately not enabled |
@@ -472,9 +472,9 @@ probe.**
   levers are closed one by one: the engine saturates at ~90 legs/s, per-call
   cost is a ~40 ms floor, the fix-ups earn 60–69% of their calls, and the
   corner sweep is now ordered. What remains is that a 5 km loop needs ~400
-  point-to-point searches. `progressiveCornerSweep` is the first structural
-  answer to that and takes 8.7% off the synthetic mix; whether it does the same
-  at Douglas is the next thing to measure.
+  point-to-point searches. `progressiveCornerSweep` and `diversityAwareEarlyStop`
+  now ship on and take a Douglas 5 km from 425 calls and 5.4 s to **343 and
+  4.0 s**; the remaining 343 is still the same structural question.
 - **415 and 162 were never the same measurement**, and the gap is not a
   discrepancy to reconcile. 415 is a production Douglas probe; 162 is the
   synthetic straight-line fixture in `test/generate.test.ts`, on different
@@ -493,6 +493,11 @@ probe.**
   synthetic networks walk at almost exactly the assumed pace; the pin work was
   neutral there too, and production overturned it. Waypoint changes want the
   probe, not the bench.
+- **Peel 5 km is the worst ground measured**, at 787 calls and 8.6 s. It passes
+  only 4 candidates in 24, so it is the case both stopping rules serve worst,
+  and at 89 calls/second it sits exactly on the engine's ~90 legs/s ceiling —
+  it is throughput-bound, and the only thing that shortens it is fewer calls.
+  Fix-ups are 39% of them (`join-pullback` alone 206), which is where to look.
 - `GRAPHHOPPER_MAX_CONCURRENCY` / `GRAPHHOPPER_MAX_QUEUE` remain untuned
   against a load test.
 - Horizontal GraphHopper replicas + a service-level admission queue.

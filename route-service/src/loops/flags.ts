@@ -106,9 +106,14 @@ export const DEFAULT_FLAGS: AlgorithmFlags = {
   edgeOverlap: true,
   // 14% fewer engine calls on its own, and better-separated alternatives.
   spreadCandidateBearings: true,
-  // Measured at 30% more engine calls than the bearing spread alone for half
-  // a percentage point of extra separation. Left off; see the Phase 1 report.
-  diversityAwareEarlyStop: false,
+  // Measured at 30% more engine calls than the bearing spread alone for half a
+  // percentage point of extra separation, and left off for a year on that.
+  // What changed is the sweep below: with the pool evaluated at every wave
+  // boundary anyway, asking the stricter question is nearly free, and the two
+  // together beat either alone. It earns its place on the ground the fixed
+  // quota of five serves worst — a Peel 5 km passes exactly four, so the quota
+  // never fires and all twenty-four bearings are swept for nothing.
+  diversityAwareEarlyStop: true,
   // Correct and provably harmless, and the benchmark shows no benefit either:
   // the candidate pools are too small for a front to bind. Left off until
   // something produces a pool big enough for it to mean anything.
@@ -138,8 +143,11 @@ export const DEFAULT_FLAGS: AlgorithmFlags = {
   // separation between the ones that remain. Whether that trade is worth it
   // depends on the ground, so it stays a decision rather than a default.
   narrowCornerSweep: false,
-  // Off until the benchmark says otherwise, like everything else here.
-  progressiveCornerSweep: false,
+  // -8.7% engine calls offline and -15.2% on production, no walk lost either
+  // place; -23.5% on production alongside the stop above, which is how the
+  // pair ships. See the Phase 8 report for the four-cell measurement and for
+  // the one fixture that says the opposite.
+  progressiveCornerSweep: true,
   budgetDetourGate: true,
   pullbackTurnOnly: true,
   guidePointPullback: false,

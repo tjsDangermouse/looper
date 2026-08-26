@@ -730,3 +730,50 @@ tell a spur that exists *because a pin is at its tip* — structural, and the
 walker's own doing — from one the walk fell into by accident. That is the same
 distinction `chokepoints-spike.md` sets out for retracing, and it wants the
 same care.
+
+## Addendum: what production said about the sweep, and about the flag it revived
+
+Both flags now ship on. The offline benchmark got the direction right and
+understated the size, and the interaction it predicted turned out to matter
+more than the sweep itself on the ground that needs help most.
+
+| probe | before | sweep only | **both** |
+| --- | --- | --- | --- |
+| douglas-5km | 425 · 5.4 s | 343 · 4.1 s | **343 · 4.0 s** |
+| douglas-3km | 240 · 2.5 s | 165 · 1.9 s | **150 · 1.7 s** |
+| onchan-5km | 419 · 4.9 s | 269 · 3.6 s | **269 · 4.2 s** |
+| peel-5km | 941 · 10.6 s | 941 · 10.7 s | **787 · 8.6 s** |
+| total | 2,025 | 1,718 (−15.2%) | **1,549 (−23.5%)** |
+
+Three routes offered on every probe in every column, and the waypoint probes
+untouched at 34 and 54 calls throughout — they do not use the ring generator.
+
+**Peel is the case worth understanding.** The sweep alone did nothing for it at
+all, and that is not a disappointment but the mechanism being honest: a sweep
+across the batch can only skip work the batch decides it does not need, and
+Peel never decided that. It passes **4 candidates in 24**, the fixed quota is
+5, so `earlyStop` came back `exhausted` and all twenty-four bearings were swept
+through every shape for nothing. The baseline audit called that five "a guess
+at a buffer above the three offered"; Peel is the guess costing twenty wasted
+candidates.
+
+`diversityAwareEarlyStop` asks the real question instead — can the selector
+fill three genuinely different walks — and Peel can, since it offers three. It
+fires at the fourth pass and the stop reason changes from `exhausted` to
+`diversity-satisfied`: 941 calls to 787, 10.6 s to 8.6 s. A flag shelved for a
+year at +30% is the only thing that has ever helped the worst ground measured,
+and only because something else changed underneath it.
+
+What is left at Peel is not the sweep's to fix. 787 calls in 8.6 s is 89 calls
+a second against an engine that tops out around 90, so it is throughput-bound:
+nothing shortens it but making fewer calls. Fix-ups are 39% of them, and
+`join-pullback` alone is 206.
+
+### One interaction the flip exposed
+
+With the sweep on, `narrowCornerSweep` was doing nothing at all — the batch
+sweep used the full shape set regardless, so a flag could be switched on and
+silently ignored. Narrowing the sweep and spreading it across the batch answer
+different questions (*which* shapes are worth trying, and in *what order*), so
+asking for both now means both: the waves are filtered to the narrow set. Only
+a test comparing the two flags on the same fixture caught it.

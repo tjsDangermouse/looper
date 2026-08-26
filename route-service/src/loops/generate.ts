@@ -680,8 +680,18 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
       // candidates a request built is a fact about the batch, not the sweep.
       for (let counted = 0; counted < candidates.length; counted++) metrics?.countCandidateBuilt()
       let stoppedBecause: 'passing-quota' | 'diversity-satisfied' | undefined
+      // Narrowing the sweep and spreading it across the batch are answers to
+      // different questions — which shapes are worth trying, and in what order
+      // to try them — so asking for both has to mean both. Sweeping the full
+      // set regardless would leave `narrowCornerSweep` switched on and doing
+      // nothing, which is worse than either behaviour.
+      const waves = flags.narrowCornerSweep
+        ? PROGRESSIVE_CORNER_WAVES
+            .map(wave => wave.filter(cornerCount => NARROW_CORNER_COUNTS.includes(cornerCount)))
+            .filter(wave => wave.length)
+        : PROGRESSIVE_CORNER_WAVES
 
-      for (const wave of PROGRESSIVE_CORNER_WAVES) {
+      for (const wave of waves) {
         const outstanding = candidates.filter(candidate => !best.get(candidate.index)?.report.pass)
         if (!outstanding.length || stoppedBecause) break
         const wavefront = outstanding.map((candidate, position) => ({ candidate, position }))
