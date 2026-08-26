@@ -940,6 +940,8 @@ async function generateWaypointLoops(
    * trim round where a pin is not.
    */
   const pins: LngLat[] = points.slice(1, -1)
+  /** Empty unless the trim is being held off them — see `keepPinnedSpurs`. */
+  const keptPins = () => (withFlags(options.flags).keepPinnedSpurs ? pins : [])
   // This is only the lower-bound check. It is deliberately routed without
   // anti-retrace penalties; offering it would turn a single waypoint into the
   // same path out and back, which is not a loop.
@@ -984,7 +986,7 @@ async function generateWaypointLoops(
     // of why, or the newer code's failure is lost behind the older one's.
     handedOver = built
   }
-  const direct = await routeWaypointCandidate(points, options.route, false, options.signal, 'waypoint-direct', pins)
+  const direct = await routeWaypointCandidate(points, options.route, false, options.signal, 'waypoint-direct', keptPins())
   if (!direct) {
     return { routes: [], warning: 'One or more waypoints cannot be reached on foot.', diagnostics: reportLegacy('unreachable', 0) }
   }
@@ -1035,7 +1037,7 @@ async function generateWaypointLoops(
   // Try the pins themselves with avoidance on the return legs. A waypoint on
   // an existing loop often already divides it into two perfectly good paths;
   // forcing an extra corner into that route only makes it less likely to fit.
-  const pinOnly = await routeWaypointCandidate(points, options.route, true, options.signal, 'waypoint-leg', pins)
+  const pinOnly = await routeWaypointCandidate(points, options.route, true, options.signal, 'waypoint-leg', keptPins())
 
   // Add one invisible shaping point to each alternative. Its reach is solved
   // from the local network stretch measured by the direct route, rather than
@@ -1058,7 +1060,7 @@ async function generateWaypointLoops(
     const scales = [0.78, 0.9, 1, 1, 1.1, 1.22]
     const guide = destination(start, guideRadius * scales[variant % scales.length], attempt.initialBearing)
     const shaped = [...points.slice(0, insertion), guide, ...points.slice(insertion)]
-    return routeWaypointCandidate(shaped, options.route, true, options.signal, 'waypoint-leg', pins)
+    return routeWaypointCandidate(shaped, options.route, true, options.signal, 'waypoint-leg', keptPins())
   })
   const analysed = [pinOnly, ...guided]
     .filter((candidate): candidate is RoutedCandidate => candidate !== undefined)
@@ -1375,7 +1377,7 @@ async function generateBackboneWaypointLoops(
       const legs = allocation.chosen.flatMap(option => routed.get(option.id) ?? [])
       // The anchors either end are the start, which the trim never touches
       // anyway; everything between them is a place the walker chose.
-      const joined = joinAndTrimLegs(legs, anchors.slice(1, -1))
+      const joined = joinAndTrimLegs(legs, flags.keepPinnedSpurs ? anchors.slice(1, -1) : [])
       const candidate: RoutedCandidate = {
         attemptId: `backbone-${allocation.chosen.map(option => option.id).join('_')}`,
         legs,

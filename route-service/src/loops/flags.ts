@@ -79,6 +79,17 @@ export type AlgorithmFlags = {
    * across the gaps, rather than from one global shaping point.
    */
   waypointBackbone: boolean
+  /**
+   * Refuse to trim an out-and-back whose tip is one of the walker's pins.
+   *
+   * Correct in isolation — a walk that no longer passes a pin is not the walk
+   * that was asked for — and it costs the walker their walk anyway, because
+   * the spur it preserves is exactly what `out-and-back-spur` refuses. The
+   * trim was load-bearing: clearing those spurs is what made waypoint mode
+   * work at all. Off until the gate can tell a spur that exists *because a pin
+   * is at its tip* from one the walk fell into by accident.
+   */
+  keepPinnedSpurs: boolean
   /** Serve an identical repeat request from a bounded in-memory cache. */
   requestCache: boolean
 }
@@ -133,6 +144,10 @@ export const DEFAULT_FLAGS: AlgorithmFlags = {
   pullbackTurnOnly: true,
   guidePointPullback: false,
   waypointBackbone: true,
+  // Measured on production: waypoint requests went from 2-3 walks to none,
+  // with `out-and-back-spur` refusing 20 of every 24 assembled — the exact
+  // failure trimming was introduced to fix. See the Phase 8 report.
+  keepPinnedSpurs: false,
   requestCache: false,
 }
 

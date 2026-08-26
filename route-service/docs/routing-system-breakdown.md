@@ -410,6 +410,7 @@ together produce a regression nobody can attribute.
 | flag | measurement |
 |---|---|
 | `guidePointPullback` | −35% calls and eliminates U-turn rejections, but one fixture drops 3 walks → 1. A product trade; see §12 |
+| `keepPinnedSpurs` | correct in isolation and it costs the walker every waypoint walk: production went 2–3 routes → **0**, `out-and-back-spur` refusing 20 of 24. Needs a structural-spur exemption in the gate first |
 | `narrowCornerSweep` | −26% calls, costs ~1 walk in 20 and some separation |
 | `progressiveCornerSweep` | −8.7% calls alone, −11.1% with `diversityAwareEarlyStop`, identical walks offered. Off pending a production probe: it is a clear win on every synthetic network and a clear loss on a uniform straight-line fixture, so the ground decides |
 | `networkAwareSeeds` | −13% coastal, +1 call elsewhere, −0.5% net |
@@ -481,11 +482,17 @@ probe.**
   candidate count is not the difference either: `urban-5km-production-width`
   raises the cap to 24 and costs **exactly** what `urban-5km` costs, because
   the early stop fires long before the cap binds. The difference is the ground.
-- **Neither waypoint correctness fix shows on the synthetic bench.** Pin
-  preservation through trimming and the duration-mode re-aim are both exactly
-  neutral across all 21 scenarios, because the synthetic networks never put a
-  pin at the tip of a sub-80 m spur and walk at almost exactly the assumed
-  pace. Their evidence is the unit tests and the production probe.
+- **A pin can still be trimmed out of the walk it was routed through.**
+  `keepPinnedSpurs` fixes that and costs every waypoint walk on real ground,
+  because the spur it preserves is what `out-and-back-spur` refuses — see the
+  Phase 8 addendum. The gate needs to tell a spur held open by a pin from one
+  the walk fell into; until then the trim keeps precedence, and the walker gets
+  a walk whose last few metres are drawn generously rather than no walk.
+- **Neither waypoint correctness fix shows on the synthetic bench.** The
+  duration-mode re-aim is exactly neutral across all 21 scenarios, because the
+  synthetic networks walk at almost exactly the assumed pace; the pin work was
+  neutral there too, and production overturned it. Waypoint changes want the
+  probe, not the bench.
 - `GRAPHHOPPER_MAX_CONCURRENCY` / `GRAPHHOPPER_MAX_QUEUE` remain untuned
   against a load test.
 - Horizontal GraphHopper replicas + a service-level admission queue.

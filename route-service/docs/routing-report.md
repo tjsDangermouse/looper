@@ -676,3 +676,57 @@ bearing — and sweeping across the batch does the opposite. That fixture has no
 street network at all, and every synthetic network with one says the reverse.
 Which is why the flag ships off: this is a question about ground, and the
 production probe is the only thing that can answer it for Douglas.
+
+## Addendum: what production said about the pin fix
+
+The probe overturned it, and this is exactly the case the synthetic bench was
+warned about being unable to judge.
+
+| | before | after pin protection |
+| --- | --- | --- |
+| wp-one | 2 routes, 0.6 s, 34 calls | **0 routes**, 7.5 s, 523 calls |
+| wp-two | 1 route, 0.8 s, 54 calls | **0 routes**, 11.5 s, 603 calls |
+| backbone stage | `backbone` | `all-rejected` |
+| `out-and-back-spur` | — | **20 of 24 assembled** |
+
+Twenty of twenty-four is the pre-Phase-4 signature, to the number. Protecting
+the pins did not introduce a new failure; it un-fixed the old one.
+
+Reproduced offline afterwards, with a pin at the head of a stub of varying
+length and everything else held constant:
+
+| stub | trim allowed to clear it | pin protected |
+| --- | --- | --- |
+| 20 m | 3 routes, no spur rejections | 3 routes, 1 |
+| 40 m | 3 routes, no spur rejections | 3 routes, 5 |
+| 60 m | 3 routes, no spur rejections | 2 routes, 22 |
+| 120 m | 3 routes, no spur rejections | **0 routes**, 24 |
+
+Two things were wrong in the reasoning behind the change, and only the probe
+could have caught either.
+
+**The trim reaches much further than its 80 m budget suggests.** It runs to a
+fixed point, and nested passes chew through a spur several times its
+single-pass window — up to `MAX_TOTAL_TRIM_METRES`. A 120 m stub is a 240 m
+round trip and was being cleared comfortably. The fixtures written for the
+change all used stubs inside the single-pass window, where the difference is
+one rejection rather than every walk.
+
+**The trim was load-bearing, not cosmetic.** Phase 4 did not add trimming to
+tidy the geometry; it added trimming *because* `out-and-back-spur` was refusing
+every assembled waypoint walk, and clearing the spurs is what made waypoint
+mode work at all. Holding the trim off the pins removes the mechanism the
+feature stands on.
+
+The defect the change was aimed at is real: a pin can be routed through and
+then spliced out, and nothing downstream notices. But refusing the walker every
+walk is a far worse answer than a walk whose last forty metres are drawn
+slightly generously — which is the trade the trim's own comment already makes
+for spikes in general, and the pin case is not special enough to reverse it.
+
+So it ships off, as `keepPinnedSpurs`, with the mechanism and its tests intact.
+Turning it on needs the other half first: `out-and-back-spur` has to be able to
+tell a spur that exists *because a pin is at its tip* — structural, and the
+walker's own doing — from one the walk fell into by accident. That is the same
+distinction `chokepoints-spike.md` sets out for retracing, and it wants the
+same care.

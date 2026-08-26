@@ -646,12 +646,22 @@ describe('a pin at the end of a cul-de-sac', () => {
   }
 
   it('still passes the pin, however tidy trimming the stub would look', async () => {
-    const result = await generateLoops(request({ waypoints: [pin], distanceKm: 5 }), { route: engine, flags })
+    // Off by default, and for a reason the synthetic fixtures cannot show:
+    // the spur this keeps is what `out-and-back-spur` refuses, and on real
+    // ground that costs the walker every walk. See the Phase 8 report.
+    const result = await generateLoops(request({ waypoints: [pin], distanceKm: 5 }),
+      { route: engine, flags: { ...flags, keepPinnedSpurs: true } })
     expect(result.routes.length).toBeGreaterThan(0)
     for (const route of result.routes) {
       const line = route.geometry.coordinates as LngLat[]
       expect(Math.min(...line.map(point => haversine(point, pinAt)))).toBeLessThan(5)
     }
+  })
+
+  it('trims the stub by default, which is what makes waypoint walks offerable', async () => {
+    const result = await generateLoops(request({ waypoints: [pin], distanceKm: 5 }), { route: engine, flags })
+    expect(result.routes.length).toBeGreaterThan(0)
+    expect(result.diagnostics!.rejections['out-and-back-spur'] ?? 0).toBe(0)
   })
 
   it('still trims the stub when no walker asked to go up it', async () => {
