@@ -58,6 +58,12 @@ export type AlgorithmFlags = {
    */
   pullbackTurnOnly: boolean
   /**
+   * Repair a guide point that landed in a cul-de-sac, the same way the ring
+   * builder repairs a corner that did. Only the generator's own invisible
+   * shaping points are ever moved.
+   */
+  guidePointPullback: boolean
+  /**
    * Build waypoint loops from an ordered backbone and a slack budget spread
    * across the gaps, rather than from one global shaping point.
    */
@@ -112,6 +118,7 @@ export const DEFAULT_FLAGS: AlgorithmFlags = {
   narrowCornerSweep: false,
   budgetDetourGate: true,
   pullbackTurnOnly: true,
+  guidePointPullback: false,
   waypointBackbone: true,
   requestCache: false,
 }

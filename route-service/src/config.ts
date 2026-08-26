@@ -25,6 +25,7 @@ const flags: AlgorithmFlags = {
   narrowCornerSweep: flag(process.env.LOOPER_NARROW_CORNER_SWEEP, DEFAULT_FLAGS.narrowCornerSweep),
   budgetDetourGate: flag(process.env.LOOPER_BUDGET_DETOUR_GATE, DEFAULT_FLAGS.budgetDetourGate),
   pullbackTurnOnly: flag(process.env.LOOPER_PULLBACK_TURN_ONLY, DEFAULT_FLAGS.pullbackTurnOnly),
+  guidePointPullback: flag(process.env.LOOPER_GUIDE_POINT_PULLBACK, DEFAULT_FLAGS.guidePointPullback),
   waypointBackbone: flag(process.env.LOOPER_WAYPOINT_BACKBONE, DEFAULT_FLAGS.waypointBackbone),
   requestCache: flag(process.env.LOOPER_REQUEST_CACHE, DEFAULT_FLAGS.requestCache),
 }

@@ -5,7 +5,7 @@ import { DEFAULT_ATTEMPT_COUNT, generateLoopAttempts, spreadAcrossCompass, type 
 import { MAX_SHARED_FRACTION, bearingOctant, initialBearing as bearingOf, labelRoutes, selectDiverseRoutes, selectPreferredDiverseRoutes } from './diversity.js'
 import { destination, distanceBetween, haversine, projector, type LngLat, type Metric } from './geo.js'
 import { MAX_REPEATED_FRACTION, analyseRouteQuality, sharedCorridorMetres, type QualityReport, type QualityThresholds } from './quality.js'
-import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinAndTrimLegs, routeLegAttempt, type LegRouter, type RoutedCandidate, type RoutedLeg, type SequentialRoutingOptions } from './routing.js'
+import { LEG_BUDGET_SHARE, applyJoinPullback, buildLoopIncrementally, joinAndTrimLegs, routeLegAttempt, type LegRouter, type RoutedCandidate, type RoutedLeg, type SequentialRoutingOptions } from './routing.js'
 import { avoidanceCustomModel, shortestPathCustomModel } from './avoidance.js'
 import { seedFor } from './random.js'
 import { countingRouter, RequestMetrics, type MetricsSnapshot, type OfferedMetrics, type RoutePurpose } from './metrics.js'
@@ -1160,7 +1160,13 @@ async function generateBackboneWaypointLoops(
     const stretch = crow > 0 ? directs[gap].distanceMeters / crow : 1
     for (const plan of planSegmentOptions(gap, anchors[gap], anchors[gap + 1], perGap, stretch)) {
       if (!plan.guides.length) continue
-      const legs = await routeThrough(options.route, [anchors[gap], ...plan.guides, anchors[gap + 1]], options.signal, (kind, kept) => metrics?.countFixup(kind, kept))
+      const legs = await routeThrough(
+        options.route,
+        [anchors[gap], ...plan.guides, anchors[gap + 1]],
+        options.signal,
+        (kind, kept) => metrics?.countFixup(kind, kept),
+        flags.guidePointPullback,
+      )
       if (!legs) continue
       routed.set(plan.id, legs)
       forThisGap.push({
@@ -1380,19 +1386,60 @@ async function routeThrough(
   points: LngLat[],
   signal: AbortSignal | undefined,
   onFixup?: SequentialRoutingOptions['onFixup'],
+  repairGuides = false,
 ): Promise<RoutedLeg[] | undefined> {
   const legs: RoutedLeg[] = []
   const walked: LngLat[][] = []
-  for (let index = 1; index < points.length; index++) {
+  // Guide points may move; the anchors at either end may not. Copied because
+  // a repair below rewrites a guide in place, and the caller's anchors are the
+  // walker's own pins.
+  const shaped = [...points]
+
+  for (let index = 1; index < shaped.length; index++) {
     signal?.throwIfAborted()
-    const result = await routeLegAttempt(route, points[0], walked, points[index - 1], points[index], {
+    const result = await routeLegAttempt(route, shaped[0], walked, shaped[index - 1], shaped[index], {
       signal,
       basePurpose: 'waypoint-leg',
       onFixup,
     })
     if (!result) return undefined
-    legs.push({ ...result.leg, relaxed: result.relaxed, avoidanceAreaCount: walked.length })
-    walked.push(result.leg.coordinates)
+    let leg = result.leg
+    let relaxed = result.relaxed
+
+    // The seam this leg starts on is a guide point when it is neither end of
+    // the gap. A guide that landed in a cul-de-sac forces the leg in and the
+    // leg out down the same short stub, which is the exact defect the ring
+    // builder repairs by pulling the corner in — and which the waypoint
+    // builders have never repaired, because they never asked.
+    const seamIsGuide = index - 1 > 0 && index - 1 < shaped.length - 1
+    if (repairGuides && seamIsGuide && legs.length > 0) {
+      const previous = legs[legs.length - 1]
+      const outcome = await applyJoinPullback(
+        route,
+        shaped[0],
+        walked.slice(0, -1),
+        shaped[index - 2],
+        previous,
+        shaped[index - 1],
+        shaped[index],
+        leg,
+        relaxed,
+        { signal, basePurpose: 'waypoint-leg', onFixup },
+      )
+      leg = outcome.leg
+      relaxed = outcome.relaxed
+      if (outcome.revisedPrevious) {
+        legs.pop()
+        walked.pop()
+        legs.push(outcome.revisedPrevious.leg)
+        walked.push(outcome.revisedPrevious.leg.coordinates)
+        // The guide moved. Nothing the walker chose has.
+        shaped[index - 1] = outcome.revisedPrevious.point
+      }
+    }
+
+    legs.push({ ...leg, relaxed, avoidanceAreaCount: walked.length })
+    walked.push(leg.coordinates)
   }
   return legs
 }

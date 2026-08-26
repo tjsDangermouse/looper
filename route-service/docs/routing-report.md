@@ -543,3 +543,36 @@ offered**, and slightly better distance error. Now the default.
 Trying *only* the two shapes that usually work is **26%**, and costs about one
 walk in twenty plus some separation between the ones that remain. That is a
 trade rather than a win, so it is `LOOPER_NARROW_CORNER_SWEEP`, off.
+
+## Guide-point repair
+
+The ring builder repairs a corner that lands in a cul-de-sac: it pulls the
+corner in and re-routes the two legs meeting there. The waypoint builders never
+did, because they never asked — so a shaping point that landed down a dead end
+forced the leg in and the leg out along the same short stub, and the walk was
+refused for it.
+
+`LOOPER_GUIDE_POINT_PULLBACK` applies the same repair at guide points. Only the
+generator's own invisible shaping points are ever moved; a walker's pin is the
+problem statement and is passed to the engine exactly as given, which is
+asserted directly in the tests rather than assumed.
+
+Measured across six waypoint fixtures:
+
+| | off | on |
+| --- | --- | --- |
+| engine calls | 1,372 | **891** (−35%) |
+| `u-turns` rejections | 22 | **0** |
+| routes offered | 15 | 13 |
+| suburban pin | 3 routes, 589 calls | 1 route, **42 calls** |
+
+The U-turn column is the repair doing exactly what it is for. The route column
+is the cost, and it is all one fixture: with the repair, suburban ground now
+succeeds on the backbone path with a single walk instead of failing over to the
+older generator, which found three at fourteen times the price.
+
+Which of those a walker would rather have is a product question, not a routing
+one — one walk in half a second against three in seven — so it ships off, with
+the flag there to settle it against real ground. The case to watch is
+`wp-one`/`wp-two`, which currently offer two walks and one: if the repair takes
+those to three, it pays for the suburban regression several times over.

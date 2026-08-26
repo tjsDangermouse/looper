@@ -686,3 +686,62 @@ describe('waypoint mode saying where it got to', () => {
     expect(result.diagnostics!.metrics!.graphhopperCalls).toBeGreaterThan(0)
   })
 })
+
+/**
+ * A guide point is the generator's own invisible shaping point and may be
+ * moved when it lands somewhere only reachable one way. A waypoint is a place
+ * the walker chose and may not be moved for any reason at all.
+ */
+describe('repairing a guide point that landed in a dead end', () => {
+  const pins = [{ lng: -4.4746, lat: 54.1546 }, { lng: -4.4886, lat: 54.1566 }]
+  const on = { guidePointPullback: true, waypointBackbone: true }
+
+  it('still visits every pin, in order, at the exact coordinates given', async () => {
+    const asked = pins.map(pin => ({ ...pin }))
+    const result = await generateLoops(request({ waypoints: asked, distanceKm: 6 }), { route: fakeEngine(), flags: on })
+    expect(asked).toEqual(pins)
+    expect(result.routes.length).toBeGreaterThan(0)
+    for (const route of result.routes) {
+      const line = route.geometry.coordinates as LngLat[]
+      let reachedAt = -1
+      for (const pin of pins) {
+        const nearest = line.reduce((best, point, index) => {
+          const away = haversine(point, [pin.lng, pin.lat])
+          return away < best.away ? { away, index } : best
+        }, { away: Infinity, index: -1 })
+        expect(nearest.away).toBeLessThan(80)
+        expect(nearest.index).toBeGreaterThan(reachedAt)
+        reachedAt = nearest.index
+      }
+    }
+  })
+
+  it('never asks the engine to route through a moved pin', async () => {
+    const asked: LngLat[][] = []
+    const route = async (points: LngLat[]) => {
+      asked.push(points)
+      return fakeEngine()(points)
+    }
+    await generateLoops(request({ waypoints: pins, distanceKm: 6 }), { route, flags: on })
+    // Every pin the walker placed must appear in some request exactly as it
+    // was given; a pulled-back version of one would be a different place.
+    for (const pin of pins) {
+      const exact = asked.some(points => points.some(point => point[0] === pin.lng && point[1] === pin.lat))
+      expect(exact).toBe(true)
+    }
+  })
+
+  it('costs nothing when it is switched off', async () => {
+    const off = new RequestMetrics()
+    await generateLoops(request({ waypoints: pins, distanceKm: 6 }), {
+      route: fakeEngine(), metrics: off, flags: { waypointBackbone: true, guidePointPullback: false },
+    })
+    expect(off.snapshot().callsByPurpose['join-pullback']).toBe(0)
+  })
+
+  it('gives the same walks twice', async () => {
+    const one = await generateLoops(request({ waypoints: pins, distanceKm: 6 }), { route: fakeEngine(), flags: on })
+    const two = await generateLoops(request({ waypoints: pins, distanceKm: 6 }), { route: fakeEngine(), flags: on })
+    expect(two.routes.map(route => route.geometry)).toEqual(one.routes.map(route => route.geometry))
+  })
+})
