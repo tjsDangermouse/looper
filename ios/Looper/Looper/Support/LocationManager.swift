@@ -19,6 +19,7 @@ final class LocationManager: NSObject {
 
     private let manager = CLLocationManager()
     private var oneShotContinuation: CheckedContinuation<Point, Error>?
+    private var oneShotTimeout: DispatchWorkItem?
     private var positionContinuation: AsyncStream<PositionUpdate>.Continuation?
     private var headingContinuation: AsyncStream<Double>.Continuation?
 
@@ -29,11 +30,61 @@ final class LocationManager: NSObject {
     }
 
     func requestOneShotLocation() async throws -> Point {
-        try await withCheckedThrowingContinuation { continuation in
-            oneShotContinuation = continuation
-            manager.requestWhenInUseAuthorization()
-            manager.requestLocation()
+        // Reuse a recent fix from this manager (for example, after returning
+        // from a walk) instead of needlessly spinning the GPS up again.
+        if let location = manager.location,
+           location.horizontalAccuracy >= 0,
+           abs(location.timestamp.timeIntervalSinceNow) <= 60 {
+            return Point(location.coordinate.longitude, location.coordinate.latitude)
         }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            // A second tap supersedes the first request; never strand its
+            // continuation by simply replacing it.
+            finishOneShot(.failure(CancellationError()))
+            oneShotContinuation = continuation
+
+            switch manager.authorizationStatus {
+            case .notDetermined:
+                // Wait for the permission decision before requesting a fix.
+                // Asking for both together can leave requestLocation pending.
+                manager.requestWhenInUseAuthorization()
+            case .authorizedAlways, .authorizedWhenInUse:
+                startOneShotLocationRequest()
+            case .denied, .restricted:
+                finishOneShot(.failure(NSError(
+                    domain: kCLErrorDomain,
+                    code: CLError.Code.denied.rawValue
+                )))
+            @unknown default:
+                finishOneShot(.failure(NSError(
+                    domain: kCLErrorDomain,
+                    code: CLError.Code.locationUnknown.rawValue
+                )))
+            }
+        }
+    }
+
+    private func startOneShotLocationRequest() {
+        guard oneShotContinuation != nil else { return }
+        oneShotTimeout?.cancel()
+        let timeout = DispatchWorkItem { [weak self] in
+            self?.finishOneShot(.failure(NSError(
+                domain: kCLErrorDomain,
+                code: CLError.Code.locationUnknown.rawValue
+            )))
+        }
+        oneShotTimeout = timeout
+        DispatchQueue.main.asyncAfter(deadline: .now() + 12, execute: timeout)
+        manager.requestLocation()
+    }
+
+    private func finishOneShot(_ result: Result<Point, Error>) {
+        guard let continuation = oneShotContinuation else { return }
+        oneShotContinuation = nil
+        oneShotTimeout?.cancel()
+        oneShotTimeout = nil
+        continuation.resume(with: result)
     }
 
     /// Watches position for the duration the stream is being iterated —
@@ -72,24 +123,35 @@ extension LocationManager: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         let point = Point(location.coordinate.longitude, location.coordinate.latitude)
-        if let continuation = oneShotContinuation {
-            oneShotContinuation = nil
-            continuation.resume(returning: point)
-        }
+        finishOneShot(.success(point))
         positionContinuation?.yield(
             PositionUpdate(point: point, accuracy: location.horizontalAccuracy, location: location)
         )
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        if let continuation = oneShotContinuation {
-            oneShotContinuation = nil
-            continuation.resume(throwing: error)
-        }
+        finishOneShot(.failure(error))
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         updateBackgroundCapability()
+        guard oneShotContinuation != nil else { return }
+        switch manager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            startOneShotLocationRequest()
+        case .denied, .restricted:
+            finishOneShot(.failure(NSError(
+                domain: kCLErrorDomain,
+                code: CLError.Code.denied.rawValue
+            )))
+        case .notDetermined:
+            break
+        @unknown default:
+            finishOneShot(.failure(NSError(
+                domain: kCLErrorDomain,
+                code: CLError.Code.locationUnknown.rawValue
+            )))
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {

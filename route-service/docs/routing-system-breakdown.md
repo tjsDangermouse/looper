@@ -1,12 +1,26 @@
 # Looper route-service: routing system breakdown
 
-Prepared as a technical reference for external AI analysis. Covers the loop-routing service at `route-service/` in the Walkabout repo as of commit `e1702d6` on `main`. All file paths are relative to `route-service/`.
+Prepared as a technical reference for external AI analysis. Covers the
+loop-routing service at `route-service/` in the Walkabout repo as of commit
+`c555a5b` on `new-maths`. All file paths are relative to `route-service/`.
+
+Several numbers below are measured against the live Isle of Man engine rather
+than estimated; those are marked **(measured)**. Where a claim rests only on
+the synthetic benchmark it says so, because the benchmark has been wrong about
+real behaviour more than once — see §12.
 
 ## 1. What this system does
 
-Given a start point and a target walking distance or duration (optionally with an ordered list of must-visit waypoints), the service returns up to 3 distinct walking **loops** (start = end) that satisfy the target and read as a sensible walk on a map — not a scribble, not a there-and-back, not three readings of the same streets.
+Given a start point and a target walking distance or duration (optionally with
+an ordered list of must-visit waypoints), the service returns up to 3 distinct
+walking **loops** (start = end) that satisfy the target and read as a sensible
+walk on a map — not a scribble, not a there-and-back, not three readings of the
+same streets.
 
-It is **not** a shortest-path service and does not expose GraphHopper's own round-trip algorithm. It builds loops itself, on top of an ordinary point-to-point pathfinder, because the pathfinder alone has no concept of "come back a different way" or "look like a nice walk."
+It is **not** a shortest-path service and does not expose GraphHopper's own
+round-trip algorithm. It builds loops itself, on top of an ordinary
+point-to-point pathfinder, because the pathfinder alone has no concept of "come
+back a different way" or "look like a nice walk."
 
 ## 2. High-level architecture
 
@@ -15,156 +29,475 @@ Client (PWA / iOS app)
   │  POST /v1/loops { start, distanceKm|durationMinutes, waypoints?, exclude?, ... }
   ▼
 route-service (Node/TypeScript, src/server.ts)
-  │  parses & validates request, per-IP rate limit, per-request AbortController/deadline
+  │  validates, per-IP rate limit, per-request AbortController/deadline,
+  │  optional exact-request cache (off), per-request RequestMetrics
   ▼
-loops/generate.ts  — generateLoops() / generateWaypointLoops()   [ORCHESTRATOR]
-  │  fans out many independent "attempts" (candidate loops)
+loops/generate.ts                                        [ORCHESTRATOR]
+  │  generateLoops()                    ordinary loops
+  │  generateBackboneWaypointLoops()    waypoint loops, current
+  │  generateWaypointLoops()            waypoint loops, older fallback
   ▼
-loops/routing.ts   — buildLoopIncrementally()                    [LOOP BUILDER]
-  │  builds one candidate loop leg-by-leg
-  ▼
+   ┌────────────────────────────┬─────────────────────────────┐
+   ▼                            ▼                             ▼
+loops/routing.ts          loops/waypoints.ts           loops/network.ts
+buildLoopIncrementally()  backbone + slack DP          reachability probe (off)
+   │                            │
+   └────────────┬───────────────┘
+                ▼
 loops/avoidance.ts — buildAvoidanceAreas(), avoidanceCustomModel()
-  │  turns already-walked ground into a GraphHopper "avoid" custom model
-  ▼
-GraphHopperClient (src/graphhopper.ts)  →  HTTP POST /route
-  ▼
-Self-hosted GraphHopper 11.0 (route-service/graphhopper/), one JVM per region
-  (Isle of Man, England — see src/regions.ts), pedestrian profile "foot"
+                ▼
+GraphHopperClient (src/graphhopper.ts)  →  POST /route, GET /spt
+                ▼
+Self-hosted GraphHopper 11.0, one JVM per region
+  (Isle of Man, England — src/regions.ts), pedestrian profile "foot"
 ```
 
-Every candidate loop, once built, is scored and gated by `loops/quality.ts`, and the survivors are picked for diversity by `loops/diversity.ts` before being returned.
+Every finished candidate is measured and gated by `loops/quality.ts` — using
+`loops/edges.ts` for overlap where the engine reported edge ids — and the
+survivors are picked by `loops/diversity.ts`.
 
-## 3. The underlying pathfinder: GraphHopper, configured deliberately without CH
+Supporting modules: `loops/flags.ts` (algorithm switches), `loops/metrics.ts`
+(per-request cost telemetry), `loops/pareto.ts`, `loops/repair.ts`,
+`loops/screening.ts`, `loops/cache.ts` — the last four all currently switched
+off, see §11.
 
-- GraphHopper 11.0, self-hosted (`graphhopper/Dockerfile`, `graphhopper/config.yml`), one instance per geographic region, each with its own OSM extract and heap (2 GB Isle of Man, 6 GB England — `docker-compose.prod.yml`).
-- Single profile `foot`, defined by a **custom model** (`graphhopper/looper_foot.json`) that replaces GraphHopper's stock `foot.json`: it zeroes out inaccessible/dangerous edges (no foot access, hike_rating ≥ 2, certain bridleways, etc.) but deliberately **does not** apply GraphHopper's stock road-class preference. Rationale (from the file's own comment): a loop generator aiming in many directions needs "one residential street is as good as another," whereas the stock weighting funnels everything onto the same well-tagged arterials regardless of the bearing the generator wants.
-- **Contraction Hierarchies (CH) is explicitly disabled** (`profiles_ch: []` in `config.yml`). CH bakes one fixed weighting into the graph at import time and cannot accept a different custom model per request — and Looper's per-request "avoid this corridor" areas (see §5) are exactly that: a different weighting on every single call.
-- **Landmarks (LM)** is enabled instead (`profiles_lm: [{ profile: foot }]`) as the speed compromise: LM stays mathematically valid as long as a request only ever *raises* edge cost (never lowers it), which is all Looper's avoidance areas ever do. This is a deliberate, already-reasoned tradeoff, not an oversight.
-- Every request also sets `'ch.disable': true` explicitly (`src/graphhopper.ts:57`) and GraphHopper is asked for ordinary **point-to-point** routes only — one call per leg, never GraphHopper's own round-trip mode.
-- **So: the actual shortest-path search per leg is GraphHopper's Landmark-accelerated bidirectional A\*/Dijkstra variant, not Looper's own code.** Looper only decides *where* the two endpoints of each leg are.
+## 3. The underlying pathfinder: GraphHopper, deliberately without CH
+
+- GraphHopper 11.0, self-hosted (`graphhopper/Dockerfile`,
+  `graphhopper/config.yml`), one instance per region with its own OSM extract
+  and heap (2 GB Isle of Man, 6 GB England — `docker-compose.prod.yml`).
+- Single profile `foot`, defined by a **custom model**
+  (`graphhopper/looper_foot.json`) replacing GraphHopper's stock `foot.json`:
+  it zeroes out inaccessible/dangerous edges but deliberately **does not**
+  apply the stock road-class preference, because a loop generator aiming in
+  many directions needs "one residential street is as good as another".
+- **Contraction Hierarchies is explicitly disabled** (`profiles_ch: []`). CH
+  bakes one weighting into the graph and cannot accept the per-request custom
+  models Looper's avoidance corridors depend on.
+- **Landmarks** is enabled instead: valid as long as a request only ever
+  *raises* edge cost, which is all the avoidance areas do.
+- Requests set `'ch.disable': true`, and ask for ordinary **point-to-point**
+  routes only — one call per leg, never GraphHopper's round-trip mode.
+- Path details requested: `street_name`, `road_class`, **`edge_id`**. The last
+  is what makes overlap measurable on the network (§6.1). It works against the
+  live engine **(measured:** 42 of 43 candidates in a sample request were
+  measured on edges, one fell back to geometry**)**.
+- `GET /spt` (shortest-path tree) is used by the optional reachability probe
+  (§9). It has its own short timeout and fails open.
+
+**Consequence worth stating plainly:** every priority rule in the profile is a
+multiplier at or below 1, and GraphHopper divides by priority — so the route it
+returns can be physically *longer* than the shortest path, and is **not** a
+lower bound on distance. Anything that refuses a request for being too long
+needs a real floor; see §8.2.
+
+### 3.1 What a call actually costs **(measured)**
+
+| | ms per call |
+|---|---|
+| leg with no custom model | 20–46 |
+| leg with 1–3 avoidance polygons | 34–60 |
+
+No call ever carries more than 3 areas — the union merges corridors before
+sending — so `MAX_AVOIDANCE_AREAS = 12` is never approached and lowering it
+would do nothing. Polygons add roughly 45%, but the ~40 ms floor is
+GraphHopper's flexible (non-CH) routing and is the dominant cost.
+
+**The engine saturates at roughly 90 foot-legs per second.** Raising
+per-request concurrency from 6 to 12 doubled achieved parallelism and doubled
+per-call latency, leaving throughput flat-to-worse (92.6 → 77.1 calls/s) and
+one fixture 2.6× slower. Latency is therefore bounded by *calls made × cost per
+call*, and the only levers are sending fewer calls — not asking for more at
+once. `ROUTING_CONCURRENCY` stays at 6, with that measurement recorded beside
+it in `docker-compose.prod.yml`.
 
 ## 4. Candidate generation: deterministic multi-start sampling
 
-`loops/candidates.ts` — `generateLoopAttempts(seed, count)`:
-- Produces `count` (default 24, configurable per-request, see §8) **deterministic** starting bearings, spread evenly around the compass (360°/pairs) with a small random jitter (±12°) so repeated requests don't look stencilled.
-- A seeded PRNG (`mulberry32`, in `loops/random.ts`) is used — the seed is derived from the start coordinate + target distance + a `variation` field the client can bump for "show me different ones" (`seedFor()`, referenced in `generate.ts`). Same request → same loops; a `variation` increment → a different, still-deterministic set.
-- Attempts come in **mirrored pairs**: the same bearing tried both clockwise and counter-clockwise, because "the same three streets can make a good loop one way and an awkward one the other" (one-way paths, stairs, crossings the generator can't see from a graph query alone).
-- This is the *only* randomness in the system, and it's fully seeded/reproducible — not stochastic search in the metaheuristic sense.
+`loops/candidates.ts`:
 
-## 5. Building one candidate loop: incremental, self-correcting construction
+- `generateLoopAttempts(seed, count)` produces `count` (default 24 in
+  production, `DEFAULT_ATTEMPT_COUNT = 16` otherwise) deterministic starting
+  bearings, spread evenly round the compass with ±12° jitter.
+- Seeded PRNG (`mulberry32`, `loops/random.ts`); seed derived from start
+  coordinate (rounded to ~11 m), target distance and the client's `variation`.
+  Same request → same loops; `variation + 1` → a different deterministic set.
+- Attempts come in **mirrored pairs** — the same bearing clockwise and
+  anticlockwise.
+- **`spreadAcrossCompass(attempts)`** reorders the batch by bit-reversal of the
+  pair index, so *any prefix* of the dispatched attempts already covers the
+  compass rather than one arc of it. This matters because the generator stops
+  partway (§7): in dispatch order, the first six attempts were the first
+  quarter of the dial. Worth **−13.8% engine calls** with better-separated
+  alternatives; on by default (`LOOPER_SPREAD_BEARINGS`).
+- This is the only randomness in the system, and it is fully reproducible.
 
-`loops/routing.ts` — `buildLoopIncrementally(start, targetMetres, initialBearing, direction, route, options)`. This is the core "algorithm," and it is best described as **greedy incremental construction with bounded local retries and geometric post-repair** — not a global optimizer, not classic Dijkstra/A* (that's delegated to GraphHopper per leg).
+## 5. Building one candidate loop
 
-Per candidate:
-1. **Corner count**: tries shapes with 1, 2, 3, then 4 corners (`CORNER_COUNTS_TO_TRY` in `generate.ts`), simplest first, stopping as soon as one produces a passing loop. A promenade might only need 2 legs; a housing estate might need 5.
-2. **Leg-by-leg construction**: for a loop with `cornerCount` corners, there are `cornerCount + 1` legs. Before each leg, the code computes remaining distance budget ÷ legs left, and aims the next leg's target point that far away, on a heading stepped evenly round the compass (turning the requested `direction`). This is *live* planning — the shape is not decided up front.
-3. **Per-leg routing** (`routeLegAttempt`): each leg is one GraphHopper point-to-point call, penalized against ground already walked (§5.1 below). If it fails outright, or blows its share of the distance budget, or contains a short dead-end spike, it gets **one bounded retry** with a relaxed penalty / shorter reach / different bearing — never a full restart.
-4. **Bounded per-leg retries** (`attemptLeg`, up to `DEFAULT_MAX_LEG_ATTEMPTS = 2`): if a leg overshoots its planned length by more than `DEFAULT_LEG_OVERSHOOT_TOLERANCE` (1.4×), or backtracks briefly onto the previous leg, the next attempt aims a shorter reach (×0.8 per retry) and swings the bearing further round (+20°/retry) — a genuinely different guess, not the same request repeated.
-5. **Join pullback** (`applyJoinPullback`): after two legs meet, if the turn there is sharper than `JOIN_TURN_THRESHOLD_DEGREES` (150°) or a short branch straddles the seam, both the arriving and departing leg are undone and re-routed to a point pulled back 65% of the way toward the start (`WAYPOINT_PULLBACK_SCALE`) — the fix for a waypoint or corner landing in a cul-de-sac.
-6. **In-leg spike detection & reroute** (`findLegSpike`): detects a short dead-end/driveway duck-in-and-back inside a single leg's own geometry (sharp reversal whose two ends land within ~20 m of each other) and asks GraphHopper to route around it with a small avoidance disc.
-7. **Post-build spike trimming** (`trimTinySpikes`): after the whole loop is joined, any remaining backtrack shorter than `TINY_SPIKE_ROUND_TRIP_METRES` (80 m) is spliced straight out of the final geometry — a last-resort honest cleanup for ground that genuinely offers no other way through, bounded so a fundamentally out-and-back walk isn't gutted (`MAX_TOTAL_TRIM_METRES = 300`).
+`loops/routing.ts` — `buildLoopIncrementally(...)`: greedy incremental
+construction with bounded local retries and geometric post-repair. The
+shortest-path search itself is GraphHopper's, per leg.
 
-### 5.1 Anti-retrace: avoidance areas, not a global no-repeat constraint
+1. **Corner count** — `CORNER_COUNTS_TO_TRY = [3, 2, 1, 4]`, stopping at the
+   first shape that passes. The order *is* the cost: most ground wants a
+   three-cornered ring, and starting there rather than at a two-legged
+   there-and-back is **6% of all engine calls** for no change to what is
+   offered. `LOOPER_NARROW_CORNER_SWEEP` narrows this to `[3, 2]` — a further
+   26%, at about one walk in twenty and some separation; off, see §11.
+2. **Leg-by-leg construction** — remaining budget ÷ legs left decides how far
+   the next leg aims, on a heading stepped round the compass. Live planning;
+   the shape is not decided up front.
+3. **Per-leg routing** (`routeLegAttempt`) — one point-to-point call, penalised
+   against ground already walked (§5.1), plus the fix-ups below.
+4. **Bounded per-leg retries** (`attemptLeg`, `DEFAULT_MAX_LEG_ATTEMPTS = 2`) —
+   a leg overshooting its planned length by more than 1.4×, or backtracking
+   onto the previous leg, is re-aimed shorter (×0.8) and further round (+20°).
+5. **Join pullback** (`applyJoinPullback`) — where two legs meet at a turn
+   sharper than 150°, both are undone and re-routed to a corner pulled 65% back
+   toward the start. The fix for a corner in a cul-de-sac.
+6. **In-leg spike reroute** (`findLegSpike`) — a short dead-end duck-in-and-back
+   inside one leg is circled with a small avoidance disc and re-routed.
+7. **Post-build trimming** (`joinAndTrimLegs` → `trimTinySpikes`) — any
+   remaining backtrack under an 80 m round trip is spliced out of the finished
+   geometry, bounded at `MAX_TOTAL_TRIM_METRES = 300`.
+8. **`preAvoidGeometries`** — the builder can be seeded with ground to treat as
+   already walked, which is how a local repair hands back the stretch a
+   previous attempt doubled over.
+
+### 5.1 What the fix-ups cost, and which earn it **(measured)**
+
+The three speculative reroutes are **~43% of every engine call** — consistently,
+at every start point sampled. Live keep rates:
+
+| fix-up | attempted | kept | calls each |
+|---|---|---|---|
+| `join-pullback` | 337 | **69%** | 2 |
+| `leg-budget` | 296 | **65%** | 1 |
+| `spike` | 83 | **60%** | 1 |
+
+All three earn their calls most of the time; total waste is ~12%. Two gates
+trim the wasteful end, both on by default:
+
+- **`LOOPER_PULLBACK_TURN_ONLY`** — a short branch straddling a leg seam is
+  already spliced out for free by the tiny-spike trim, which reaches further
+  (80 m) than the detector that triggers the pullback (~40 m). Spending two
+  engine calls to route around something already removed buys nothing.
+  **−6.4% calls**, identical walks, better separation.
+- **`LOOPER_BUDGET_DETOUR_GATE`** — a leg only shortens under a weaker penalty
+  if the penalty is what made it long. One running under `BUDGET_DETOUR_RATIO`
+  (2×) its straight-line distance did not go round anything. **−1.8% calls**,
+  and it raises the fix-up's own keep rate.
+
+### 5.2 Anti-retrace: avoidance areas, not a global no-repeat constraint
 
 `loops/avoidance.ts`:
-- Every leg already routed is buffered into a 25 m-half-width polygon corridor (`CORRIDOR_HALF_WIDTH_METRES`) using Turf.js (`@turf/buffer`, `union`, `difference`, `simplify`).
-- A 75 m circle around the start is always cut out (the shared doorstep every loop has is not "retracing").
-- These corridors are sent to GraphHopper as a **custom model** (`avoidanceCustomModel`): any edge inside a corridor gets `multiply_by: 0.05` on its priority — GraphHopper folds priority into the weight denominator, so this is roughly a **20× cost penalty**, not a hard block. A relaxed retry uses 0.2× (5× penalty) if the strong penalty leaves a leg unroutable or absurdly long.
-- Practically: this is a **soft, per-request, incrementally-updated weighting** rather than a graph-level constraint — GraphHopper will still cross or reuse penalized ground if nothing else is close to the target length, which is intentional (a single bridge can be the only way through).
-- Capped at 12 areas per request (`MAX_AVOIDANCE_AREAS`) — the largest corridors by area are kept, to bound request size.
+
+- Every routed leg is buffered into a 25 m half-width corridor
+  (`CORRIDOR_HALF_WIDTH_METRES`) with Turf; a 75 m circle round the start is
+  cut out.
+- Sent as a custom model: edges inside a corridor get `multiply_by: 0.05` —
+  roughly a 20× cost penalty, **not** a block. A relaxed retry uses 0.2×.
+- Soft and incremental by design: GraphHopper will still reuse penalised ground
+  when nothing else is near the target length, which is intentional (a single
+  bridge can be the only way through).
+- **Merging is an optimisation that may fail.** `@turf/union` throws on
+  degenerate geometry — a walk doubling back along exactly the same line — and
+  that exception used to escape and fail the *whole request* with a 500 rather
+  than losing one candidate. Union and difference are now both fail-open: where
+  corridors cannot be merged they are sent separately, and where the doorstep
+  circle cannot be cut out it is not cut out.
+- `shortestPathCustomModel()` asks for the shortest route rather than the
+  preferred one, via `distance_influence: 2000`. Used only where a genuine
+  distance floor is needed (§8.2).
 
 ## 6. Quality scoring and hard rejection gate
 
-`loops/quality.ts` — every finished candidate is measured **from its raw geometry**, not trusted from GraphHopper's own turn-by-turn instructions (those are used only as a secondary signal for U-turns).
+`loops/quality.ts` — every candidate is measured from its own geometry;
+GraphHopper's instructions are a secondary signal for U-turns only.
 
-**Hard rejection thresholds** (`analyseRouteQuality` — any one failure rejects the whole candidate):
-| Check | Threshold | What it catches |
-|---|---|---|
-| Distance error | > 12% of target | Wrong length |
-| Duration error | > 15% of target (time mode) | Wrong time |
-| Repeated corridor | > 12% of distance is retraced ground | A walk that scribbles through the same few blocks |
-| Short backtrack | any backtrack under 500 m that isn't a "real feature" | A corner that turned out to be a dead end |
-| U-turns | > 1 | Geometric turn-arounds (≥150° swing, arms within 20 m) |
-| Leg balance | any middle leg > 45% or < 8% of total (3+ leg shapes only) | One trudge and three corners, or a collapsed spoke |
-| Bounding-box elongation | ratio > 4.5 | A long thin corridor rather than an enclosing loop |
-| Compactness | isoperimetric compactness < 0.20 | "Hits the distance, never repeats a street, still reads as a scribble on a map" |
-| Start stub | out-and-back stub at the door > max(150 m, 4% of distance), and < 500 m | A there-and-back with a loop stuck on the end |
-| Doesn't return to start | > 40 m gap between first/last point | Not a loop at all |
+**Hard rejections** (any one refuses the candidate) — unchanged from before this
+work:
 
-A backtrack ≥ 500 m is *excused* from several of these checks — long enough to only be a real feature (a pier, a headland, a promenade with one road in), not an accident, and the whole walk is then judged as the legitimate there-and-back it is.
+| Check | Threshold |
+|---|---|
+| Distance error | > 12% of target |
+| Duration error | > 15% of target (time mode) |
+| Repeated corridor | > 12% of distance retraced |
+| Short backtrack | any reverse run under 500 m that isn't a real feature |
+| U-turns | > 1 |
+| Leg balance | middle leg > 45% or < 8% (3+ leg shapes) |
+| Bounding-box elongation | ratio > 4.5 |
+| Compactness | isoperimetric < 0.20 |
+| Start stub | > max(150 m, 4% of distance) and < 500 m |
+| Doesn't return to start | > 40 m gap |
 
-**Weighted quality score** (0–100, used for ranking, not gating) — `SCORE_WEIGHTS`:
-- Overlap avoidance: **35%**
-- Distance/duration closeness: **25%**
-- Shape (isoperimetric compactness): **20%**
-- Leg balance: **10%**
-- Simplicity (fewer U-turns): **10%**
+Weighted score (ranking only, 0–100): overlap 35%, closeness 25%, shape 20%,
+balance 10%, simplicity 10%.
 
-This weighting is explicitly stated as "the way a walker would weigh it": not retracing matters most, then hitting the requested length, then whether it feels like a loop, then balance, then how fiddly it is to follow.
+### 6.1 Overlap is measured on the network, not by proximity
 
-## 7. Choosing what to offer: diversity selection
+`loops/edges.ts`. The geometric measure asks whether two stretches pass within
+17.5 m running roughly parallel — a street's width, so it cannot tell a pavement
+from the one opposite, a back lane from the road it runs behind, or a towpath
+from the road above it.
 
-`loops/diversity.ts` — `selectDiverseRoutes(candidates, limit=3, maxShared=0.55)`:
-- Candidates ranked by quality score.
-- Two-pass greedy selection: pass 1 requires each pick to leave via a different 45° compass octant (`bearingOctant`) *and* share ≤ 55% ground with anything already chosen; pass 2 drops the octant requirement (some towns have a genuine bottleneck — a single bridge/headland — where every clean loop leaves the same way).
-- Labels (`labelRoutes`) are compass-direction names ("North loop"), disambiguated by length ("Shorter east loop"/"Longer east loop") when two picks share an octant.
+With `edge_id` details, the question stops being geometric: two routes share
+ground if and only if they walked the same edges, length-weighted. Used for
+internal retrace, route-to-route similarity, and locating the longest repeated
+section. Geometry remains the truth for shape, spikes, bounding boxes,
+compactness, avoidance corridors and rendering — and remains the per-route
+fallback wherever edge ids are missing. `QualityReport.overlapSource` says which
+was used, and `RequestMetrics` counts both.
 
-## 8. Orchestration: batching, retries, and the recent early-stop optimization
+On by default (`LOOPER_EDGE_OVERLAP`).
 
-`loops/generate.ts` — `generateLoops(request, options)`:
-1. Builds a seeded set of attempts (`candidateCount`, default 24 — `src/config.ts`) via §4, and runs them through a bounded worker pool (`mapWithConcurrency`, concurrency default 6 — capped because "twenty-four at once is more load than a small routing container should take").
-2. **Early-stop (added 2026-08-26):** `mapWithConcurrency` now accepts a `shouldStop()` callback; `attempt()` passes one that trips once **5 passing candidates** have already been found, so unclaimed attempts in the batch are never dispatched. (Already-dispatched attempts — up to `concurrency` of them — finish naturally; this is a *bounded* trim of the tail, not mid-flight cancellation.) Measured on the test fixture: cut total GraphHopper calls from 648 to 162 (~75%) for the same 3 offered routes.
-3. If under 3 loops pass, exactly **one** re-aim retry is allowed:
-   - Time mode, duration-only misses: rescale the distance target from the *observed* pace on this terrain, and try one more batch.
-   - Otherwise: rescale the construction target from the median distance actually returned (the street network stretched a crow-flies target more/less than expected), retry once — but the walker's original ask (`qualityTarget`) is what candidates are still judged against, never silently moved.
-4. If diversity selection still can't fill 3 offers, up to `MAX_DISCOVERY_BATCHES` (3) additional fresh bearing batches are sampled (`variation + batch`).
-5. If literally nothing passes, but at least one candidate passes the three *essential* checks (distance, duration, closes the loop — never the shape checks), Looper offers a walk that doubles back rather than nothing, with an explicit warning (`RETRACES_WARNING`) — never mixed in alongside clean loops.
-6. If nothing passes even the essentials: empty result + `NO_CLEAN_LOOP_WARNING`.
+## 7. Choosing what to offer
 
-### Waypoint mode
-`generateWaypointLoops()` (same file): when the client supplies ordered must-visit waypoints:
-1. Routes the waypoints directly (no avoidance) as a sanity floor — if that alone exceeds 125% of the target, refuses immediately with a clear "increase your plan or remove a waypoint" message rather than forcing a bad answer.
-2. First tries to reuse an *ordinary* generated loop (§8 above, ignoring waypoints) that happens to already pass through the pins in the right order — cheaper and less likely to manufacture a needless spur than rebuilding around a point already on the loop.
-3. Otherwise routes the pins with avoidance-on-return-legs, then inserts **one invisible "guide point"** per alternative to shape any spare distance into a loop without moving a pin the walker placed. The guide's distance from the start is chosen by sampling 48 radii (`WAYPOINT_GUIDE_RADIUS_SAMPLES`) against 6 scale factors, picking whichever gets closest to the target crow-flight perimeter (deliberately a sampled search, not binary search — the objective isn't monotonic when a bearing points between two waypoints, so binary search can converge on the wrong side of the minimum).
+`loops/diversity.ts` — `selectDiverseRoutes(candidates, limit = 3, maxShared = 0.55)`:
 
-## 9. Concurrency and load control (also added 2026-08-26)
+- Ranked by quality score, two-pass greedy: pass 1 requires a different 45°
+  compass octant *and* ≤ 55% shared ground; pass 2 drops the octant rule.
+- `selectPreferredDiverseRoutes` exposes pass 1 alone — the same code path, not
+  a second implementation of the rule.
+- `sharedFraction(a, b)` uses edges where both routes have them and geometry
+  otherwise; `mutualSharedFraction` takes the worse of both directions, because
+  containment is not symmetric.
+- Labels are compass names, disambiguated by length when two picks share an
+  octant.
 
-Two independent layers, addressing two different scaling problems:
-- **Per-request concurrency** (`config.concurrency`, default 6): bounds how many legs *one* request routes in parallel — protects one request from over-fanning-out internally.
-- **Global concurrency ceiling** (`src/concurrencyLimiter.ts`, new): a semaphore shared across **every** request hitting a given region's GraphHopper instance, not just one request's own fan-out. Configurable via `GRAPHHOPPER_MAX_CONCURRENCY` (default 24) / `GRAPHHOPPER_MAX_QUEUE` (default 100). Beyond the concurrency limit, calls queue; beyond the queue limit, they're refused immediately (`LimiterBusyError`) rather than left to pile up — this is what actually protects the single small GraphHopper JVM (2–6 GB heap, no horizontal replicas today) from hundreds of simultaneous walkers.
-- `LimiterBusyError` is translated into the existing `GraphHopperError(kind: 'timeout')` → the existing 503 "route service is busy" response path, so no new client-facing error shape was introduced.
-- Separately, a per-IP fixed-window rate limiter (`src/http/rateLimit.ts`, default 20 requests/minute) exists at the HTTP layer — this bounds *request rate per walker*, not total engine load across walkers, which is why the concurrency limiter above was still needed.
-- A single `AbortController` per HTTP request (`src/server.ts`) ties together a hard deadline (`REQUEST_TIMEOUT_MS`, default 25 s) and client-disconnect detection; every GraphHopper call and every queued concurrency-limiter wait observes it, so a request that times out or whose client goes away stops consuming engine capacity promptly.
+## 8. Orchestration
 
-## 10. What this system deliberately does *not* do
+`generateLoops(request, options)`:
 
-- No Contraction Hierarchies (see §3) — a considered tradeoff for per-request custom avoidance models, not an oversight.
-- No global/whole-route optimization (no genetic algorithms, simulated annealing, ILP, orienteering-problem solving) — loops are built greedily, leg by leg, with local repair only.
-- No use of GraphHopper's built-in round-trip/alternative-route algorithms.
-- No point-of-interest or "scenic" scoring — the only per-request criteria are distance/duration target, optional ordered waypoints, and previously-shown routes to exclude (`exclude`). Geometry-only quality (§6) is otherwise the sole shaping signal.
-- No caching of GraphHopper responses or precomputed/offline route generation — every request is fully live.
-- No horizontal scaling of the GraphHopper engine itself — one JVM per region; the global concurrency limiter (§9) manages load on that single process rather than distributing it.
+1. Seeded attempts (§4), spread across the compass, run through a bounded
+   worker pool (`mapWithConcurrency`, concurrency 6).
+2. **Early stop** — dispatch stops once `EARLY_STOP_PASSING_COUNT = 5`
+   candidates have passed. Already-dispatched attempts finish; nothing is
+   cancelled mid-flight and no permit is leaked.
+3. If fewer than 3 pass, exactly **one** re-aim retry: rescale from observed
+   pace (time mode) or from the median distance actually returned. The target a
+   walk is *judged* against never moves.
+4. Up to `MAX_DISCOVERY_BATCHES = 3` further fresh-bearing batches if diversity
+   still cannot fill three offers.
+5. If nothing passes but something passes the three *essential* checks
+   (distance, duration, closure), a walk that doubles back is offered with
+   `RETRACES_WARNING` — never mixed alongside a clean loop.
+6. Otherwise empty + `NO_CLEAN_LOOP_WARNING`.
 
-## 11. Known open items (not yet implemented, discussed but deferred)
+### 8.1 Waypoint mode, rebuilt around a backbone
 
-- Horizontal GraphHopper replicas + a service-level admission queue for real throughput scaling beyond what one JVM's concurrency ceiling can absorb.
-- Offline precomputation/caching of loop sets for popular (start point × distance) combinations, to serve common requests near-zero-cost instead of fully live every time.
-- A bounded "local repair" step for near-miss candidates (single-reason quality rejections) that perturbs bearing/corner-count and rescoring rather than falling straight through to a whole fresh discovery batch — sketched in `route-service/docs/routing-algorithms-research.md` but not built.
-- `GRAPHHOPPER_MAX_CONCURRENCY`/`GRAPHHOPPER_MAX_QUEUE` defaults are untuned against real traffic or a load test.
+`generateBackboneWaypointLoops()` (`LOOPER_WAYPOINT_BACKBONE`, on by default),
+with `loops/waypoints.ts` doing the maths. The problem is treated as a length
+problem rather than a shape problem:
+
+```
+anchors   a0 = start, a1…am = the walker's pins, a(m+1) = start
+backbone  B = Σ routeCost(ai, a(i+1))     the walk you cannot avoid
+slack     Δ = K − B                        what there is to spend
+```
+
+1. **One direct route per gap.** These are both the backbone and the "spend
+   nothing here" option, so nothing is paid for twice.
+2. **A doorstep pin is handed back.** If `B < 10%` of the target
+   (`PIN_CONSTRAINT_SHARE`) the pins constrain nothing and the ordinary loop
+   generator does a better job; the older path takes over.
+3. **Feasibility** (§8.2) before any refusal.
+4. **Per-gap alternatives** — `DETOUR_SHARES = [0, 0.35, 0.7, 1.2, 2]` of that
+   gap's share of the slack, each on both sides, placed by
+   `guideForDetour(...)` as an isoceles detour over the gap and **corrected for
+   the network stretch measured on that gap's own direct route** (a crow-flight
+   detour comes back longer than asked, by the local stretch).
+5. **Slack allocation** — a bucketed dynamic programme (`allocateSlack`) picks
+   one option per gap. Bounded by the table rather than the gap count:
+   `bucketMetres` 2% of target, `maxBuckets` 96, `keepPerState` 3.
+   `BACKBONE_ASSEMBLY_LIMIT = 24` combinations are assembled and measured.
+6. **Shape is a bar to clear, not a ranking.** Each combination is scored on
+   the crow-flight ring its anchors and guides describe (`ringShapeOf`), and the
+   whole ranked set is ordered in tiers — right length *and* encloses ground,
+   encloses ground, right length, neither. Plans enclosing nothing are kept
+   last rather than discarded, so a pin down a single lane still gets an honest
+   there-and-back.
+7. **Assembled walks are joined *and trimmed*** (`joinAndTrimLegs`) and then
+   face every ordinary gate except leg balance, which a pin makes meaningless.
+8. **Separation falls back once, and stops** — 55%, then
+   `WAYPOINT_RELAXED_SHARED = 0.8`. Pins force shared ground; three walks that
+   are 95% the same walk are one walk with two extra taps to dismiss.
+
+**Guide points may move; pins may not.** `LOOPER_GUIDE_POINT_PULLBACK` (off,
+§11) applies the ring builder's own corner repair at a guide that landed in a
+cul-de-sac. Nothing anywhere moves a coordinate the walker chose, and the tests
+assert every pin reaches the engine exactly as given rather than assuming it.
+
+**Diagnostics.** Waypoint mode has eight ways of giving up and they all reach
+the walker as the same sentence, so `Diagnostics` carries `stage`
+(`unreachable`, `over-plan`, `doorstep-pin`, `no-allocation`, `all-rejected`,
+`backbone`, `reused-natural`, `legacy-guides`, `legacy-empty`), the rejection
+tally, and — when the backbone hands over to the older generator —
+`backboneStage`, `backboneRejections` and `backboneShapes`, so the newer code's
+failure is not lost behind the older one's outcome.
+
+`generateWaypointLoops()` remains as the fallback: reuse an ordinary loop that
+already passes the pins, else pin-only, else one global guide point.
+
+### 8.2 Feasibility needs a real floor
+
+The profile's preferred route is not a lower bound (§3), so refusing on it can
+refuse a walk that is actually walkable. The floor is therefore established
+properly — with `shortestPathCustomModel()` — **only when the ordinary routes
+already look too long**, which keeps the extra calls off every request that was
+never going to be refused. `fitsInPlan(backbone, target, maxError, tolerance)`
+allows `FEASIBILITY_TOLERANCE = 5%` for snapping, and the doubt goes the
+walker's way.
+
+## 9. Optional: network-aware seeding
+
+`loops/network.ts` (`LOOPER_NETWORK_AWARE_SEEDS`, off). One `GET /spt` probe
+summarises reach and network stretch per 30° sector, and candidate bearings
+with real network behind them are dispatched first. Deliberately a *reordering*
+and never a cull — a quarter of the unpromising bearings are still tried,
+because one probe at one budget does not get to veto a direction.
+
+Worth −13% on a seafront start and −11% on a promenade, and one extra call
+everywhere else, netting −0.5% across the fixture mix. Worth switching on for a
+coastal region and measuring there.
+
+## 10. Concurrency, load control and telemetry
+
+- **Per-request concurrency** (`ROUTING_CONCURRENCY`, 6) — see §3.1 for why it
+  is not higher.
+- **Global ceiling** (`src/concurrencyLimiter.ts`,
+  `GRAPHHOPPER_MAX_CONCURRENCY` 24 / `GRAPHHOPPER_MAX_QUEUE` 100) — a semaphore
+  shared across every request. Beyond the limit, calls queue; beyond the queue,
+  they are refused. Proven by test not to leak a permit when work throws, when
+  a waiter aborts, when the queue is full, or across a 200-request burst mixing
+  all three.
+- `LimiterBusyError` maps onto the existing 503 path; no new client-facing
+  error shape.
+- Per-IP rate limit, 20/minute (`src/http/rateLimit.ts`).
+- One `AbortController` per request ties a 25 s deadline to client-disconnect;
+  every engine call and queued wait observes it.
+- **`loops/metrics.ts`** records, per request: engine calls by purpose (`leg`,
+  `leg-relaxed`, `leg-budget`, `spike`, `join-pullback`, `waypoint-direct`,
+  `waypoint-leg`, `repair`, `network-summary`, `screen`), routed legs (which is
+  *not* the same as HTTP calls), engine ms bucketed by avoidance-polygon count,
+  fix-up attempted-vs-kept, candidate and rejection counts, early-stop reason,
+  overlap source, and offered-route quality. No coordinate reaches it, so it is
+  logged in production as `cost`.
+
+## 11. Feature flags
+
+Every significant algorithm change has its own switch (`loops/flags.ts`, env
+names in `.env.example`), and each arrived off. Two unproven changes enabled
+together produce a regression nobody can attribute.
+
+**On:**
+
+| flag | why |
+|---|---|
+| `edgeOverlap` | the only measure that can tell a back lane from the road behind it |
+| `spreadCandidateBearings` | −13.8% calls, better separation |
+| `pullbackTurnOnly` | −6.4% calls, identical walks |
+| `budgetDetourGate` | −1.8% calls, better fix-up keep rate |
+| `waypointBackbone` | −85% calls on waypoint requests; hits the target ~4× closer |
+
+**Off, with the evidence:**
+
+| flag | measurement |
+|---|---|
+| `guidePointPullback` | −35% calls and eliminates U-turn rejections, but one fixture drops 3 walks → 1. A product trade; see §12 |
+| `narrowCornerSweep` | −26% calls, costs ~1 walk in 20 and some separation |
+| `networkAwareSeeds` | −13% coastal, +1 call elsewhere, −0.5% net |
+| `localRepair` | 4 in 5 repairs succeed for +1.7% calls, and the *offered* walks get no better |
+| `diversityAwareEarlyStop` | +30% calls for half a point of separation |
+| `paretoArchive` | correct and harmless; candidate pools too small for a front to bind |
+| `twoStageScreening` | HTTP calls flat, **path searches +37%** — one request for a whole ring saves round trips, not the engine's work |
+| `requestCache` | correct by construction; deliberately not enabled |
+
+## 12. Measurement
+
+Two tools, and they disagree in ways worth knowing about.
+
+- **`npm run bench`** (`bench/`) — 20 deterministic scenarios over five
+  synthetic pedestrian networks with real nodes, edges and Dijkstra, emitting
+  GraphHopper-shaped JSON parsed by the service's own `parseLeg`. Supports
+  `--flags`, `--compare`, `--save`, `--concurrency`. Call counts and route
+  quality are exact and machine-independent; wall clock is not.
+- **`bench/probe-production.sh`** — a handful of ordinary route requests
+  against the live service, printing ms/call, parallelism, fix-up keep rates,
+  polygon-cost buckets and the waypoint stage.
+
+**The benchmark has been wrong about real behaviour three times.** Its engine
+originally snapped to junctions, where GraphHopper snaps to the middle of an
+edge — and that single difference is what creates the dead-end joins the
+fix-ups exist to repair. The fixtures showed 3.2% of calls on join pullbacks
+and no spikes at all; production showed 25–29% and 2–4%. It now snaps to edges
+and reproduces the real profile (24.3%), but the lesson stands: **prefer the
+probe.**
+
+## 13. What this system deliberately does *not* do
+
+- No Contraction Hierarchies (§3) — a considered tradeoff.
+- No global whole-route optimisation. No genetic algorithms, annealing, ILP or
+  orienteering solvers. Greedy construction with bounded local repair.
+- No use of GraphHopper's round-trip or alternative-route algorithms.
+- No point-of-interest or scenic scoring. Geometry-only quality is the sole
+  shaping signal beyond distance, waypoints and exclusions.
+- **No caching.** `loops/cache.ts` exists, is complete and tested — bounded
+  LRU, TTL, keyed on graph version, region, profile, profile version, algorithm
+  flags, generation settings and every request field at full coordinate
+  precision — and is **switched off by product decision**, not by oversight.
+- No horizontal GraphHopper scaling — one JVM per region.
+- No structural-retrace allowance. See `chokepoints-spike.md`: the signal is
+  already available for free (a leg that came back `relaxed`, or whose spike
+  reroute failed, has demonstrated there is no way round), but relaxing the
+  retrace gate is the riskiest change available and the only fixtures are ones
+  whose chokepoints we placed ourselves.
+
+## 14. Known open items
+
+- **Suburban waypoint pins still fail** — `out-and-back-spur` 23 of 24 on the
+  fixture. Cul-de-sac ground puts guide points down dead ends longer than the
+  80 m trim budget. `guidePointPullback` addresses it but trades route count;
+  needs a real-ground A/B.
+- **Waypoint requests offer 1–2 walks, not 3**, on the live engine. Fixed from
+  "returns nothing", not finished.
+- **Standard loops are still ~5 s** for a 5 km Douglas request (415 calls). The
+  levers are closed one by one: the engine saturates at ~90 legs/s, per-call
+  cost is a ~40 ms floor, the fix-ups earn 60–69% of their calls, and the
+  corner sweep is now ordered. What remains is that a 5 km loop needs ~400
+  point-to-point searches.
+- `GRAPHHOPPER_MAX_CONCURRENCY` / `GRAPHHOPPER_MAX_QUEUE` remain untuned
+  against a load test.
+- Horizontal GraphHopper replicas + a service-level admission queue.
 
 ## Appendix: key files
 
 | File | Role |
 |---|---|
-| `src/server.ts` | HTTP surface, request lifecycle, abort/deadline, concurrency-limiter wiring |
-| `src/config.ts` | All tunable knobs, env-configurable |
-| `src/graphhopper.ts` | Thin GraphHopper HTTP client; request/response shape |
-| `src/regions.ts` | Region bounds → which GraphHopper instance serves a start point |
-| `src/loops/candidates.ts` | Deterministic seeded bearing/direction sampling |
-| `src/loops/routing.ts` | Incremental leg-by-leg loop construction, retries, spike/join repair |
-| `src/loops/avoidance.ts` | Walked-ground → GraphHopper avoidance custom model |
-| `src/loops/quality.ts` | Geometry-derived scoring and hard rejection gate |
-| `src/loops/diversity.ts` | Final 3-of-N selection for genuinely different offered routes |
-| `src/loops/generate.ts` | Top-level orchestration: batching, retries, early-stop, waypoint mode |
-| `src/concurrencyLimiter.ts` | Global cross-request concurrency ceiling on the GraphHopper engine |
-| `graphhopper/config.yml`, `graphhopper/looper_foot.json` | GraphHopper engine configuration and custom walking profile |
+| `src/server.ts` | HTTP surface, request lifecycle, abort/deadline, limiter and cache wiring |
+| `src/config.ts` | All tunable knobs and flag defaults, env-configurable |
+| `src/graphhopper.ts` | GraphHopper client: `/route`, `/spt`, response and path-detail parsing |
+| `src/regions.ts` | Region bounds → which engine serves a start point |
+| `src/concurrencyLimiter.ts` | Global cross-request ceiling on the engine |
+| `src/loops/generate.ts` | Orchestration: batching, retries, early stop, both waypoint generators |
+| `src/loops/candidates.ts` | Seeded bearing/direction sampling and compass spreading |
+| `src/loops/routing.ts` | Incremental leg-by-leg construction, fix-ups, join/spike repair, trimming |
+| `src/loops/waypoints.ts` | Backbone, per-gap alternatives, slack DP, ring shape, feasibility |
+| `src/loops/avoidance.ts` | Walked ground → custom model; fail-open merging; shortest-path model |
+| `src/loops/quality.ts` | Geometry-derived scoring and the hard gates |
+| `src/loops/edges.ts` | Length-weighted overlap on network edges |
+| `src/loops/diversity.ts` | Final 3-of-N selection |
+| `src/loops/flags.ts` | Algorithm switches and their shipped defaults |
+| `src/loops/metrics.ts` | Per-request cost telemetry, coordinate-free |
+| `src/loops/network.ts` | Reachability probe and bearing bias (off) |
+| `src/loops/repair.ts`, `pareto.ts`, `screening.ts`, `cache.ts` | Implemented, tested, off |
+| `bench/` | Synthetic networks, scenarios, runner, production probe |
+| `graphhopper/config.yml`, `graphhopper/looper_foot.json` | Engine configuration and custom walking profile |
+
+## Related documents
+
+- `routing-baseline.md` — the Phase 0 audit: control flow, call-count ceilings,
+  and why the profile's route is not a distance lower bound.
+- `routing-report.md` — phase-by-phase implementation report, including the
+  addenda recording what production said and which conclusions it overturned.
+- `chokepoints-spike.md` — structural vs avoidable retracing: design and
+  benchmark plan, deliberately not implemented.

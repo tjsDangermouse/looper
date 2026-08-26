@@ -22,6 +22,7 @@ struct ContentView: View {
                         courseUp: model.courseUp && model.screen == .walk,
                         padding: model.padding,
                         onFollowChange: { model.following = $0 },
+                        onUserLocation: model.updateMapLocation,
                         onPoint: { point in
                             if model.screen == .planner { model.start = point }
                         },

@@ -100,6 +100,7 @@ final class AppModel: ObservableObject {
     private var startingWalk = false
     private var pausedAt: Date?
     private var routeWaypoints: [Point] = []
+    private var mapLocationAt: Date?
 
     static let waypointLimit = 4
 
@@ -325,6 +326,15 @@ final class AppModel: ObservableObject {
     }
 
     func requestLocation() {
+        // MapLibre receives Core Location updates to draw its user dot. If it
+        // already supplied one, use that same known position immediately.
+        if let position, let mapLocationAt,
+           Date().timeIntervalSince(mapLocationAt) <= 60 {
+            start = position
+            locationState = ""
+            screen = .planner
+            return
+        }
         locationState = "Finding your location…"
         Task {
             do {
@@ -339,6 +349,11 @@ final class AppModel: ObservableObject {
                 locationState = "We could not get a location. Choose a start point on the map."
             }
         }
+    }
+
+    func updateMapLocation(_ point: Point) {
+        position = point
+        mapLocationAt = Date()
     }
 
     // Discovery starts from fresh bearings. Refresh skips the variations the

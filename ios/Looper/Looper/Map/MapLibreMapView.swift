@@ -20,6 +20,7 @@ struct MapLibreMapView: UIViewRepresentable {
     var courseUp: Bool
     var padding: (bottom: CGFloat, right: CGFloat)
     var onFollowChange: (Bool) -> Void
+    var onUserLocation: (Point) -> Void
     var onPoint: (Point) -> Void
     var onLongPress: (Point) -> Void
 
@@ -122,6 +123,11 @@ struct MapLibreMapView: UIViewRepresentable {
             style.setImage(chevronImage(), forName: "chevron")
             styleReady = true
             sync()
+        }
+
+        func mapView(_ mapView: MLNMapView, didUpdate userLocation: MLNUserLocation?) {
+            guard let coordinate = userLocation?.location?.coordinate else { return }
+            parent.onUserLocation(Point(coordinate.longitude, coordinate.latitude))
         }
 
         func mapView(_ mapView: MLNMapView, viewFor annotation: MLNAnnotation) -> MLNAnnotationView? {

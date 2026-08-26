@@ -132,7 +132,7 @@ export type AllocationOptions = {
    * that enclose nothing at all, not to pre-judge the ones that are merely
    * unremarkable.
    */
-  minShape: 0.25,
+  minShape: number
 }
 
 export const DEFAULT_ALLOCATION: AllocationOptions = {
