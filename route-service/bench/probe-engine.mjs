@@ -57,11 +57,30 @@ const avoidModel = count => {
   }
 }
 
+/** Everything the service asks for on every leg, kept in one place. */
+const AS_SENT = {
+  instructions: true,
+  calc_points: true,
+  points_encoded: false,
+  details: ['street_name', 'road_class', 'edge_id'],
+}
+
 const CELLS = [
-  { name: 'landmarks (as shipped)', body: {} },
-  { name: 'no landmarks', body: { 'lm.disable': true } },
-  { name: '+ custom model, 1 area', body: { custom_model: avoidModel(1) } },
-  { name: '+ custom model, 8 areas', body: { custom_model: avoidModel(8) } },
+  // Is the *search* the cost? Production says no — 200-1000 nodes a call — so
+  // these two should differ little, and that is the point of asking.
+  { name: 'bare search', body: {} },
+  { name: 'bare, no landmarks', body: { 'lm.disable': true } },
+  { name: 'bare + 1 avoid area', body: { custom_model: avoidModel(1) } },
+  { name: 'bare + 8 avoid areas', body: { custom_model: avoidModel(8) } },
+  // If the cost is not the search, it is what we ask to be built and returned
+  // afterwards. The service asks for all of this on every leg, including the
+  // three in five that are thrown away unseen.
+  { name: 'as the service sends', body: AS_SENT },
+  { name: '  without instructions', body: { ...AS_SENT, instructions: false } },
+  { name: '  without path details', body: { ...AS_SENT, details: [] } },
+  { name: '  edge_id detail only', body: { ...AS_SENT, details: ['edge_id'] } },
+  { name: '  points encoded', body: { ...AS_SENT, points_encoded: true } },
+  { name: 'as sent + 1 avoid area', body: { ...AS_SENT, custom_model: avoidModel(1) } },
 ]
 
 const ask = async extra => {
@@ -73,7 +92,6 @@ const ask = async extra => {
       points: [FROM, TO],
       profile: PROFILE,
       'ch.disable': true,
-      points_encoded: false,
       instructions: false,
       calc_points: false,
       ...extra,
@@ -106,7 +124,9 @@ for (const cell of CELLS) {
   }
 }
 console.log(`
-If "no landmarks" settles about as many nodes as "landmarks (as shipped)",
-the heuristic is not helping on this graph and config.yml is wrong about it.
-If "+ custom model" is far above both, the per-request model is what costs the
-search, and that is the 40 ms floor the whole service is built on top of.`)
+Production settles only 200-1000 nodes a call, so the search is not the cost:
+at 60 ms a call that is 80 microseconds a node, and a Dijkstra does millions a
+second. What the "as the service sends" rows measure is the rest of the
+request — building instructions, extracting path details, serialising the
+geometry — which is paid in full on every leg including the three in five that
+are thrown away without ever being looked at.`)
