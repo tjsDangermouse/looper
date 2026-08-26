@@ -55,13 +55,26 @@ seconds rather than a reimport:
 
 ```bash
 LOOPER_PROGRESSIVE_CORNER_SWEEP=true docker compose -f docker-compose.prod.yml up -d route-service
-bench/probe-production.sh
 ```
 
-To put it back, run the same `up -d` without the variable. Nothing persists:
-interpolation happens at `up` time, so the next deployment that does not name
-the flag gets the shipped default. Note that `docker compose restart` will
-*not* pick a change up — it restarts the container as it already stands.
+The production host runs Docker Desktop on Windows, where that first line is
+bash syntax PowerShell does not have. There, set it and then run the command:
+
+```powershell
+$env:LOOPER_PROGRESSIVE_CORNER_SWEEP = "true"
+docker compose -f docker-compose.prod.yml up -d route-service
+```
+
+Either way, measure it with `bench/probe-production.sh` — a bash script, so
+from WSL, Git Bash, or any machine that can reach the service, since it only
+sends ordinary route requests.
+
+To put it back, clear the variable and run the same `up -d` again
+(`Remove-Item Env:\LOOPER_PROGRESSIVE_CORNER_SWEEP` in PowerShell). Nothing
+persists: interpolation happens at `up` time, so the next deployment that does
+not name the flag gets the shipped default. Note that `docker compose restart`
+will *not* pick a change up — it restarts the container as it already stands,
+and `$env:` lasts only as long as the PowerShell session that set it.
 
 **Keeping one, because the measurement settled it.** Change `DEFAULT_FLAGS` in
 `src/loops/flags.ts` and commit it with the numbers, the way every flag that
