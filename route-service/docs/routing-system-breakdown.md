@@ -12,7 +12,7 @@ real behaviour more than once — see §12.
 ## 1. What this system does
 
 Given a start point and a target walking distance or duration (optionally with
-a set of must-visit waypoints), the service returns up to 3 distinct
+an ordered list of must-visit waypoints), the service returns up to 3 distinct
 walking **loops** (start = end) that satisfy the target and read as a sensible
 walk on a map — not a scribble, not a there-and-back, not three readings of the
 same streets.
@@ -295,16 +295,6 @@ backbone  B = Σ routeCost(ai, a(i+1))     the walk you cannot avoid
 slack     Δ = K − B                        what there is to spend
 ```
 
-0. **The visiting order is chosen, not assumed** (`LOOPER_FREE_WAYPOINT_ORDER`,
-   on by default). The pins are a *set* of places to pass; the order they were
-   tapped in was never part of the request. Every distinct order is ranked —
-   `visitOrders(n)` drops each order's mirror, so 4 pins are 12 orders, not 24 —
-   using one routed leg per *pair* of places, cached and reused across orders
-   (4 places = 6 legs, not 48). The shortest backbone wins, and a second order
-   is built only when it is within 10% of it. Because the backbone is now the
-   shortest way through those places, the floor a refusal is measured against
-   is the honest one: a walk refused as "more than 25% over" is one no order
-   could have fitted. With the flag off, the tap order is used, as before.
 1. **One direct route per gap.** These are both the backbone and the "spend
    nothing here" option, so nothing is paid for twice.
 2. **A doorstep pin is handed back.** If `B < 10%` of the target
@@ -408,7 +398,6 @@ together produce a regression nobody can attribute.
 | `pullbackTurnOnly` | −6.4% calls, identical walks |
 | `budgetDetourGate` | −1.8% calls, better fix-up keep rate |
 | `waypointBackbone` | −85% calls on waypoint requests; hits the target ~4× closer |
-| `freeWaypointOrder` | three pins tapped out of ring order went 1 walk → 3, identical to the same pins tapped in order; +5 calls across the whole waypoint mix |
 
 **Off, with the evidence:**
 

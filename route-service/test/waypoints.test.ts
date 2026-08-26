@@ -10,7 +10,6 @@ import {
   ringOf,
   ringShapeOf,
   spreadAllocations,
-  visitOrders,
   type Allocation,
   type SegmentOption,
 } from '../src/loops/waypoints.js'
@@ -268,41 +267,5 @@ describe('the shape a combination plans before anything is routed', () => {
   it('scores nothing rather than guessing when no anchors were supplied', () => {
     const byGap = [[option(0, 'a', [], 1500)], [option(1, 'b', [], 1500)]]
     expect(allocateSlack(byGap, { target: 3000 })[0].shape).toBe(0)
-  })
-})
-
-/**
- * The tap order is how the pins arrived, not a sequence the walker asked to be
- * marched through. Freeing it is what lets a walk through three places be the
- * loop those places describe rather than the zigzag the tapping did.
- */
-describe('the orders the pins can be visited in', () => {
-  it('has nothing to choose with one pin, or with two', () => {
-    expect(visitOrders(1)).toEqual([[0]])
-    // Out through both pins and back is the same walk from either end, so the
-    // second order is the first one read backwards and is not a second walk.
-    expect(visitOrders(2)).toEqual([[0, 1]])
-  })
-
-  it('offers three walks through three pins and twelve through four', () => {
-    expect(visitOrders(3)).toHaveLength(3)
-    expect(visitOrders(4)).toHaveLength(12)
-  })
-
-  it('never offers an order and the same order backwards', () => {
-    for (const count of [3, 4]) {
-      const seen = new Set(visitOrders(count).map(order => order.join(',')))
-      for (const order of visitOrders(count)) {
-        expect(seen.has([...order].reverse().join(','))).toBe(order.length === 1)
-      }
-    }
-  })
-
-  it('visits every pin exactly once in every order', () => {
-    for (const order of visitOrders(4)) expect([...order].sort()).toEqual([0, 1, 2, 3])
-  })
-
-  it('gives the same orders in the same sequence every time', () => {
-    expect(visitOrders(4)).toEqual(visitOrders(4))
   })
 })
