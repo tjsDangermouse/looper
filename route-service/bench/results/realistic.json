@@ -1,6 +1,6 @@
 {
   "label": "realistic",
-  "at": "2026-08-26T13:29:35.798Z",
+  "at": "2026-08-26T15:05:47.823Z",
   "flags": "budgetDetourGate,edgeOverlap,pullbackTurnOnly,spreadCandidateBearings,waypointBackbone",
   "scenarios": [
     {
@@ -16,7 +16,7 @@
         "join-pullback": 42
       },
       "nodesVisited": 140442,
-      "wallMs": 844,
+      "wallMs": 812,
       "metrics": {
         "graphhopperCalls": 176,
         "callsByPurpose": {
@@ -33,7 +33,7 @@
           "other": 0
         },
         "routedLegs": 176,
-        "engineMs": 1330,
+        "engineMs": 1271,
         "candidatesBuilt": 10,
         "candidatesRouted": 10,
         "candidatesPassed": 9,
@@ -66,6 +66,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 62,
+            "ms": 471
+          },
+          "1-3": {
+            "calls": 114,
+            "ms": 800
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 3,
           "medianDistanceErrorPercent": 2.8,
@@ -76,11 +94,11 @@
           "maxPairSharedPercent": 15.4,
           "maxPairSharedEdgePercent": 14.6
         },
-        "totalMs": 844,
+        "totalMs": 813,
         "candidateMs": {
-          "median": 391,
-          "p95": 604,
-          "max": 604
+          "median": 393,
+          "p95": 568,
+          "max": 568
         }
       }
     },
@@ -97,7 +115,7 @@
         "join-pullback": 18
       },
       "nodesVisited": 19855,
-      "wallMs": 521,
+      "wallMs": 514,
       "metrics": {
         "graphhopperCalls": 131,
         "callsByPurpose": {
@@ -114,7 +132,7 @@
           "other": 0
         },
         "routedLegs": 131,
-        "engineMs": 779,
+        "engineMs": 757,
         "candidatesBuilt": 10,
         "candidatesRouted": 10,
         "candidatesPassed": 9,
@@ -147,6 +165,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 45,
+            "ms": 306
+          },
+          "1-3": {
+            "calls": 86,
+            "ms": 451
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 3,
           "medianDistanceErrorPercent": 1,
@@ -157,11 +193,11 @@
           "maxPairSharedPercent": 6.1,
           "maxPairSharedEdgePercent": 4.5
         },
-        "totalMs": 521,
+        "totalMs": 514,
         "candidateMs": {
-          "median": 223,
-          "p95": 366,
-          "max": 366
+          "median": 221,
+          "p95": 360,
+          "max": 360
         }
       }
     },
@@ -178,7 +214,7 @@
         "join-pullback": 8
       },
       "nodesVisited": 188257,
-      "wallMs": 381,
+      "wallMs": 375,
       "metrics": {
         "graphhopperCalls": 70,
         "callsByPurpose": {
@@ -195,7 +231,7 @@
           "other": 0
         },
         "routedLegs": 70,
-        "engineMs": 681,
+        "engineMs": 679,
         "candidatesBuilt": 10,
         "candidatesRouted": 10,
         "candidatesPassed": 10,
@@ -226,6 +262,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 28,
+            "ms": 321
+          },
+          "1-3": {
+            "calls": 42,
+            "ms": 358
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 3,
           "medianDistanceErrorPercent": 2,
@@ -236,98 +290,17 @@
           "maxPairSharedPercent": 0,
           "maxPairSharedEdgePercent": 0
         },
-        "totalMs": 381,
+        "totalMs": 375,
         "candidateMs": {
           "median": 179,
-          "p95": 365,
-          "max": 365
+          "p95": 359,
+          "max": 359
         }
       }
     },
     {
       "id": "urban-time-60min",
       "about": "Dense town grid, duration mode, 60 minutes at the default pace",
-      "network": "dense-grid",
-      "routesOffered": 3,
-      "valid": true,
-      "expectationExceeded": false,
-      "engineCalls": 176,
-      "callsByPurpose": {
-        "leg": 134,
-        "join-pullback": 42
-      },
-      "nodesVisited": 140442,
-      "wallMs": 784,
-      "metrics": {
-        "graphhopperCalls": 176,
-        "callsByPurpose": {
-          "leg": 134,
-          "leg-relaxed": 0,
-          "leg-budget": 0,
-          "spike": 0,
-          "join-pullback": 42,
-          "waypoint-direct": 0,
-          "waypoint-leg": 0,
-          "repair": 0,
-          "network-summary": 0,
-          "screen": 0,
-          "other": 0
-        },
-        "routedLegs": 176,
-        "engineMs": 1273,
-        "candidatesBuilt": 10,
-        "candidatesRouted": 10,
-        "candidatesPassed": 9,
-        "candidatesRejected": 1,
-        "rejectionReasons": {
-          "leg-too-short": 1
-        },
-        "repairsAttempted": 0,
-        "repairsSucceeded": 0,
-        "repairBudgetExhausted": 0,
-        "discoveryBatches": 0,
-        "reaims": 0,
-        "earlyStop": "passing-quota",
-        "fallbackRetracing": false,
-        "cacheHits": 0,
-        "cacheMisses": 0,
-        "overlapFromEdges": 31,
-        "overlapFromGeometry": 0,
-        "fixups": {
-          "join-pullback": {
-            "attempted": 21,
-            "kept": 20
-          },
-          "leg-budget": {
-            "attempted": 0,
-            "kept": 0
-          },
-          "spike": {
-            "attempted": 0,
-            "kept": 0
-          }
-        },
-        "offered": {
-          "count": 3,
-          "medianDistanceErrorPercent": 2.8,
-          "maxDistanceErrorPercent": 2.8,
-          "medianRepeatedPercent": 0.6,
-          "maxRepeatedPercent": 0.8,
-          "totalUTurns": 0,
-          "maxPairSharedPercent": 15.4,
-          "maxPairSharedEdgePercent": 14.6
-        },
-        "totalMs": 784,
-        "candidateMs": {
-          "median": 374,
-          "p95": 557,
-          "max": 557
-        }
-      }
-    },
-    {
-      "id": "urban-time-paced",
-      "about": "Duration mode with a walker-supplied pace, which moves the distance target",
       "network": "dense-grid",
       "routesOffered": 3,
       "valid": true,
@@ -355,7 +328,7 @@
           "other": 0
         },
         "routedLegs": 176,
-        "engineMs": 1240,
+        "engineMs": 1226,
         "candidatesBuilt": 10,
         "candidatesRouted": 10,
         "candidatesPassed": 9,
@@ -388,6 +361,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 62,
+            "ms": 438
+          },
+          "1-3": {
+            "calls": 114,
+            "ms": 788
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 3,
           "medianDistanceErrorPercent": 2.8,
@@ -398,11 +389,110 @@
           "maxPairSharedPercent": 15.4,
           "maxPairSharedEdgePercent": 14.6
         },
-        "totalMs": 757,
+        "totalMs": 758,
         "candidateMs": {
-          "median": 364,
-          "p95": 536,
-          "max": 536
+          "median": 362,
+          "p95": 537,
+          "max": 537
+        }
+      }
+    },
+    {
+      "id": "urban-time-paced",
+      "about": "Duration mode with a walker-supplied pace, which moves the distance target",
+      "network": "dense-grid",
+      "routesOffered": 3,
+      "valid": true,
+      "expectationExceeded": false,
+      "engineCalls": 176,
+      "callsByPurpose": {
+        "leg": 134,
+        "join-pullback": 42
+      },
+      "nodesVisited": 140442,
+      "wallMs": 781,
+      "metrics": {
+        "graphhopperCalls": 176,
+        "callsByPurpose": {
+          "leg": 134,
+          "leg-relaxed": 0,
+          "leg-budget": 0,
+          "spike": 0,
+          "join-pullback": 42,
+          "waypoint-direct": 0,
+          "waypoint-leg": 0,
+          "repair": 0,
+          "network-summary": 0,
+          "screen": 0,
+          "other": 0
+        },
+        "routedLegs": 176,
+        "engineMs": 1268,
+        "candidatesBuilt": 10,
+        "candidatesRouted": 10,
+        "candidatesPassed": 9,
+        "candidatesRejected": 1,
+        "rejectionReasons": {
+          "leg-too-short": 1
+        },
+        "repairsAttempted": 0,
+        "repairsSucceeded": 0,
+        "repairBudgetExhausted": 0,
+        "discoveryBatches": 0,
+        "reaims": 0,
+        "earlyStop": "passing-quota",
+        "fallbackRetracing": false,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "overlapFromEdges": 31,
+        "overlapFromGeometry": 0,
+        "fixups": {
+          "join-pullback": {
+            "attempted": 21,
+            "kept": 20
+          },
+          "leg-budget": {
+            "attempted": 0,
+            "kept": 0
+          },
+          "spike": {
+            "attempted": 0,
+            "kept": 0
+          }
+        },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 62,
+            "ms": 461
+          },
+          "1-3": {
+            "calls": 114,
+            "ms": 807
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
+        "offered": {
+          "count": 3,
+          "medianDistanceErrorPercent": 2.8,
+          "maxDistanceErrorPercent": 2.8,
+          "medianRepeatedPercent": 0.6,
+          "maxRepeatedPercent": 0.8,
+          "totalUTurns": 0,
+          "maxPairSharedPercent": 15.4,
+          "maxPairSharedEdgePercent": 14.6
+        },
+        "totalMs": 781,
+        "candidateMs": {
+          "median": 378,
+          "p95": 556,
+          "max": 556
         }
       }
     },
@@ -436,7 +526,7 @@
           "other": 0
         },
         "routedLegs": 143,
-        "engineMs": 929,
+        "engineMs": 947,
         "candidatesBuilt": 10,
         "candidatesRouted": 10,
         "candidatesPassed": 8,
@@ -470,6 +560,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 54,
+            "ms": 433
+          },
+          "1-3": {
+            "calls": 89,
+            "ms": 514
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 3,
           "medianDistanceErrorPercent": 8,
@@ -483,8 +591,8 @@
         "totalMs": 598,
         "candidateMs": {
           "median": 300,
-          "p95": 450,
-          "max": 450
+          "p95": 452,
+          "max": 452
         }
       }
     },
@@ -502,7 +610,7 @@
         "join-pullback": 40
       },
       "nodesVisited": 31622,
-      "wallMs": 406,
+      "wallMs": 404,
       "metrics": {
         "graphhopperCalls": 188,
         "callsByPurpose": {
@@ -519,7 +627,7 @@
           "other": 0
         },
         "routedLegs": 188,
-        "engineMs": 529,
+        "engineMs": 527,
         "candidatesBuilt": 10,
         "candidatesRouted": 10,
         "candidatesPassed": 7,
@@ -554,6 +662,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 61,
+            "ms": 143
+          },
+          "1-3": {
+            "calls": 127,
+            "ms": 384
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 3,
           "medianDistanceErrorPercent": 5.3,
@@ -564,11 +690,11 @@
           "maxPairSharedPercent": 20.2,
           "maxPairSharedEdgePercent": 20.1
         },
-        "totalMs": 406,
+        "totalMs": 404,
         "candidateMs": {
-          "median": 201,
-          "p95": 365,
-          "max": 365
+          "median": 202,
+          "p95": 364,
+          "max": 364
         }
       }
     },
@@ -585,7 +711,7 @@
         "join-pullback": 52
       },
       "nodesVisited": 72633,
-      "wallMs": 606,
+      "wallMs": 604,
       "metrics": {
         "graphhopperCalls": 241,
         "callsByPurpose": {
@@ -602,7 +728,7 @@
           "other": 0
         },
         "routedLegs": 241,
-        "engineMs": 682,
+        "engineMs": 683,
         "candidatesBuilt": 11,
         "candidatesRouted": 11,
         "candidatesPassed": 7,
@@ -638,6 +764,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 74,
+            "ms": 197
+          },
+          "1-3": {
+            "calls": 167,
+            "ms": 486
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 3,
           "medianDistanceErrorPercent": 2.5,
@@ -648,9 +792,9 @@
           "maxPairSharedPercent": 2.5,
           "maxPairSharedEdgePercent": 3.3
         },
-        "totalMs": 606,
+        "totalMs": 605,
         "candidateMs": {
-          "median": 288,
+          "median": 286,
           "p95": 435,
           "max": 435
         }
@@ -672,7 +816,7 @@
         "join-pullback": 102
       },
       "nodesVisited": 18938,
-      "wallMs": 699,
+      "wallMs": 710,
       "metrics": {
         "graphhopperCalls": 500,
         "callsByPurpose": {
@@ -689,7 +833,7 @@
           "other": 0
         },
         "routedLegs": 500,
-        "engineMs": 974,
+        "engineMs": 999,
         "candidatesBuilt": 15,
         "candidatesRouted": 15,
         "candidatesPassed": 6,
@@ -725,6 +869,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 126,
+            "ms": 229
+          },
+          "1-3": {
+            "calls": 374,
+            "ms": 770
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 3,
           "medianDistanceErrorPercent": 9.8,
@@ -735,11 +897,11 @@
           "maxPairSharedPercent": 48.5,
           "maxPairSharedEdgePercent": 50
         },
-        "totalMs": 698,
+        "totalMs": 710,
         "candidateMs": {
-          "median": 245,
-          "p95": 416,
-          "max": 416
+          "median": 246,
+          "p95": 430,
+          "max": 430
         }
       }
     },
@@ -758,7 +920,7 @@
         "join-pullback": 482
       },
       "nodesVisited": 42795,
-      "wallMs": 3664,
+      "wallMs": 3652,
       "metrics": {
         "graphhopperCalls": 2383,
         "callsByPurpose": {
@@ -775,7 +937,7 @@
           "other": 0
         },
         "routedLegs": 2383,
-        "engineMs": 4937,
+        "engineMs": 4925,
         "candidatesBuilt": 72,
         "candidatesRouted": 72,
         "candidatesPassed": 11,
@@ -812,6 +974,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 601,
+            "ms": 1224
+          },
+          "1-3": {
+            "calls": 1782,
+            "ms": 3701
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 2,
           "medianDistanceErrorPercent": 7.1,
@@ -822,10 +1002,10 @@
           "maxPairSharedPercent": 0,
           "maxPairSharedEdgePercent": 0
         },
-        "totalMs": 3663,
+        "totalMs": 3652,
         "candidateMs": {
-          "median": 294,
-          "p95": 409,
+          "median": 293,
+          "p95": 410,
           "max": 460
         }
       }
@@ -843,7 +1023,7 @@
         "join-pullback": 70
       },
       "nodesVisited": 62303,
-      "wallMs": 628,
+      "wallMs": 626,
       "metrics": {
         "graphhopperCalls": 245,
         "callsByPurpose": {
@@ -860,7 +1040,7 @@
           "other": 0
         },
         "routedLegs": 245,
-        "engineMs": 804,
+        "engineMs": 805,
         "candidatesBuilt": 12,
         "candidatesRouted": 12,
         "candidatesPassed": 6,
@@ -896,6 +1076,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 78,
+            "ms": 236
+          },
+          "1-3": {
+            "calls": 167,
+            "ms": 569
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 3,
           "medianDistanceErrorPercent": 7.6,
@@ -906,11 +1104,11 @@
           "maxPairSharedPercent": 42.2,
           "maxPairSharedEdgePercent": 39.8
         },
-        "totalMs": 628,
+        "totalMs": 626,
         "candidateMs": {
           "median": 267,
-          "p95": 409,
-          "max": 409
+          "p95": 411,
+          "max": 411
         }
       }
     },
@@ -930,7 +1128,7 @@
         "join-pullback": 146
       },
       "nodesVisited": 261761,
-      "wallMs": 2040,
+      "wallMs": 2027,
       "metrics": {
         "graphhopperCalls": 729,
         "callsByPurpose": {
@@ -947,7 +1145,7 @@
           "other": 0
         },
         "routedLegs": 729,
-        "engineMs": 3092,
+        "engineMs": 3070,
         "candidatesBuilt": 24,
         "candidatesRouted": 24,
         "candidatesPassed": 0,
@@ -986,6 +1184,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 189,
+            "ms": 774
+          },
+          "1-3": {
+            "calls": 540,
+            "ms": 2296
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 3,
           "medianDistanceErrorPercent": 0,
@@ -996,11 +1212,11 @@
           "maxPairSharedPercent": 27,
           "maxPairSharedEdgePercent": 30
         },
-        "totalMs": 2040,
+        "totalMs": 2027,
         "candidateMs": {
-          "median": 447,
-          "p95": 627,
-          "max": 668
+          "median": 444,
+          "p95": 624,
+          "max": 663
         }
       }
     },
@@ -1017,7 +1233,7 @@
         "join-pullback": 34
       },
       "nodesVisited": 125606,
-      "wallMs": 538,
+      "wallMs": 530,
       "metrics": {
         "graphhopperCalls": 132,
         "callsByPurpose": {
@@ -1034,7 +1250,7 @@
           "other": 0
         },
         "routedLegs": 132,
-        "engineMs": 878,
+        "engineMs": 876,
         "candidatesBuilt": 10,
         "candidatesRouted": 10,
         "candidatesPassed": 10,
@@ -1065,6 +1281,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 55,
+            "ms": 398
+          },
+          "1-3": {
+            "calls": 77,
+            "ms": 478
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 3,
           "medianDistanceErrorPercent": 0.8,
@@ -1075,11 +1309,11 @@
           "maxPairSharedPercent": 22.5,
           "maxPairSharedEdgePercent": 22.2
         },
-        "totalMs": 538,
+        "totalMs": 530,
         "candidateMs": {
-          "median": 226,
-          "p95": 389,
-          "max": 389
+          "median": 224,
+          "p95": 384,
+          "max": 384
         }
       }
     },
@@ -1097,7 +1331,7 @@
         "waypoint-leg": 32
       },
       "nodesVisited": 13256,
-      "wallMs": 114,
+      "wallMs": 112,
       "metrics": {
         "graphhopperCalls": 34,
         "callsByPurpose": {
@@ -1118,8 +1352,14 @@
         "candidatesBuilt": 0,
         "candidatesRouted": 0,
         "candidatesPassed": 0,
-        "candidatesRejected": 0,
-        "rejectionReasons": {},
+        "candidatesRejected": 33,
+        "rejectionReasons": {
+          "out-and-back-spur": 14,
+          "repeated-corridor": 4,
+          "shapeless": 10,
+          "start-spur": 2,
+          "u-turns": 3
+        },
         "repairsAttempted": 0,
         "repairsSucceeded": 0,
         "repairBudgetExhausted": 0,
@@ -1145,6 +1385,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 18,
+            "ms": 38
+          },
+          "1-3": {
+            "calls": 16,
+            "ms": 37
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 2,
           "medianDistanceErrorPercent": 11.8,
@@ -1155,7 +1413,7 @@
           "maxPairSharedPercent": 60.8,
           "maxPairSharedEdgePercent": 58.3
         },
-        "totalMs": 114,
+        "totalMs": 112,
         "candidateMs": {
           "median": 0,
           "p95": 0,
@@ -1176,7 +1434,7 @@
         "waypoint-leg": 48
       },
       "nodesVisited": 15228,
-      "wallMs": 150,
+      "wallMs": 147,
       "metrics": {
         "graphhopperCalls": 51,
         "callsByPurpose": {
@@ -1193,12 +1451,18 @@
           "other": 0
         },
         "routedLegs": 51,
-        "engineMs": 111,
+        "engineMs": 106,
         "candidatesBuilt": 0,
         "candidatesRouted": 0,
         "candidatesPassed": 0,
-        "candidatesRejected": 0,
-        "rejectionReasons": {},
+        "candidatesRejected": 27,
+        "rejectionReasons": {
+          "out-and-back-spur": 10,
+          "repeated-corridor": 2,
+          "shapeless": 11,
+          "start-spur": 1,
+          "u-turns": 3
+        },
         "repairsAttempted": 0,
         "repairsSucceeded": 0,
         "repairBudgetExhausted": 0,
@@ -1224,6 +1488,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 27,
+            "ms": 56
+          },
+          "1-3": {
+            "calls": 24,
+            "ms": 50
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 3,
           "medianDistanceErrorPercent": 1,
@@ -1234,7 +1516,7 @@
           "maxPairSharedPercent": 59.3,
           "maxPairSharedEdgePercent": 57.6
         },
-        "totalMs": 150,
+        "totalMs": 147,
         "candidateMs": {
           "median": 0,
           "p95": 0,
@@ -1256,7 +1538,7 @@
         "waypoint-leg": 64
       },
       "nodesVisited": 23757,
-      "wallMs": 201,
+      "wallMs": 199,
       "metrics": {
         "graphhopperCalls": 68,
         "callsByPurpose": {
@@ -1273,12 +1555,18 @@
           "other": 0
         },
         "routedLegs": 68,
-        "engineMs": 150,
+        "engineMs": 146,
         "candidatesBuilt": 0,
         "candidatesRouted": 0,
         "candidatesPassed": 0,
-        "candidatesRejected": 0,
-        "rejectionReasons": {},
+        "candidatesRejected": 47,
+        "rejectionReasons": {
+          "out-and-back-spur": 19,
+          "repeated-corridor": 1,
+          "shapeless": 9,
+          "start-spur": 2,
+          "u-turns": 16
+        },
         "repairsAttempted": 0,
         "repairsSucceeded": 0,
         "repairBudgetExhausted": 0,
@@ -1304,6 +1592,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 36,
+            "ms": 77
+          },
+          "1-3": {
+            "calls": 32,
+            "ms": 69
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 2,
           "medianDistanceErrorPercent": 2.9,
@@ -1314,7 +1620,7 @@
           "maxPairSharedPercent": 20.4,
           "maxPairSharedEdgePercent": 20.7
         },
-        "totalMs": 201,
+        "totalMs": 199,
         "candidateMs": {
           "median": 0,
           "p95": 0,
@@ -1337,7 +1643,7 @@
         "waypoint-leg": 82
       },
       "nodesVisited": 110020,
-      "wallMs": 1353,
+      "wallMs": 1341,
       "metrics": {
         "graphhopperCalls": 563,
         "callsByPurpose": {
@@ -1354,17 +1660,20 @@
           "other": 0
         },
         "routedLegs": 563,
-        "engineMs": 1788,
+        "engineMs": 1743,
         "candidatesBuilt": 20,
         "candidatesRouted": 20,
         "candidatesPassed": 8,
-        "candidatesRejected": 13,
+        "candidatesRejected": 74,
         "rejectionReasons": {
           "distance": 6,
           "elongated": 3,
           "leg-too-short": 1,
-          "out-and-back-spur": 2,
-          "shapeless": 1
+          "out-and-back-spur": 30,
+          "repeated-corridor": 4,
+          "shapeless": 13,
+          "start-spur": 6,
+          "u-turns": 11
         },
         "repairsAttempted": 0,
         "repairsSucceeded": 0,
@@ -1391,6 +1700,24 @@
             "kept": 0
           }
         },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 176,
+            "ms": 487
+          },
+          "1-3": {
+            "calls": 387,
+            "ms": 1256
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
         "offered": {
           "count": 3,
           "medianDistanceErrorPercent": 4,
@@ -1400,11 +1727,11 @@
           "totalUTurns": 0,
           "maxPairSharedPercent": 42.6
         },
-        "totalMs": 1353,
+        "totalMs": 1341,
         "candidateMs": {
-          "median": 380,
-          "p95": 511,
-          "max": 516
+          "median": 371,
+          "p95": 507,
+          "max": 511
         }
       }
     },
@@ -1422,7 +1749,7 @@
         "waypoint-leg": 32
       },
       "nodesVisited": 10190,
-      "wallMs": 51,
+      "wallMs": 50,
       "metrics": {
         "graphhopperCalls": 34,
         "callsByPurpose": {
@@ -1443,8 +1770,14 @@
         "candidatesBuilt": 0,
         "candidatesRouted": 0,
         "candidatesPassed": 0,
-        "candidatesRejected": 0,
-        "rejectionReasons": {},
+        "candidatesRejected": 53,
+        "rejectionReasons": {
+          "out-and-back-spur": 9,
+          "repeated-corridor": 10,
+          "shapeless": 19,
+          "start-spur": 9,
+          "u-turns": 6
+        },
         "repairsAttempted": 0,
         "repairsSucceeded": 0,
         "repairBudgetExhausted": 0,
@@ -1468,6 +1801,24 @@
           "spike": {
             "attempted": 0,
             "kept": 0
+          }
+        },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 18,
+            "ms": 14
+          },
+          "1-3": {
+            "calls": 16,
+            "ms": 15
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
           }
         },
         "offered": {
@@ -1517,7 +1868,7 @@
           "other": 0
         },
         "routedLegs": 2,
-        "engineMs": 2,
+        "engineMs": 1,
         "candidatesBuilt": 0,
         "candidatesRouted": 0,
         "candidatesPassed": 0,
@@ -1546,6 +1897,24 @@
           "spike": {
             "attempted": 0,
             "kept": 0
+          }
+        },
+        "engineMsByAreas": {
+          "0": {
+            "calls": 2,
+            "ms": 1
+          },
+          "1-3": {
+            "calls": 0,
+            "ms": 0
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
           }
         },
         "offered": {
@@ -1578,7 +1947,7 @@
         "waypoint-direct": 4
       },
       "nodesVisited": 12682,
-      "wallMs": 12,
+      "wallMs": 11,
       "metrics": {
         "graphhopperCalls": 4,
         "callsByPurpose": {
@@ -1595,7 +1964,7 @@
           "other": 0
         },
         "routedLegs": 4,
-        "engineMs": 11,
+        "engineMs": 12,
         "candidatesBuilt": 0,
         "candidatesRouted": 0,
         "candidatesPassed": 0,
@@ -1626,7 +1995,25 @@
             "kept": 0
           }
         },
-        "totalMs": 11,
+        "engineMsByAreas": {
+          "0": {
+            "calls": 4,
+            "ms": 12
+          },
+          "1-3": {
+            "calls": 0,
+            "ms": 0
+          },
+          "4-7": {
+            "calls": 0,
+            "ms": 0
+          },
+          "8+": {
+            "calls": 0,
+            "ms": 0
+          }
+        },
+        "totalMs": 12,
         "candidateMs": {
           "median": 0,
           "p95": 0,
@@ -1641,7 +2028,7 @@
     "validRoutePercent": 100,
     "engineCalls": 6046,
     "routesOffered": 50,
-    "medianWallMs": 538,
-    "p95WallMs": 2040
+    "medianWallMs": 530,
+    "p95WallMs": 2027
   }
 }

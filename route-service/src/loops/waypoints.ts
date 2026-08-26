@@ -1,4 +1,4 @@
-import { bearingBetween, destination, haversine, normaliseBearing, type LngLat } from './geo.js'
+import { bearingBetween, compactness, destination, haversine, normaliseBearing, type LngLat } from './geo.js'
 
 /**
  * Waypoint loops, as a length problem rather than a shape problem.
@@ -123,6 +123,16 @@ export type AllocationOptions = {
    * falls outside that band when there are not enough of them.
    */
   spreadWithinError: number
+  /**
+   * How much ground a combination's plan must enclose before it is worth
+   * routing. Measured on the anchors and shaping points, so it is free.
+   *
+   * Below the finished walk's own compactness gate, because routing adds
+   * wiggle and therefore only ever lowers it: this is meant to catch the plans
+   * that enclose nothing at all, not to pre-judge the ones that are merely
+   * unremarkable.
+   */
+  minShape: 0.25,
 }
 
 export const DEFAULT_ALLOCATION: AllocationOptions = {
@@ -132,6 +142,7 @@ export const DEFAULT_ALLOCATION: AllocationOptions = {
   keepPerState: 3,
   limit: 6,
   spreadWithinError: 0.1,
+  minShape: 0.25,
 }
 
 export type Allocation = {
@@ -146,7 +157,39 @@ export type Allocation = {
    * on the side of it, however exactly it hits the distance.
    */
   concentration: number
+  /**
+   * How much ground the combination encloses, against a circle of the same
+   * perimeter — measured on the anchors and shaping points alone, before
+   * anything is routed.
+   *
+   * This is what stops the allocation assembling a walk that is exactly the
+   * right length and shaped like a closed pair of scissors. With one pin the
+   * gaps out and back can bulge to the same side, and the result reads as a
+   * there-and-back to every shape gate the finished walk is judged by:
+   * measured on real ground, `shapeless` killed 18 of 24 assembled walks and
+   * `u-turns` another 14. Length was never the problem.
+   */
+  shape: number
 }
+
+/**
+ * The crow-flight ring a combination describes: the anchors in order, with
+ * each gap's shaping points threaded between them.
+ *
+ * Deliberately geometric and unrouted. It is not what the walk will look like
+ * — the network decides that — but a combination whose *plan* encloses nothing
+ * will not produce a walk that encloses something, and finding that out here
+ * costs nothing rather than costing a routed leg.
+ */
+export function ringOf(anchors: Anchor[], chosen: SegmentOption[]): LngLat[] {
+  const ring: LngLat[] = [anchors[0]]
+  for (let gap = 0; gap < chosen.length; gap++) {
+    ring.push(...chosen[gap].guides, anchors[gap + 1] ?? anchors[0])
+  }
+  return ring
+}
+
+export const ringShapeOf = (anchors: Anchor[], chosen: SegmentOption[]): number => compactness(ringOf(anchors, chosen))
 
 /**
  * Choose one option per gap so the whole walk comes out near the target.
@@ -163,8 +206,12 @@ export type Allocation = {
  * Deterministic throughout — states are visited in order, ties are broken by
  * a stated rule, and the returned list is sorted.
  */
-export function allocateSlack(byGap: SegmentOption[][], options: Partial<AllocationOptions> & { target: number }): Allocation[] {
+export function allocateSlack(
+  byGap: SegmentOption[][],
+  options: Partial<AllocationOptions> & { target: number; anchors?: Anchor[] },
+): Allocation[] {
   const settings: AllocationOptions = { ...DEFAULT_ALLOCATION, ...options }
+  const anchors = options.anchors
   if (!byGap.length || byGap.some(gap => !gap.length)) return []
 
   const bucketOf = (value: number) => Math.min(settings.maxBuckets - 1, Math.max(0, Math.round(value / settings.bucketMetres)))
@@ -210,6 +257,7 @@ export function allocateSlack(byGap: SegmentOption[][], options: Partial<Allocat
         total: partial.total,
         error: Math.abs(partial.total - settings.target),
         concentration: concentrationOf(partial.chosen, byGap),
+        shape: anchors ? ringShapeOf(anchors, partial.chosen) : 0,
       })
     }
   }
@@ -224,7 +272,18 @@ export function allocateSlack(byGap: SegmentOption[][], options: Partial<Allocat
 
   const band = settings.target * settings.spreadWithinError
   const rightLength = ranked.filter(allocation => allocation.error <= band)
-  const spread = spreadAllocations(rightLength, settings.limit)
+  // Shape is a bar to clear, not a ranking. Ordering by it hands the diversity
+  // selector twenty-four variations on one well-shaped walk; using it as a
+  // floor keeps the variety and throws out only the combinations whose plan
+  // encloses nothing — the ones that were going to fail `shapeless` anyway.
+  // Any combination that encloses ground is preferred over every one that
+  // does not — asking for some minimum number of them first is how the filter
+  // ends up never applying, because there are rarely two dozen of them. The
+  // ones that enclose nothing are not discarded: they are appended below, so
+  // a pin down a single lane still gets the honest there-and-back rather than
+  // nothing at all.
+  const wellShaped = rightLength.filter(allocation => allocation.shape >= settings.minShape)
+  const spread = spreadAllocations(wellShaped.length ? wellShaped : rightLength, settings.limit)
   if (spread.length >= settings.limit) return spread
   // Not enough walks of the right length to choose between. The rest are
   // offered in plain order of how close they came, and the quality gates

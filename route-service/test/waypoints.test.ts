@@ -7,6 +7,8 @@ import {
   gapsDifferingBetween,
   guideForDetour,
   planSegmentOptions,
+  ringOf,
+  ringShapeOf,
   spreadAllocations,
   type Allocation,
   type SegmentOption,
@@ -200,5 +202,70 @@ describe('whether a walk through the pins fits the plan at all', () => {
 
   it('refuses a plan of nothing rather than dividing by it', () => {
     expect(fitsInPlan(1000, 0, 0.25)).toBe(false)
+  })
+})
+
+/**
+ * Measured on real ground, `shapeless` killed 18 of 24 assembled waypoint
+ * walks and `u-turns` another 14 — while the best-fitting combination by
+ * length enclosed no area at all. Length was never the problem.
+ */
+describe('the shape a combination plans before anything is routed', () => {
+  const start: LngLat = FIXTURE_ORIGIN
+  const pin: LngLat = at(800, 0)
+  const anchors = [start, pin, start]
+  const option = (gap: number, id: string, guides: LngLat[], distanceMeters = 1500): SegmentOption =>
+    ({ gap, id: `${gap}-${id}`, guides, distanceMeters, durationSeconds: distanceMeters / 1.39 })
+
+  it('threads the shaping points between the anchors, in order', () => {
+    const guide = at(400, 600)
+    const ring = ringOf(anchors, [option(0, 'out', [guide]), option(1, 'back', [])])
+    expect(ring).toEqual([start, guide, pin, start])
+  })
+
+  it('says a plan that doubles back on itself encloses nothing', () => {
+    // Both gaps bulge to the same side of the line out: the walk goes out and
+    // comes back over itself, which is exactly what fails the shape gate.
+    const sameSide = ringShapeOf(anchors, [
+      option(0, 'out', [at(400, 500)]),
+      option(1, 'back', [at(400, 500)]),
+    ])
+    expect(sameSide).toBeLessThan(0.05)
+  })
+
+  it('says a plan that goes out one way and back another encloses ground', () => {
+    const opposite = ringShapeOf(anchors, [
+      option(0, 'out', [at(400, 500)]),
+      option(1, 'back', [at(400, -500)]),
+    ])
+    expect(opposite).toBeGreaterThan(0.4)
+  })
+
+  it('prefers a slightly worse fit that is a loop over a perfect fit that is not', () => {
+    const byGap = [
+      [option(0, 'flat', [at(400, 500)], 1500), option(0, 'wide', [at(400, 900)], 1900)],
+      [option(1, 'same', [at(400, 500)], 1500), option(1, 'other', [at(400, -500)], 1600)],
+    ]
+    // 1500 + 1500 = 3000 is the exact fit and encloses nothing; 1500 + 1600
+    // misses by 100 m and is a proper loop.
+    const [best] = allocateSlack(byGap, { anchors, target: 3000, limit: 4 })
+    expect(best.chosen.map(chosen => chosen.id)).toEqual(['0-flat', '1-other'])
+    expect(best.shape).toBeGreaterThan(0.4)
+  })
+
+  it('still answers when nothing available encloses anything', () => {
+    // A pin down a single lane has no loop in it. Refusing everything would
+    // offer the walker nothing where a there-and-back is the honest answer.
+    const byGap = [
+      [option(0, 'out', [at(400, 20)], 1500)],
+      [option(1, 'back', [at(400, 20)], 1500)],
+    ]
+    const allocations = allocateSlack(byGap, { anchors, target: 3000, limit: 4 })
+    expect(allocations).toHaveLength(1)
+  })
+
+  it('scores nothing rather than guessing when no anchors were supplied', () => {
+    const byGap = [[option(0, 'a', [], 1500)], [option(1, 'b', [], 1500)]]
+    expect(allocateSlack(byGap, { target: 3000 })[0].shape).toBe(0)
   })
 })

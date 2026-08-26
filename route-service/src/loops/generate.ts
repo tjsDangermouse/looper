@@ -1134,6 +1134,7 @@ async function generateBackboneWaypointLoops(
   }
 
   const allocations = allocateSlack(byGap, {
+    anchors,
     target: targetMetres,
     bucketMetres: Math.max(25, targetMetres * BACKBONE_BUCKET_SHARE),
     limit: BACKBONE_ASSEMBLY_LIMIT,
