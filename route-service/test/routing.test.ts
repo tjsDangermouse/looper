@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon'
 import { AVOID_PRIORITY, RELAXED_AVOID_PRIORITY } from '../src/loops/avoidance.js'
 import { buildRouteBody, GraphHopperError, parseLeg, maneuverName, isUTurnSign, type GraphHopperLeg } from '../src/graphhopper.js'
-import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinLegGeometries, routeLegAttempt } from '../src/loops/routing.js'
+import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinAndTrimLegs, joinLegGeometries, routeLegAttempt } from '../src/loops/routing.js'
 import type { LngLat } from '../src/loops/geo.js'
 import { FIXTURE_ORIGIN, at, polyline } from './fixtures/routes.js'
 
@@ -493,5 +493,53 @@ describe('paying for a reroute only when it can help', () => {
       onFixup: (kind, kept) => outcomes.push([kind, kept]),
     })
     expect(outcomes).toEqual([['leg-budget', false]])
+  })
+})
+
+/**
+ * Joining legs and trimming the noise out of them are two halves of one job.
+ * Waypoint walks did the first and not the second for as long as they have
+ * existed, and the quality engine threw out twenty of every twenty-four for a
+ * forty-metre duck into a driveway.
+ */
+describe('joining legs into a walk somebody would recognise', () => {
+  const leg = (coordinates: LngLat[]) => {
+    let metres = 0
+    for (let index = 1; index < coordinates.length; index++) {
+      metres += Math.hypot(
+        (coordinates[index][0] - coordinates[index - 1][0]) * 65000,
+        (coordinates[index][1] - coordinates[index - 1][1]) * 111320,
+      )
+    }
+    return { coordinates, distanceMeters: metres, durationSeconds: metres / 1.39, steps: [] }
+  }
+
+  /** Straight out, a twenty-metre duck into a driveway, then straight on. */
+  const withSpike = leg([
+    ...polyline([[0, 0], [200, 0]]),
+    ...polyline([[200, 0], [200, 20]]),
+    ...polyline([[200, 20], [200, 0]]),
+    ...polyline([[200, 0], [400, 0]]),
+  ])
+
+  it('cuts a short dead-end branch out of the finished walk', () => {
+    const joined = joinLegGeometries([withSpike])
+    const trimmed = joinAndTrimLegs([withSpike])
+    expect(trimmed.coordinates.length).toBeLessThan(joined.coordinates.length)
+    expect(trimmed.distanceMeters).toBeLessThan(joined.distanceMeters)
+  })
+
+  it('leaves a walk with nothing wrong with it exactly as it was', () => {
+    const clean = leg(polyline([[0, 0], [400, 0], [400, 400]]))
+    const trimmed = joinAndTrimLegs([clean])
+    expect(trimmed.coordinates).toHaveLength(joinLegGeometries([clean]).coordinates.length)
+    expect(trimmed.distanceMeters).toBeCloseTo(clean.distanceMeters, 0)
+  })
+
+  it('joins several legs and trims across the seams between them', () => {
+    const first = leg(polyline([[0, 0], [200, 0]]))
+    const second = leg([...polyline([[200, 0], [200, 20]]), ...polyline([[200, 20], [200, 0]]), ...polyline([[200, 0], [400, 0]])])
+    const trimmed = joinAndTrimLegs([first, second])
+    expect(trimmed.distanceMeters).toBeLessThan(first.distanceMeters + second.distanceMeters)
   })
 })

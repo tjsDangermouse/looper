@@ -466,7 +466,7 @@ export async function buildLoopIncrementally(
     if (!closing) heading = normaliseBearing(heading + (turn * 360) / (cornerCount + 1))
   }
 
-  const joined = trimTinySpikes(joinLegGeometries(legs))
+  const joined = joinAndTrimLegs(legs)
   return {
     attemptId: `${direction === 'clockwise' ? 'cw' : 'ccw'}-${Math.round(initialBearing)}`,
     legs,
@@ -474,6 +474,20 @@ export async function buildLoopIncrementally(
     legDistances: legs.map(leg => leg.distanceMeters),
   }
 }
+
+/**
+ * Stitch legs into one walk and cut the noise out of it — the two steps that
+ * together turn a set of routed legs into something a walker would recognise.
+ *
+ * Every builder that assembles legs needs both. Joining without trimming
+ * leaves the short dead-end branches that the ground genuinely offers no way
+ * round, and the quality engine then refuses the whole walk for a forty-metre
+ * duck into a driveway. That is what happened to waypoint walks, in both
+ * generators, for as long as they have existed: they joined and did not trim,
+ * and `out-and-back-spur` threw out twenty of every twenty-four.
+ */
+export const joinAndTrimLegs = (legs: Parameters<typeof joinLegGeometries>[0]) =>
+  trimTinySpikes(joinLegGeometries(legs))
 
 /**
  * Cut any backtrack under TINY_SPIKE_ROUND_TRIP_METRES straight out of the

@@ -5,7 +5,7 @@ import { DEFAULT_ATTEMPT_COUNT, generateLoopAttempts, spreadAcrossCompass, type 
 import { MAX_SHARED_FRACTION, bearingOctant, initialBearing as bearingOf, labelRoutes, selectDiverseRoutes, selectPreferredDiverseRoutes } from './diversity.js'
 import { destination, distanceBetween, haversine, projector, type LngLat, type Metric } from './geo.js'
 import { MAX_REPEATED_FRACTION, analyseRouteQuality, sharedCorridorMetres, type QualityReport, type QualityThresholds } from './quality.js'
-import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinLegGeometries, routeLegAttempt, type LegRouter, type RoutedCandidate, type RoutedLeg, type SequentialRoutingOptions } from './routing.js'
+import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinAndTrimLegs, routeLegAttempt, type LegRouter, type RoutedCandidate, type RoutedLeg, type SequentialRoutingOptions } from './routing.js'
 import { avoidanceCustomModel, shortestPathCustomModel } from './avoidance.js'
 import { seedFor } from './random.js'
 import { countingRouter, RequestMetrics, type MetricsSnapshot, type OfferedMetrics, type RoutePurpose } from './metrics.js'
@@ -793,7 +793,13 @@ async function generateWaypointLoops(
       stage,
       // Carried through the hand-over, so the newer generator's failure is
       // still readable behind the older one's outcome.
-      ...(handedOver ? { backboneStage: handedOver.stage, backboneRejections: handedOver.rejections } : {}),
+      ...(handedOver
+        ? {
+            backboneStage: handedOver.stage,
+            backboneRejections: handedOver.rejections,
+            ...(handedOver.shapes ? { backboneShapes: handedOver.shapes } : {}),
+          }
+        : {}),
       ...(metrics ? { metrics: metrics.snapshot() } : {}),
     }
     options.onDiagnostics?.(diagnostics)
@@ -1166,7 +1172,7 @@ async function generateBackboneWaypointLoops(
 
   const analysed = allocations.map(allocation => {
     const legs = allocation.chosen.flatMap(option => routed.get(option.id) ?? [])
-    const joined = joinLegGeometries(legs)
+    const joined = joinAndTrimLegs(legs)
     const candidate: RoutedCandidate = {
       attemptId: `backbone-${allocation.chosen.map(option => option.id).join('_')}`,
       legs,
@@ -1475,7 +1481,7 @@ async function routeWaypointCandidate(
       }
     }
   }
-  const joined = joinLegGeometries(legs)
+  const joined = joinAndTrimLegs(legs)
   return {
     attemptId: `waypoints-${points.length}`,
     legs,
