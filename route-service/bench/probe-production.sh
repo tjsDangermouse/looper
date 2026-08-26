@@ -57,6 +57,11 @@ if areas:
 backbone = diagnostics.get('backboneStage')
 if backbone:
     print(f"{'':16} backbone gave up at {backbone}: {json.dumps(diagnostics.get('backboneRejections') or {})}")
+shapes = diagnostics.get('backboneShapes')
+if shapes:
+    # enclosing == 0 means the shaping points are placed wrongly, not chosen
+    # wrongly: there was nothing better for the preference to prefer.
+    print(f"{'':16} plans: {shapes['assembled']} assembled, {shapes['enclosing']} enclose ground, best shape {shapes['best']}")
 PY
 }
 

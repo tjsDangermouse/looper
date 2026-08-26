@@ -271,26 +271,53 @@ export function allocateSlack(
     .filter(deduplicated())
 
   const band = settings.target * settings.spreadWithinError
-  const rightLength = ranked.filter(allocation => allocation.error <= band)
-  // Shape is a bar to clear, not a ranking. Ordering by it hands the diversity
-  // selector twenty-four variations on one well-shaped walk; using it as a
-  // floor keeps the variety and throws out only the combinations whose plan
-  // encloses nothing — the ones that were going to fail `shapeless` anyway.
-  // Any combination that encloses ground is preferred over every one that
-  // does not — asking for some minimum number of them first is how the filter
-  // ends up never applying, because there are rarely two dozen of them. The
-  // ones that enclose nothing are not discarded: they are appended below, so
-  // a pin down a single lane still gets the honest there-and-back rather than
-  // nothing at all.
-  const wellShaped = rightLength.filter(allocation => allocation.shape >= settings.minShape)
-  const spread = spreadAllocations(wellShaped.length ? wellShaped : rightLength, settings.limit)
+  const encloses = (allocation: Allocation) => allocation.shape >= settings.minShape
+
+  /**
+   * Four tiers, best first: the right length *and* encloses ground; encloses
+   * ground; the right length; neither.
+   *
+   * Ordering the whole list rather than filtering the front of it is the
+   * point. Filtering only the combinations that get spread for variety leaves
+   * the rest of the set to be filled in plain distance-error order, which is
+   * how a shape preference ends up governing three of twenty-four assembled
+   * walks and changing nothing measurable.
+   */
+  const tierOf = (allocation: Allocation) => (encloses(allocation) ? 0 : 2) + (allocation.error <= band ? 0 : 1)
+  const ordered = [...ranked].sort((a, b) =>
+    tierOf(a) - tierOf(b)
+    || a.error - b.error
+    || a.concentration - b.concentration
+    || combinationKey(a).localeCompare(combinationKey(b)))
+
+  // Variety is chosen among the best tier where there is one, so two walks
+  // that both enclose ground but spend their slack in different gaps beat one
+  // of each. Where nothing encloses ground — a pin down a single lane — the
+  // honest there-and-back is still offered rather than nothing.
+  const best = ordered.filter(allocation => tierOf(allocation) === 0)
+  const spread = spreadAllocations(best.length ? best : ordered, settings.limit)
   if (spread.length >= settings.limit) return spread
-  // Not enough walks of the right length to choose between. The rest are
-  // offered in plain order of how close they came, and the quality gates
-  // downstream will refuse the ones that are simply wrong.
   const already = new Set(spread.map(combinationKey))
-  return [...spread, ...ranked.filter(allocation => !already.has(combinationKey(allocation)))].slice(0, settings.limit)
+  return [...spread, ...ordered.filter(allocation => !already.has(combinationKey(allocation)))].slice(0, settings.limit)
 }
+
+/**
+ * Pick allocations that spend their slack in genuinely different places.
+ *
+ * The table's best twelve answers are usually the same walk twelve times: the
+ * same choice in every gap but one, differing by a hundred metres nobody would
+ * notice. Sorting by target error alone therefore hands the diversity selector
+ * a set it has to throw most of away, and the walker ends up with one choice.
+ *
+ * So after the closest answer, each further one is whichever remaining answer
+ * differs in the most gaps from everything picked so far — a walk that spends
+ * its slack in the second gap instead of the third really is a different walk.
+ * Error breaks ties, so a spread-out answer never beats a close one that is
+ * equally different.
+ */
+
+
+
 
 /**
  * Pick allocations that spend their slack in genuinely different places.

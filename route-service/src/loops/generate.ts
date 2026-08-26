@@ -17,7 +17,7 @@ import { longestRepeatedSection } from './edges.js'
 import { findRepeatedCorridors, MIN_SHARED_RUN_METRES } from './quality.js'
 import { normaliseBearing } from './geo.js'
 import { biasAttemptsToNetwork, summariseNetwork, type NetworkSummary, type ReachedPoint } from './network.js'
-import { allocateSlack, fitsInPlan, planSegmentOptions, type SegmentOption } from './waypoints.js'
+import { allocateSlack, DEFAULT_ALLOCATION, fitsInPlan, planSegmentOptions, type SegmentOption } from './waypoints.js'
 import { pickForRefinement, screenSkeleton, type ScreenVerdict } from './screening.js'
 import { destination as pointAtBearing } from './geo.js'
 import { targetMetresFor, targetSecondsFor, type LoopMode } from './units.js'
@@ -192,6 +192,12 @@ export type Diagnostics = {
   backboneStage?: WaypointStage
   /** Which gates killed the walks the backbone generator assembled. */
   backboneRejections?: Record<string, number>
+  /**
+   * How many of the walks it assembled had a plan that encloses any ground.
+   * If this is zero the shape preference had nothing to prefer, and the
+   * problem is where the shaping points are put rather than which are chosen.
+   */
+  backboneShapes?: { assembled: number; enclosing: number; best: number }
   /** What the request cost. Internal; the API contract allows extra fields. */
   metrics?: MetricsSnapshot
 }
@@ -201,10 +207,18 @@ export type Diagnostics = {
  * `undefined`: a hand-over carries the reason, and the reason is the whole
  * point of having built the thing that gave up.
  */
-type HandedOver = { handedOver: true; stage: WaypointStage; rejections: Record<string, number> }
+type HandedOver = {
+  handedOver: true
+  stage: WaypointStage
+  rejections: Record<string, number>
+  shapes?: Diagnostics['backboneShapes']
+}
 
-const handOver = (stage: WaypointStage, rejections: Record<string, number>): HandedOver =>
-  ({ handedOver: true, stage, rejections: { ...rejections } })
+const handOver = (
+  stage: WaypointStage,
+  rejections: Record<string, number>,
+  shapes?: Diagnostics['backboneShapes'],
+): HandedOver => ({ handedOver: true, stage, rejections: { ...rejections }, ...(shapes ? { shapes } : {}) })
 
 const isHandedOver = (result: LoopResponse | HandedOver): result is HandedOver =>
   (result as HandedOver).handedOver === true
@@ -1042,7 +1056,7 @@ async function generateBackboneWaypointLoops(
   let assembled = 0
   let passed = 0
   /** Emitted on every exit, so no way of giving up is silent. */
-  const report = (stage: WaypointStage, offered: number): Diagnostics => {
+  const report = (stage: WaypointStage, offered: number, shapes?: Diagnostics['backboneShapes']): Diagnostics => {
     const diagnostics: Diagnostics = {
       candidates: assembled,
       routed: assembled,
@@ -1053,6 +1067,7 @@ async function generateBackboneWaypointLoops(
       retracing: false,
       targetMetres,
       stage,
+      ...(shapes ? { backboneShapes: shapes } : {}),
       ...(metrics ? { metrics: metrics.snapshot() } : {}),
     }
     options.onDiagnostics?.(diagnostics)
@@ -1140,6 +1155,14 @@ async function generateBackboneWaypointLoops(
     limit: BACKBONE_ASSEMBLY_LIMIT,
   })
   if (!allocations.length) return handOver('no-allocation', rejections)
+  // Reported on every exit from here on: if `enclosing` is zero the shape
+  // preference had nothing to prefer, and the problem is where the shaping
+  // points are put rather than which combination is chosen.
+  const shapes: Diagnostics['backboneShapes'] = {
+    assembled: allocations.length,
+    enclosing: allocations.filter(allocation => allocation.shape >= DEFAULT_ALLOCATION.minShape).length,
+    best: Number(Math.max(...allocations.map(allocation => allocation.shape)).toFixed(3)),
+  }
 
   const analysed = allocations.map(allocation => {
     const legs = allocation.chosen.flatMap(option => routed.get(option.id) ?? [])
@@ -1195,7 +1218,7 @@ async function generateBackboneWaypointLoops(
   const offerable = analysed.filter(entry => entry.report.pass)
   // Every assembled walk failed a gate. `rejections` says which, which is the
   // only thing that makes this case debuggable from a log line.
-  if (!offerable.length) return handOver('all-rejected', rejections)
+  if (!offerable.length) return handOver('all-rejected', rejections, shapes)
 
   // Pins constrain a walk in a way a plain loop is not: every alternative has
   // to visit the same places, and between two pins there is often only one
@@ -1241,7 +1264,7 @@ async function generateBackboneWaypointLoops(
 
   return {
     routes,
-    diagnostics: report('backbone', routes.length),
+    diagnostics: report('backbone', routes.length, shapes),
     ...(routes.length < 3
       ? { warning: `We found only ${routes.length} clean ${routes.length === 1 ? 'loop' : 'loops'} through those waypoints. Try moving a waypoint for more choices.` }
       : {}),
