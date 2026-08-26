@@ -74,6 +74,24 @@ services:
       # the single JVM. Raise it only from a load test — and note the finding
       # above: this engine has less headroom than it looks like it has.
       GRAPHHOPPER_MAX_CONCURRENCY: ${GRAPHHOPPER_MAX_CONCURRENCY:-24}
+      # Algorithm flags. Every one of these is a decision the benchmark or a
+      # production probe settled, so each ships at its measured default and an
+      # unset variable here leaves it exactly there — see src/loops/flags.ts.
+      LOOPER_EDGE_OVERLAP: ${LOOPER_EDGE_OVERLAP:-}
+      LOOPER_SPREAD_BEARINGS: ${LOOPER_SPREAD_BEARINGS:-}
+      LOOPER_DIVERSITY_EARLY_STOP: ${LOOPER_DIVERSITY_EARLY_STOP:-}
+      LOOPER_PARETO_ARCHIVE: ${LOOPER_PARETO_ARCHIVE:-}
+      LOOPER_LOCAL_REPAIR: ${LOOPER_LOCAL_REPAIR:-}
+      LOOPER_NETWORK_AWARE_SEEDS: ${LOOPER_NETWORK_AWARE_SEEDS:-}
+      LOOPER_TWO_STAGE_SCREENING: ${LOOPER_TWO_STAGE_SCREENING:-}
+      LOOPER_NARROW_CORNER_SWEEP: ${LOOPER_NARROW_CORNER_SWEEP:-}
+      LOOPER_PROGRESSIVE_CORNER_SWEEP: ${LOOPER_PROGRESSIVE_CORNER_SWEEP:-}
+      LOOPER_BUDGET_DETOUR_GATE: ${LOOPER_BUDGET_DETOUR_GATE:-}
+      LOOPER_PULLBACK_TURN_ONLY: ${LOOPER_PULLBACK_TURN_ONLY:-}
+      LOOPER_GUIDE_POINT_PULLBACK: ${LOOPER_GUIDE_POINT_PULLBACK:-}
+      LOOPER_WAYPOINT_BACKBONE: ${LOOPER_WAYPOINT_BACKBONE:-}
+      LOOPER_KEEP_PINNED_SPURS: ${LOOPER_KEEP_PINNED_SPURS:-}
+      LOOPER_REQUEST_CACHE: ${LOOPER_REQUEST_CACHE:-}
     ports:
       # Nginx is the public HTTPS entry point; keep the service local to this host.
       - "127.0.0.1:${ROUTE_SERVICE_PORT:-8988}:8080"

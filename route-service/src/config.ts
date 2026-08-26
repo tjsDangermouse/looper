@@ -10,9 +10,15 @@ const number = (value: string | undefined, fallback: number) => {
  * Anything but an explicit `true`/`1` leaves the flag as it ships. A typo in a
  * deployment environment should mean "the algorithm I already had", never "an
  * unproven one, silently".
+ *
+ * Empty counts as absent, and that is load-bearing rather than tidy. Compose
+ * passes an unset variable through as `''`, not as nothing, so reading it as
+ * "not true, therefore false" would take every flag that ships *on* and
+ * silently switch it off across a whole deployment — the loudest possible
+ * version of the failure this function exists to prevent.
  */
-const flag = (value: string | undefined, fallback: boolean) =>
-  value === undefined ? fallback : value === 'true' || value === '1'
+export const flag = (value: string | undefined, fallback: boolean) =>
+  value === undefined || value === '' ? fallback : value === 'true' || value === '1'
 
 const flags: AlgorithmFlags = {
   edgeOverlap: flag(process.env.LOOPER_EDGE_OVERLAP, DEFAULT_FLAGS.edgeOverlap),
