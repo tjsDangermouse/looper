@@ -97,6 +97,19 @@ describe('reading the engine’s answer', () => {
   it('treats a pathless answer as a leg that cannot be walked', () => {
     expect(() => parseLeg({ paths: [] })).toThrow(GraphHopperError)
   })
+
+  it('reads how much of the graph the engine had to search', () => {
+    const leg = parseLeg({ ...payload, hints: { 'visited_nodes.sum': 41238, 'visited_nodes.average': 41238 } })
+    expect(leg.visitedNodes).toBe(41238)
+  })
+
+  it('says nothing rather than zero when the build does not report it', () => {
+    // A build without the hint and a search that settled no nodes must not
+    // read the same: zero would average into the per-leg figure and quietly
+    // halve it, which is precisely the measurement this exists to make.
+    expect(parseLeg(payload).visitedNodes).toBeUndefined()
+    expect(parseLeg({ ...payload, hints: {} }).visitedNodes).toBeUndefined()
+  })
 })
 
 describe('building a loop leg by leg', () => {

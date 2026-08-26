@@ -35,6 +35,20 @@ export type GraphHopperLeg = {
    * uses these has a geometric fallback.
    */
   edges?: EdgeSpan[]
+  /**
+   * How many nodes the engine settled to answer this, from its own `hints`.
+   *
+   * Milliseconds say how long a call took; this says how much of the graph it
+   * had to look at, which is the only thing that separates "the engine is
+   * busy" from "the search is doing far more work than it should". A leg
+   * answered by a working landmark heuristic settles a few thousand; one that
+   * has fallen back to a bidirectional Dijkstra over the whole island settles
+   * orders of magnitude more, at the same wall-clock cost per call under load.
+   *
+   * Optional because it is a hint rather than a contract, and nothing depends
+   * on it: it is reported and never read by the algorithm.
+   */
+  visitedNodes?: number
 }
 
 export class GraphHopperError extends Error {
@@ -241,12 +255,17 @@ export function parseLeg(payload: any): GraphHopperLeg {
     endIndex: instruction?.interval?.[1],
   }))
   const edges = parseEdgeSpans(path?.details?.edge_id, coordinates.length)
+  // GraphHopper reports this beside the paths rather than inside one, and
+  // spells it with a dot in the key. A build that does not report it is not a
+  // build that is broken.
+  const visited = Number(payload?.hints?.['visited_nodes.sum'])
   return {
     coordinates: coordinates.map(([lng, lat]: number[]) => [lng, lat] as LngLat),
     distanceMeters: Number(path.distance ?? 0),
     durationSeconds: Number(path.time ?? 0) / 1000,
     steps,
     ...(edges ? { edges } : {}),
+    ...(Number.isFinite(visited) ? { visitedNodes: visited } : {}),
   }
 }
 

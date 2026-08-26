@@ -78,7 +78,13 @@ export type FixupTally = { attempted: number; kept: number }
  */
 export const AREA_BUCKETS = ['0', '1-3', '4-7', '8+'] as const
 export type AreaBucket = (typeof AREA_BUCKETS)[number]
-export type AreaTiming = { calls: number; ms: number }
+export type AreaTiming = {
+  calls: number
+  ms: number
+  /** Summed over the calls that reported one; see `MetricsSnapshot.visitedNodes`. */
+  visitedNodes: number
+  visitedNodeCalls: number
+}
 
 export const areaBucketFor = (count: number): AreaBucket =>
   count <= 0 ? '0' : count <= 3 ? '1-3' : count <= 7 ? '4-7' : '8+'
@@ -94,6 +100,19 @@ export type MetricsSnapshot = {
   routedLegs: number
   /** Wall time inside engine calls, summed across concurrent callers. */
   engineMs: number
+  /**
+   * Nodes the engine settled, summed over the calls that reported a count.
+   *
+   * Milliseconds measure how long we waited; this measures how much of the
+   * graph was searched, and only the second one can tell a slow engine from a
+   * search doing far more work than it should. Divided by `visitedNodeCalls`
+   * it is the per-leg search size, which is what says whether the landmark
+   * heuristic is doing anything under a per-request custom model — the
+   * question the whole avoidance design rests on and which nothing has ever
+   * measured. Zero calls reporting means the build does not offer the hint.
+   */
+  visitedNodes: number
+  visitedNodeCalls: number
   candidatesBuilt: number
   candidatesRouted: number
   candidatesPassed: number
@@ -152,6 +171,9 @@ export class RequestMetrics {
   private readonly candidateDurations: number[] = []
   private routedLegs = 0
   private engineMs = 0
+  private visitedNodes = 0
+  /** Calls that reported one, which is not every call — see `visitedNodes`. */
+  private visitedNodeCalls = 0
   private candidatesBuilt = 0
   private candidatesRouted = 0
   private candidatesPassed = 0
@@ -175,14 +197,22 @@ export class RequestMetrics {
     this.startedAt = now()
   }
 
-  countCall(purpose: RoutePurpose, elapsedMs = 0, routedLegs = 1, avoidanceAreas = 0) {
+  countCall(purpose: RoutePurpose, elapsedMs = 0, routedLegs = 1, avoidanceAreas = 0, visitedNodes?: number) {
     this.counts.set(purpose, (this.counts.get(purpose) ?? 0) + 1)
     this.routedLegs += routedLegs
     this.engineMs += elapsedMs
+    if (visitedNodes !== undefined) {
+      this.visitedNodes += visitedNodes
+      this.visitedNodeCalls++
+    }
     const bucket = areaBucketFor(avoidanceAreas)
-    const timing = this.areaTimings.get(bucket) ?? { calls: 0, ms: 0 }
+    const timing = this.areaTimings.get(bucket) ?? { calls: 0, ms: 0, visitedNodes: 0, visitedNodeCalls: 0 }
     timing.calls++
     timing.ms += elapsedMs
+    if (visitedNodes !== undefined) {
+      timing.visitedNodes += visitedNodes
+      timing.visitedNodeCalls++
+    }
     this.areaTimings.set(bucket, timing)
   }
 
@@ -240,6 +270,8 @@ export class RequestMetrics {
       callsByPurpose,
       routedLegs: this.routedLegs,
       engineMs: Math.round(this.engineMs),
+      visitedNodes: this.visitedNodes,
+      visitedNodeCalls: this.visitedNodeCalls,
       candidatesBuilt: this.candidatesBuilt,
       candidatesRouted: this.candidatesRouted,
       candidatesPassed: this.candidatesPassed,
@@ -262,8 +294,13 @@ export class RequestMetrics {
         spike: this.fixups.get('spike') ?? { attempted: 0, kept: 0 },
       },
       engineMsByAreas: Object.fromEntries(AREA_BUCKETS.map(bucket => {
-        const timing = this.areaTimings.get(bucket) ?? { calls: 0, ms: 0 }
-        return [bucket, { calls: timing.calls, ms: Math.round(timing.ms) }]
+        const timing = this.areaTimings.get(bucket) ?? { calls: 0, ms: 0, visitedNodes: 0, visitedNodeCalls: 0 }
+        return [bucket, {
+          calls: timing.calls,
+          ms: Math.round(timing.ms),
+          visitedNodes: timing.visitedNodes,
+          visitedNodeCalls: timing.visitedNodeCalls,
+        }]
       })) as Record<AreaBucket, AreaTiming>,
       offered: this.offered,
       totalMs: Math.round(this.now() - this.startedAt),
@@ -292,10 +329,15 @@ export function countingRouter(
   if ((route as Counted)[COUNTED_BY] === metrics) return route
   const counted = async (points: LngLat[], customModel: CustomModel | undefined, purpose: RoutePurpose = 'other') => {
     const began = now()
+    let visitedNodes: number | undefined
     try {
-      return await route(points, customModel, purpose)
+      const leg = await route(points, customModel, purpose)
+      visitedNodes = leg.visitedNodes
+      return leg
     } finally {
-      metrics.countCall(purpose, now() - began, Math.max(1, points.length - 1), customModel?.areas?.features?.length ?? 0)
+      // A call that threw is still a call, and still cost the engine time. It
+      // simply has no node count to report, which is what `undefined` says.
+      metrics.countCall(purpose, now() - began, Math.max(1, points.length - 1), customModel?.areas?.features?.length ?? 0, visitedNodes)
     }
   }
   Object.defineProperty(counted, COUNTED_BY, { value: metrics, enumerable: false })

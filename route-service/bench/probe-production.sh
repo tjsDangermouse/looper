@@ -44,16 +44,29 @@ calls = metrics['callsByPurpose']
 fixups = metrics.get('fixups', {})
 kept = ' '.join(f"{k.split('-')[-1]}={v['kept']}/{v['attempted']}" for k, v in fixups.items())
 total = metrics['graphhopperCalls'] or 1
+# How much of the graph each call had to search. Milliseconds say how long we
+# waited; this says how much work was done, and only the second one can tell a
+# busy engine from a search with no working heuristic behind it. A leg answered
+# by landmarks settles a few thousand nodes; one that has fallen back to a
+# bidirectional Dijkstra over the whole island settles far more.
+seen = metrics.get('visitedNodeCalls') or 0
+nodes = f"nodes/call={metrics['visitedNodes']/seen:8.0f}" if seen else "nodes/call=       -"
 print(f"{name:16} {ended-began:5.1f}s routes={routes} calls={metrics['graphhopperCalls']:4} "
-      f"ms/call={metrics['engineMs']/total:5.1f} par={metrics['engineMs']/max(1, metrics['totalMs']):4.2f}x "
+      f"ms/call={metrics['engineMs']/total:5.1f} {nodes} par={metrics['engineMs']/max(1, metrics['totalMs']):4.2f}x "
       f"pull={calls['join-pullback']:3} budget={calls['leg-budget']:3} stage={stage}")
 print(f"{'':16} fixups kept: {kept}")
 areas = metrics.get('engineMsByAreas')
 if areas:
     # If ms/call climbs with polygon count, the anti-retrace areas are the
     # ceiling and fewer or simpler ones buy more than any call reduction.
-    cells = ' '.join(f"{b}:{v['ms']/v['calls']:.0f}ms/{v['calls']}" for b, v in areas.items() if v['calls'])
-    print(f"{'':16} ms per call by avoidance polygons -> {cells}")
+    # If nodes-per-call climbs with polygon count, the custom model is costing
+    # the search its heuristic rather than merely costing time to evaluate.
+    def cell(b, v):
+        seen = v.get('visitedNodeCalls') or 0
+        nodes = f"/{v['visitedNodes']/seen:.0f}n" if seen else ''
+        return f"{b}:{v['ms']/v['calls']:.0f}ms{nodes}/{v['calls']}"
+    cells = ' '.join(cell(b, v) for b, v in areas.items() if v['calls'])
+    print(f"{'':16} per call by avoidance polygons -> {cells}")
 backbone = diagnostics.get('backboneStage')
 if backbone:
     print(f"{'':16} backbone gave up at {backbone}: {json.dumps(diagnostics.get('backboneRejections') or {})}")
