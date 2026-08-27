@@ -17,7 +17,8 @@ type Path = { id: string; points: string; colour: string; selected: boolean; lin
 // Chevrons dropped at an even spacing along the drawn line, pointing the way
 // the walk goes. Screen space, so they stay the same size at every zoom, and
 // off-screen ones are dropped rather than drawn into the void.
-const SPACING = 110
+const SPACING = 70
+const ARROW_SPEED = 32
 // Close enough to read the next corner and its street, wide enough to hold a
 // couple of hundred metres of the loop around the walker.
 const WALK_ZOOM = 17
@@ -34,16 +35,17 @@ const interpolateZoom = (zoom: number, stops: Array<[number, number]>) => {
 export const routeLineWidth = (zoom: number, selected: boolean) => interpolateZoom(zoom,
   selected ? [[11, 3], [14, 6], [17, 9], [19, 10]] : [[11, 2], [14, 4], [17, 6], [19, 7]])
 const routeArrowScale = (zoom: number) => interpolateZoom(zoom, [[11, 0.5], [14, 0.75], [17, 1], [19, 1.1]])
-function arrowsAlong(pixels: { x: number; y: number }[]) {
+export function routeArrowsAlong(pixels: { x: number; y: number }[], phase = 0,
+  viewport = { width: window.innerWidth, height: window.innerHeight }) {
   const arrows: Arrow[] = []
-  let until = SPACING / 2
+  let until = (SPACING / 2 + phase) % SPACING
   for (let i = 1; i < pixels.length; i++) {
     const a = pixels[i - 1], b = pixels[i], dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy)
     if (!length) continue
     let at = until
     for (; at <= length; at += SPACING) {
       const x = a.x + dx * at / length, y = a.y + dy * at / length
-      if (x > -20 && y > -20 && x < window.innerWidth + 20 && y < window.innerHeight + 20) arrows.push({ x, y, angle: Math.atan2(dy, dx) * 180 / Math.PI })
+      if (x > -20 && y > -20 && x < viewport.width + 20 && y < viewport.height + 20) arrows.push({ x, y, angle: Math.atan2(dy, dx) * 180 / Math.PI })
     }
     until = at - length
   }
@@ -59,6 +61,7 @@ export function MapView({ start, routes, selected, position, follow, walking, he
   const paddingRef = useRef(padding)
   const startRef = useRef(start)
   const selectedRef = useRef(selected)
+  const arrowPhase = useRef(0)
   const gps = useRef<maplibregl.Marker | undefined>(undefined)
   const positionRef = useRef(position)
   const followRef = useRef(follow)
@@ -129,7 +132,7 @@ export function MapView({ start, routes, selected, position, follow, walking, he
         lineWidth: routeLineWidth(zoom, selected),
         arrowScale: routeArrowScale(zoom),
         points: pixels.map(pixel => `${pixel.x},${pixel.y}`).join(' '),
-        arrows: arrowsAlong(pixels),
+        arrows: routeArrowsAlong(pixels, arrowPhase.current),
       }
     }))
   }
@@ -199,6 +202,23 @@ export function MapView({ start, routes, selected, position, follow, walking, he
 
   const routeIds = routes.map(r => r.id).join(',')
   useEffect(() => { routesRef.current = routes; redraw() }, [routes])
+  useEffect(() => {
+    if (!routes.length) return
+    let frame = 0
+    let previous = performance.now()
+    let lastDraw = previous
+    const animate = (now: number) => {
+      const elapsed = Math.min(now - previous, 100)
+      previous = now
+      arrowPhase.current = (arrowPhase.current + elapsed * ARROW_SPEED / 1000) % SPACING
+      // Thirty updates a second looks fluid while avoiding needless React
+      // work on high-refresh-rate phones.
+      if (now - lastDraw >= 1000 / 30) { lastDraw = now; redraw() }
+      frame = requestAnimationFrame(animate)
+    }
+    frame = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(frame)
+  }, [routeIds])
   useEffect(() => { triggerFit(routesRef.current) }, [routeIds])
   useEffect(() => { selectedRef.current = selected; redraw() }, [selected])
   useEffect(() => { startRef.current = start; marker.current?.setLngLat(start); if (!followRef.current) mapRef.current?.flyTo({ center: start, padding: pad(), duration: 450 }) }, [start])

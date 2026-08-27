@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as maplibregl from 'maplibre-gl'
-import { routeLineWidth } from './MapView'
+import { routeArrowsAlong, routeLineWidth } from './MapView'
 import { editorGroups } from './MapStyleEditor'
 import { applyLooperStyle, looperPalette, mapStyle, mapStyles } from './mapStyle'
 
@@ -29,6 +29,15 @@ describe('basemap style', () => {
     expect(routeLineWidth(17, false)).toBe(6)
     expect(routeLineWidth(14, true)).toBe(6)
     expect(routeLineWidth(15.5, true)).toBe(7.5)
+  })
+
+  it('places dense route arrows and advances them in travel order', () => {
+    const line = [{ x: 0, y: 50 }, { x: 300, y: 50 }]
+    const initial = routeArrowsAlong(line, 0, { width: 400, height: 100 })
+    const advanced = routeArrowsAlong(line, 10, { width: 400, height: 100 })
+    expect(initial.map(arrow => arrow.x)).toEqual([35, 105, 175, 245])
+    expect(advanced.map(arrow => arrow.x)).toEqual([45, 115, 185, 255])
+    expect(initial.every(arrow => arrow.angle === 0)).toBe(true)
   })
 
   it('offers Default and every custom style without changing tile providers', () => {

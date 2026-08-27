@@ -6,7 +6,8 @@ import LooperKit
 /// Close enough to read the next corner and its street, wide enough to hold a
 /// couple of hundred metres of the loop around the walker.
 private let walkZoom: Double = 16
-private let chevronSpacing: NSNumber = 110
+private let chevronSpacing: CGFloat = 70
+private let chevronSpeed: CGFloat = 32
 
 struct MapLibreMapView: UIViewRepresentable {
     var mapStyle: MapStyleChoice
@@ -68,11 +69,18 @@ struct MapLibreMapView: UIViewRepresentable {
         context.coordinator.sync()
     }
 
+    static func dismantleUIView(_ mapView: MLNMapView, coordinator: Coordinator) {
+        coordinator.stopArrowAnimation()
+    }
+
     final class Coordinator: NSObject, MLNMapViewDelegate, UIGestureRecognizerDelegate {
         var parent: MapLibreMapView
         weak var mapView: MLNMapView?
 
-        private var routeLayers: [String: (source: MLNShapeSource, line: MLNLineStyleLayer, symbol: MLNSymbolStyleLayer)] = [:]
+        private var routeLayers: [String: (source: MLNShapeSource, arrowSource: MLNShapeSource, line: MLNLineStyleLayer, symbol: MLNSymbolStyleLayer)] = [:]
+        private var arrowAnimation: CADisplayLink?
+        private var arrowPhase: CGFloat = 0
+        private var lastArrowTimestamp: CFTimeInterval = 0
         private var startAnnotation: MLNPointAnnotation?
         private var waypointAnnotations: [WaypointAnnotation] = []
         private var styleReady = false
@@ -96,6 +104,12 @@ struct MapLibreMapView: UIViewRepresentable {
         init(parent: MapLibreMapView) {
             self.parent = parent
             self.lastMapStyle = parent.mapStyle
+        }
+
+        func stopArrowAnimation() {
+            arrowAnimation?.invalidate()
+            arrowAnimation = nil
+            lastArrowTimestamp = 0
         }
 
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
@@ -127,6 +141,7 @@ struct MapLibreMapView: UIViewRepresentable {
             style.setImage(chevronImage(), forName: "chevron")
             styleReady = true
             sync()
+            startArrowAnimation()
         }
 
         func mapView(_ mapView: MLNMapView, didFailToLoadMapWithError error: Error) {
@@ -234,6 +249,7 @@ struct MapLibreMapView: UIViewRepresentable {
             for (id, layers) in routeLayers where !current.contains(id) {
                 style.removeLayer(layers.symbol)
                 style.removeLayer(layers.line)
+                style.removeSource(layers.arrowSource)
                 style.removeSource(layers.source)
                 routeLayers.removeValue(forKey: id)
             }
@@ -246,6 +262,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 let feature = MLNPolylineFeature(coordinates: &mutableCoordinates, count: UInt(mutableCoordinates.count))
                 if let existing = routeLayers[route.id] {
                     existing.source.shape = feature
+                    existing.arrowSource.shape = arrowShape(for: route, mapView: mapView)
                     existing.line.lineColor = NSExpression(forConstantValue: colour)
                     existing.line.lineWidth = routeLineWidth(selected: selected)
                     existing.line.lineOpacity = NSExpression(forConstantValue: opacity)
@@ -255,6 +272,9 @@ struct MapLibreMapView: UIViewRepresentable {
                     let source = MLNShapeSource(identifier: "route-\(route.id)", shape: feature, options: nil)
                     style.addSource(source)
 
+                    let arrowSource = MLNShapeSource(identifier: "route-arrows-\(route.id)", shape: arrowShape(for: route, mapView: mapView), options: nil)
+                    style.addSource(arrowSource)
+
                     let line = MLNLineStyleLayer(identifier: "route-line-\(route.id)", source: source)
                     line.lineColor = NSExpression(forConstantValue: colour)
                     line.lineWidth = routeLineWidth(selected: selected)
@@ -263,20 +283,67 @@ struct MapLibreMapView: UIViewRepresentable {
                     line.lineJoin = NSExpression(forConstantValue: "round")
                     style.addLayer(line)
 
-                    let symbol = MLNSymbolStyleLayer(identifier: "route-arrows-\(route.id)", source: source)
+                    let symbol = MLNSymbolStyleLayer(identifier: "route-arrows-\(route.id)", source: arrowSource)
                     symbol.iconImageName = NSExpression(forConstantValue: "chevron")
-                    symbol.symbolPlacement = NSExpression(forConstantValue: "line")
-                    symbol.symbolSpacing = NSExpression(forConstantValue: chevronSpacing)
-                    symbol.iconRotationAlignment = NSExpression(forConstantValue: "map")
+                    symbol.iconRotation = NSExpression(forKeyPath: "bearing")
+                    symbol.iconRotationAlignment = NSExpression(forConstantValue: "viewport")
                     symbol.iconAllowsOverlap = NSExpression(forConstantValue: true)
                     symbol.iconIgnoresPlacement = NSExpression(forConstantValue: true)
                     symbol.iconOpacity = line.lineOpacity
                     symbol.iconScale = routeChevronScale()
                     style.addLayer(symbol)
 
-                    routeLayers[route.id] = (source, line, symbol)
+                    routeLayers[route.id] = (source, arrowSource, line, symbol)
                 }
             }
+            if parent.routes.isEmpty { stopArrowAnimation() } else { startArrowAnimation() }
+        }
+
+        private func startArrowAnimation() {
+            guard arrowAnimation == nil, !parent.routes.isEmpty else { return }
+            let animation = CADisplayLink(target: self, selector: #selector(animateRouteArrows(_:)))
+            animation.preferredFramesPerSecond = 30
+            animation.add(to: .main, forMode: .common)
+            arrowAnimation = animation
+        }
+
+        @objc private func animateRouteArrows(_ animation: CADisplayLink) {
+            guard styleReady, let mapView else { return }
+            if lastArrowTimestamp == 0 { lastArrowTimestamp = animation.timestamp; return }
+            let elapsed = min(animation.timestamp - lastArrowTimestamp, 0.1)
+            lastArrowTimestamp = animation.timestamp
+            arrowPhase = (arrowPhase + CGFloat(elapsed) * chevronSpeed).truncatingRemainder(dividingBy: chevronSpacing)
+            for route in parent.routes {
+                routeLayers[route.id]?.arrowSource.shape = arrowShape(for: route, mapView: mapView)
+            }
+        }
+
+        private func arrowShape(for route: Route, mapView: MLNMapView) -> MLNShapeCollectionFeature {
+            let pixels = route.geometry.coordinates.map {
+                mapView.convert(CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng), toPointTo: mapView)
+            }
+            var arrows: [MLNPointFeature] = []
+            var until = (chevronSpacing / 2 + arrowPhase).truncatingRemainder(dividingBy: chevronSpacing)
+            guard pixels.count > 1 else { return MLNShapeCollectionFeature(shapes: arrows) }
+            for index in 1..<pixels.count {
+                let start = pixels[index - 1], end = pixels[index]
+                let dx = end.x - start.x, dy = end.y - start.y
+                let length = hypot(dx, dy)
+                guard length > 0 else { continue }
+                var distance = until
+                while distance <= length {
+                    let point = CGPoint(x: start.x + dx * distance / length, y: start.y + dy * distance / length)
+                    if mapView.bounds.insetBy(dx: -20, dy: -20).contains(point) {
+                        let arrow = MLNPointFeature()
+                        arrow.coordinate = mapView.convert(point, toCoordinateFrom: mapView)
+                        arrow.attributes = ["bearing": atan2(dy, dx) * 180 / .pi]
+                        arrows.append(arrow)
+                    }
+                    distance += chevronSpacing
+                }
+                until = distance - length
+            }
+            return MLNShapeCollectionFeature(shapes: arrows)
         }
 
         private func routeLineWidth(selected: Bool) -> NSExpression {
