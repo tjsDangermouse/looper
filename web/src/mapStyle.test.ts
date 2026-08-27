@@ -27,6 +27,11 @@ describe('basemap style', () => {
     expect(mapStyles.looper.url).toBe(mapStyles.default.url)
   })
 
+  it('keeps the Looper map a daylight style', () => {
+    expect(looperPalette.background).toBe('#f4f3ed')
+    expect(looperPalette.label).toBe('#334249')
+  })
+
   it('makes walking infrastructure prominent and removes noisy POIs', () => {
     const layers = ['background', 'park', 'landcover_wood', 'road_motorway', 'road_minor',
       'road_path_pedestrian', 'poi_r1', 'road_one_way_arrow'].map(id => ({ id }))

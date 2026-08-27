@@ -37,7 +37,7 @@ extraction boundary.
 ## Map rendering
 
 Both clients use MapLibre with OpenFreeMap's hosted Liberty style. The map switch offers
-the untouched style as **Default** and a runtime, walk-first treatment as **Looper**.
+the untouched style as **Default** and a light, walk-first treatment as **Looper**.
 Looper subdues motorways and POIs, clarifies parks and woodland, and adds strong,
 separately coloured vector layers for footways, trails and cycleways. Basemap style
 configuration is isolated in `web/src/mapStyle.ts` and

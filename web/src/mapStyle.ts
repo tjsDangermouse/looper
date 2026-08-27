@@ -13,11 +13,12 @@ export const mapStyles = {
 export const mapStyle = mapStyles.default
 
 export const looperPalette = {
-  background: '#0b1720', land: '#172630', residential: '#1b2c36', water: '#123246',
-  park: '#284a36', woodland: '#203d30', building: '#20313b', casing: '#0a141b',
-  motorway: '#465660', mainRoad: '#74838a', residentialRoad: '#c1cccc',
-  serviceRoad: '#8e9c9e', footway: '#d7e8b1', trail: '#9cc36b', cycleway: '#65c8ca',
-  label: '#d8e2e4', labelHalo: '#0b1720',
+  background: '#f4f3ed', land: '#f4f3ed', residential: '#ecefe9', water: '#c6e4ed',
+  park: '#dcebd6', parkOutline: '#8aac78', woodland: '#c8dec4', waterLine: '#82bdcf',
+  building: '#deded7', casing: '#d5dad5',
+  motorway: '#b7bdc0', mainRoad: '#969fa1', residentialRoad: '#ffffff',
+  serviceRoad: '#c9cec9', footway: '#78934e', trail: '#4f7b31', cycleway: '#168b95',
+  label: '#334249', labelHalo: '#faf9f4',
 } as const
 
 type StyleMap = Pick<Map, 'addLayer' | 'getLayer' | 'getStyle' | 'setLayoutProperty' | 'setPaintProperty'>
@@ -34,11 +35,11 @@ export function applyLooperStyle(map: StyleMap) {
   setPaint(map, ['background'], 'background-color', looperPalette.background)
   setPaint(map, ['landuse_residential'], 'fill-color', looperPalette.residential)
   setPaint(map, ['park'], 'fill-color', looperPalette.park)
-  setPaint(map, ['park_outline'], 'line-color', looperPalette.trail)
+  setPaint(map, ['park_outline'], 'line-color', looperPalette.parkOutline)
   setPaint(map, ['landcover_wood'], 'fill-color', looperPalette.woodland)
   setPaint(map, ['landcover_grass', 'landcover_grass_park'], 'fill-color', looperPalette.park)
   setPaint(map, ['water'], 'fill-color', looperPalette.water)
-  setPaint(map, ['waterway'], 'line-color', looperPalette.water)
+  setPaint(map, ['waterway'], 'line-color', looperPalette.waterLine)
   setPaint(map, ['building'], 'fill-color', looperPalette.building)
   setPaint(map, ['building-3d'], 'fill-extrusion-color', looperPalette.building)
 
