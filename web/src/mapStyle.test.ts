@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as maplibregl from 'maplibre-gl'
-import './MapView'
+import { routeLineWidth } from './MapView'
 import { editorGroups } from './MapStyleEditor'
 import { applyLooperStyle, looperPalette, mapStyle, mapStyles } from './mapStyle'
 
@@ -21,6 +21,14 @@ describe('basemap style', () => {
 
   it('configures the vector-tile worker for the Vite bundle', () => {
     expect(maplibregl.getWorkerUrl()).toContain('maplibre-gl-worker')
+  })
+
+  it('scales route option paths with the map zoom', () => {
+    expect(routeLineWidth(11, false)).toBe(2)
+    expect(routeLineWidth(14, false)).toBe(4)
+    expect(routeLineWidth(17, false)).toBe(6)
+    expect(routeLineWidth(14, true)).toBe(6)
+    expect(routeLineWidth(15.5, true)).toBe(7.5)
   })
 
   it('offers Default and every custom style without changing tile providers', () => {

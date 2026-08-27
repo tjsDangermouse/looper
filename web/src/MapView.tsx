@@ -13,7 +13,7 @@ maplibregl.setWorkerUrl(maplibreWorkerUrl)
 
 type Props = { start: Point; routes: Route[]; selected?: string; position?: Point; follow?: boolean; walking?: boolean; heading?: number; courseUp?: boolean; onFollowChange?: (following: boolean) => void; onPoint: (point: Point) => void; padding?: { bottom: number; right: number } }
 type Arrow = { x: number; y: number; angle: number }
-type Path = { id: string; points: string; colour: string; selected: boolean; arrows: Arrow[] }
+type Path = { id: string; points: string; colour: string; selected: boolean; lineWidth: number; arrowScale: number; arrows: Arrow[] }
 // Chevrons dropped at an even spacing along the drawn line, pointing the way
 // the walk goes. Screen space, so they stay the same size at every zoom, and
 // off-screen ones are dropped rather than drawn into the void.
@@ -21,6 +21,19 @@ const SPACING = 110
 // Close enough to read the next corner and its street, wide enough to hold a
 // couple of hundred metres of the loop around the walker.
 const WALK_ZOOM = 17
+const interpolateZoom = (zoom: number, stops: Array<[number, number]>) => {
+  if (zoom <= stops[0][0]) return stops[0][1]
+  for (let index = 1; index < stops.length; index++) {
+    const [nextZoom, nextValue] = stops[index]
+    const [previousZoom, previousValue] = stops[index - 1]
+    if (zoom <= nextZoom) return previousValue + (nextValue - previousValue) * (zoom - previousZoom) / (nextZoom - previousZoom)
+  }
+  return stops[stops.length - 1][1]
+}
+
+export const routeLineWidth = (zoom: number, selected: boolean) => interpolateZoom(zoom,
+  selected ? [[11, 3], [14, 6], [17, 9], [19, 10]] : [[11, 2], [14, 4], [17, 6], [19, 7]])
+const routeArrowScale = (zoom: number) => interpolateZoom(zoom, [[11, 0.5], [14, 0.75], [17, 1], [19, 1.1]])
 function arrowsAlong(pixels: { x: number; y: number }[]) {
   const arrows: Arrow[] = []
   let until = SPACING / 2
@@ -105,12 +118,16 @@ export function MapView({ start, routes, selected, position, follow, walking, he
   const redraw = () => {
     const map = mapRef.current
     if (!map) return
+    const zoom = map.getZoom()
     setPaths(routesRef.current.map((route, index) => {
       const pixels = route.geometry.coordinates.map(point => map.project(point))
+      const selected = route.id === selectedRef.current
       return {
         id: route.id,
         colour: routeColours[index % routeColours.length],
-        selected: route.id === selectedRef.current,
+        selected,
+        lineWidth: routeLineWidth(zoom, selected),
+        arrowScale: routeArrowScale(zoom),
         points: pixels.map(pixel => `${pixel.x},${pixel.y}`).join(' '),
         arrows: arrowsAlong(pixels),
       }
@@ -232,8 +249,8 @@ export function MapView({ start, routes, selected, position, follow, walking, he
   }
 
   return <><div ref={container} style={{ position: 'fixed', inset: 0 }} aria-label="Douglas, Isle of Man map" /><svg aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 1, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>{paths.map(path => <g key={path.id} opacity={selected ? (path.selected ? 1 : .28) : .9}>
-    <polyline points={path.points} fill="none" stroke={path.colour} strokeWidth={path.selected ? 9 : 6} strokeLinecap="round" strokeLinejoin="round" />
-    {path.arrows.map((arrow, index) => <path key={index} d="M-4.5,-4 L0,0 L-4.5,4" fill="none" stroke="#fff" strokeWidth={path.selected ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round" transform={`translate(${arrow.x} ${arrow.y}) rotate(${arrow.angle})`} />)}
+    <polyline points={path.points} fill="none" stroke={path.colour} strokeWidth={path.lineWidth} strokeLinecap="round" strokeLinejoin="round" />
+    {path.arrows.map((arrow, index) => <path key={index} d="M-4.5,-4 L0,0 L-4.5,4" fill="none" stroke="#fff" strokeWidth={path.selected ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round" transform={`translate(${arrow.x} ${arrow.y}) rotate(${arrow.angle}) scale(${path.arrowScale})`} />)}
   </g>)}</svg>{!walking && <div ref={styleControl} className={'map-style-control'+(styleMenuOpen ? ' open' : '')} style={{ bottom: `calc(${padding?.bottom ?? 0}px + max(12px, env(safe-area-inset-bottom)))` }}>
     <div className="map-style-options" role="menu" aria-hidden={!styleMenuOpen}>
       {mapStyles.map((style, index) => <button key={style.id} type="button" role="menuitemradio" aria-checked={styleID === style.id} tabIndex={styleMenuOpen ? 0 : -1} style={{ '--style-index': index } as CSSProperties} onClick={() => chooseStyle(style.id)}><i aria-hidden="true" style={'palette' in style ? { background: `linear-gradient(135deg, ${style.palette.park} 0 45%, ${style.palette.water} 46% 65%, ${style.palette.background} 66%)` } : undefined} />{style.label}</button>)}

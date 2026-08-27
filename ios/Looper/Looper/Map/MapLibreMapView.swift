@@ -239,7 +239,7 @@ struct MapLibreMapView: UIViewRepresentable {
             }
             for (index, route) in parent.routes.enumerated() {
                 let colour = UIColor(hex: routeColours[index % routeColours.count])
-                let selected = parent.selectedRouteID == nil || parent.selectedRouteID == route.id
+                let selected = parent.selectedRouteID == route.id
                 let opacity = parent.selectedRouteID == nil ? 0.9 : (selected ? 1 : 0.28)
                 let coordinates = route.geometry.coordinates.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
                 var mutableCoordinates = coordinates
@@ -247,16 +247,17 @@ struct MapLibreMapView: UIViewRepresentable {
                 if let existing = routeLayers[route.id] {
                     existing.source.shape = feature
                     existing.line.lineColor = NSExpression(forConstantValue: colour)
-                    existing.line.lineWidth = NSExpression(forConstantValue: selected ? 9 : 6)
+                    existing.line.lineWidth = routeLineWidth(selected: selected)
                     existing.line.lineOpacity = NSExpression(forConstantValue: opacity)
                     existing.symbol.iconOpacity = existing.line.lineOpacity
+                    existing.symbol.iconScale = routeChevronScale()
                 } else {
                     let source = MLNShapeSource(identifier: "route-\(route.id)", shape: feature, options: nil)
                     style.addSource(source)
 
                     let line = MLNLineStyleLayer(identifier: "route-line-\(route.id)", source: source)
                     line.lineColor = NSExpression(forConstantValue: colour)
-                    line.lineWidth = NSExpression(forConstantValue: selected ? 9 : 6)
+                    line.lineWidth = routeLineWidth(selected: selected)
                     line.lineOpacity = NSExpression(forConstantValue: opacity)
                     line.lineCap = NSExpression(forConstantValue: "round")
                     line.lineJoin = NSExpression(forConstantValue: "round")
@@ -270,11 +271,27 @@ struct MapLibreMapView: UIViewRepresentable {
                     symbol.iconAllowsOverlap = NSExpression(forConstantValue: true)
                     symbol.iconIgnoresPlacement = NSExpression(forConstantValue: true)
                     symbol.iconOpacity = line.lineOpacity
+                    symbol.iconScale = routeChevronScale()
                     style.addLayer(symbol)
 
                     routeLayers[route.id] = (source, line, symbol)
                 }
             }
+        }
+
+        private func routeLineWidth(selected: Bool) -> NSExpression {
+            let widths = selected ? [3, 6, 9, 10] : [2, 4, 6, 7]
+            return NSExpression(mglJSONObject: [
+                "interpolate", ["linear"], ["zoom"],
+                11, widths[0], 14, widths[1], 17, widths[2], 19, widths[3]
+            ])
+        }
+
+        private func routeChevronScale() -> NSExpression {
+            NSExpression(mglJSONObject: [
+                "interpolate", ["linear"], ["zoom"],
+                11, 0.5, 14, 0.75, 17, 1, 19, 1.1
+            ])
         }
 
         // MARK: Camera

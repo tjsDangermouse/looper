@@ -107,7 +107,7 @@ export function MapStyleEditor() {
     map.on('load', () => {
       applyLooperStyle(map, activePaletteRef.current)
       map.addSource('editor-routes', { type: 'geojson', data: routeData(routeColoursRef.current) })
-      map.addLayer({ id: 'editor-routes', type: 'line', source: 'editor-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get', 'colour'], 'line-width': 7, 'line-opacity': 0.9 } })
+      map.addLayer({ id: 'editor-routes', type: 'line', source: 'editor-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get', 'colour'], 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 2, 14, 4, 17, 7, 19, 8], 'line-opacity': 0.9 } })
     })
     map.on('error', event => console.error('[Looper style editor]', event.error))
     return () => { document.body.classList.remove('map-style-editor-body'); map.remove(); mapRef.current = undefined }
