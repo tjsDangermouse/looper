@@ -14,8 +14,10 @@ Looper PWA  ─────►  Looper Route Service  ─────►  self-h
                                                    OpenStreetMap PBF
 ```
 
-The app talks to Looper's own API and to nothing else. There is no third-party routing
-provider and no routing API key anywhere in this repository.
+The app talks to Looper's own API for routing. There is no third-party routing provider
+and no routing API key anywhere in this repository. Both clients render their basemap
+with MapLibre using OpenFreeMap's hosted Liberty vector style; map data still comes from
+OpenStreetMap.
 
 ## Repository map
 
@@ -31,6 +33,28 @@ iOS clients meet the route service only through [Loop API v1](route-service/cont
 GraphHopper, Compose files, data documentation, and the API contract are
 operational assets owned by the route service and already sit within its
 extraction boundary.
+
+## Map rendering
+
+Both clients use MapLibre with OpenFreeMap's hosted Liberty style. Basemap provider
+configuration is isolated in `web/src/mapStyle.ts` and
+`ios/Looper/Looper/Map/MapStyleConfiguration.swift`, ready for a future hosted Looper
+style URL.
+
+- `web/src/MapView.tsx` owns the web map, start/current-location markers, gestures and
+  camera. Routes remain screen-space SVG overlays projected by MapLibre, which keeps
+  their existing selection, colour, width and chevron behaviour above the basemap.
+- `ios/Looper/Looper/Map/MapLibreMapView.swift` owns the interactive iOS map, annotations,
+  gestures and camera. Route GeoJSON is represented by `MLNShapeSource` objects; route
+  line and chevron layers are appended after the basemap style loads, placing them above
+  its layers.
+- `ios/Looper/Looper/Map/LoopSummaryMapView.swift` uses the same basemap for completed
+  outing previews. `ios/Looper/Looper/Support/RouteTileCache.swift` uses the same style
+  URL for per-walk offline regions.
+
+The previous 256-by-256 OpenStreetMap PNG source was not misconfigured for Retina
+displays. MapLibre scaled it as configured, but scaling source pixels cannot provide the
+native sharpness of vector roads and labels.
 
 ## Local development
 
@@ -237,7 +261,7 @@ cd route-service && npm run lint && npm run typecheck && npm test
 
 Map data and routing are derived from **OpenStreetMap**, © OpenStreetMap contributors,
 available under the [Open Database Licence](https://www.openstreetmap.org/copyright).
-Both the map tiles and every route Looper generates are ODbL-licensed derivatives, so the
-credit must stay visible wherever the app is deployed. It is shown in the app on the
-welcome screen and in the map's attribution control — keep both. Routing is performed by
-self-hosted [GraphHopper](https://www.graphhopper.com/), Apache 2.0.
+OpenFreeMap supplies the OpenMapTiles vector basemap style and hosting. Both the map tiles
+and every route Looper generates are ODbL-licensed derivatives, so the credit must stay
+visible wherever the app is deployed. It is shown in the app on the welcome screen.
+Routing is performed by self-hosted [GraphHopper](https://www.graphhopper.com/), Apache 2.0.

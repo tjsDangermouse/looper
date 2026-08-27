@@ -11,7 +11,6 @@
 		0EA530B6D39F9FCAD4E9281E /* LooperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9E464C30A96FFB196493C847 /* LooperKit */; };
 		10E81493FCA756139A76F79F /* BottomSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BEB8FC47D50871EE61F9B9C /* BottomSheet.swift */; };
 		10F4FF7E51B3E465A5B6321B /* SheetHeightKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3AE51BA2538D9799ADF9AEF /* SheetHeightKey.swift */; };
-		17889B2B605D69E81470DB00 /* OSMStyle.json in Resources */ = {isa = PBXBuildFile; fileRef = F015977723BD5A6F2CCB72A2 /* OSMStyle.json */; };
 		19515570A2C23010B2E65CCA /* HealthKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE795470AA6E8611DA7750F8 /* HealthKitService.swift */; };
 		19DBD97869493F1BF17B140F /* ResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D11D25EB1EDAB1EFF5EC303B /* ResultView.swift */; };
 		2563DCC062E820C93E6AC2E7 /* PlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F28839314B865C4E18231BB6 /* PlannerView.swift */; };
@@ -55,6 +54,7 @@
 		E2F9D134C92F3EC7730A72C3 /* WatchModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B723E2A8859EC2D70D5BF786 /* WatchModel.swift */; };
 		F0185C7C7D8BBB0BD9CDD1E2 /* GuidancePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF36AA8F3EB3485E6E73217F /* GuidancePage.swift */; };
 		F7A2A461C46C3AF95508BC54 /* WatchHapticPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD7E139CE785165EC60CD60C /* WatchHapticPlayer.swift */; };
+		FCE45C47731FF90344AB868D /* MapStyleConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 999466F47160AB098018BCD7 /* MapStyleConfiguration.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -108,6 +108,7 @@
 		892C896BBE805E15C40FF985 /* RouteTileCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteTileCache.swift; sourceTree = "<group>"; };
 		898B18622C0F724237790CC4 /* VoiceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSettingsView.swift; sourceTree = "<group>"; };
 		8E038413F7A07635B1FBA8BF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		999466F47160AB098018BCD7 /* MapStyleConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapStyleConfiguration.swift; sourceTree = "<group>"; };
 		99C168511C6016603309E018 /* BrandBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandBadge.swift; sourceTree = "<group>"; };
 		9DE956B03DA628600F29CCD3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A78E96C2488C44CE3C073DF0 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
@@ -129,7 +130,6 @@
 		E81BC85DFABD7D24AECB98EF /* WorkoutPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutPages.swift; sourceTree = "<group>"; };
 		EB2F9FAA54BF127F37C20269 /* MapLibreMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLibreMapView.swift; sourceTree = "<group>"; };
 		EE795470AA6E8611DA7750F8 /* HealthKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitService.swift; sourceTree = "<group>"; };
-		F015977723BD5A6F2CCB72A2 /* OSMStyle.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = OSMStyle.json; sourceTree = "<group>"; };
 		F28839314B865C4E18231BB6 /* PlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlannerView.swift; sourceTree = "<group>"; };
 		F3DA003A20133F2BA81D5DB9 /* LooperWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LooperWatch.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -182,14 +182,6 @@
 				4FBBE075EF8B5A79E9F071ED /* AppModel.swift */,
 			);
 			path = App;
-			sourceTree = "<group>";
-		};
-		88C5D7380B10D0C6B596E016 /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-				F015977723BD5A6F2CCB72A2 /* OSMStyle.json */,
-			);
-			path = Resources;
 			sourceTree = "<group>";
 		};
 		949B7A65594765935D2C7EEF /* Products */ = {
@@ -271,6 +263,7 @@
 			children = (
 				44D8F1D18F1F7CE624322F6A /* LoopSummaryMapView.swift */,
 				EB2F9FAA54BF127F37C20269 /* MapLibreMapView.swift */,
+				999466F47160AB098018BCD7 /* MapStyleConfiguration.swift */,
 			);
 			path = Map;
 			sourceTree = "<group>";
@@ -285,7 +278,6 @@
 				1A64D791F4AECBFEFC9B0213 /* LooperApp.swift */,
 				71E877E605B005A1CF6EE2EF /* App */,
 				DC9FE6E6808C5598CDDBA134 /* Map */,
-				88C5D7380B10D0C6B596E016 /* Resources */,
 				9EEA2568F3400CE8187BF89B /* Screens */,
 				9EDD0A5E5814EACCD3A499D8 /* Support */,
 			);
@@ -387,7 +379,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				53BB37518F558723D75E005F /* Assets.xcassets in Resources */,
-				17889B2B605D69E81470DB00 /* OSMStyle.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -422,6 +413,7 @@
 				39D738AFA344FA25C911A879 /* LoopSummaryView.swift in Sources */,
 				C411CA3A8A7B47B01F8B7584 /* LooperApp.swift in Sources */,
 				463B58E0CF7C44C0F1A8E884 /* MapLibreMapView.swift in Sources */,
+				FCE45C47731FF90344AB868D /* MapStyleConfiguration.swift in Sources */,
 				2563DCC062E820C93E6AC2E7 /* PlannerView.swift in Sources */,
 				B176A7380FD731F6AC1BF0E0 /* RouteStore.swift in Sources */,
 				DB4CC7575D4A1E08A04356AE /* RouteTileCache.swift in Sources */,

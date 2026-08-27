@@ -58,7 +58,7 @@ struct WelcomeView: View {
 
             VStack(spacing: 4) {
                 Text("Your location stays on your device.")
-                Text("Maps and routes © OpenStreetMap contributors")
+                Text("OpenFreeMap © OpenMapTiles · data © OpenStreetMap contributors")
             }
             .font(.caption2)
             .foregroundStyle(.secondary)

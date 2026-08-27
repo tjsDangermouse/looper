@@ -27,8 +27,7 @@ struct MapLibreMapView: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
     func makeUIView(context: Context) -> MLNMapView {
-        let styleURL = Bundle.main.url(forResource: "OSMStyle", withExtension: "json")
-        let mapView = MLNMapView(frame: .zero, styleURL: styleURL)
+        let mapView = MLNMapView(frame: .zero, styleURL: MapStyleConfiguration.styleURL)
         mapView.setCenter(CLLocationCoordinate2D(latitude: start.lat, longitude: start.lng), zoomLevel: 13, animated: false)
         mapView.delegate = context.coordinator
         mapView.logoView.isHidden = true
@@ -123,6 +122,10 @@ struct MapLibreMapView: UIViewRepresentable {
             style.setImage(chevronImage(), forName: "chevron")
             styleReady = true
             sync()
+        }
+
+        func mapView(_ mapView: MLNMapView, didFailToLoadMapWithError error: Error) {
+            print("[Looper map] Failed to load \(MapStyleConfiguration.provider) \(MapStyleConfiguration.styleName): \(error.localizedDescription)")
         }
 
         func mapView(_ mapView: MLNMapView, didUpdate userLocation: MLNUserLocation?) {

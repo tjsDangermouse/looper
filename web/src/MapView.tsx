@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { headingGap, routeColours, type Point, type Route } from './lib'
+import { mapStyle } from './mapStyle'
 
 type Props = { start: Point; routes: Route[]; selected?: string; position?: Point; follow?: boolean; walking?: boolean; heading?: number; courseUp?: boolean; onFollowChange?: (following: boolean) => void; onPoint: (point: Point) => void; padding?: { bottom: number; right: number } }
 type Arrow = { x: number; y: number; angle: number }
@@ -28,8 +29,6 @@ function arrowsAlong(pixels: { x: number; y: number }[]) {
   }
   return arrows
 }
-
-const style: maplibregl.StyleSpecification = { version: 8, sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors' } }, layers: [{ id: 'osm', type: 'raster', source: 'osm' }] }
 
 export function MapView({ start, routes, selected, position, follow, walking, heading, courseUp, onFollowChange, onPoint, padding }: Props) {
   const container = useRef<HTMLDivElement>(null)
@@ -109,7 +108,7 @@ export function MapView({ start, routes, selected, position, follow, walking, he
 
   useEffect(() => {
     if (!container.current) return
-    const map = mapRef.current = new maplibregl.Map({ container: container.current, style, center: start, zoom: 13, attributionControl: false })
+    const map = mapRef.current = new maplibregl.Map({ container: container.current, style: mapStyle.url, center: start, zoom: 13, attributionControl: false })
     map.setPadding(pad())
     map.addControl(new maplibregl.NavigationControl())
     marker.current = new maplibregl.Marker({ color: routeColours[0] }).setLngLat(start).addTo(map)

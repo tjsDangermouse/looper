@@ -27,16 +27,19 @@ final class RouteTileCache {
     func cache(_ route: Route) {
         release()
         guard
-            let styleURL = Bundle.main.url(forResource: "OSMStyle", withExtension: "json"),
             let bounds = boundingBox(route)
         else { return }
 
         let region = MLNTilePyramidOfflineRegion(
-            styleURL: styleURL, bounds: bounds,
+            styleURL: MapStyleConfiguration.styleURL, bounds: bounds,
             fromZoomLevel: Self.minZoomLevel, toZoomLevel: Self.maxZoomLevel
         )
         storage.addPack(for: region, withContext: Data()) { [weak self] pack, error in
-            guard let self, let pack, error == nil else { return }
+            if let error {
+                print("[Looper map cache] Failed to cache \(MapStyleConfiguration.provider) tiles: \(error.localizedDescription)")
+                return
+            }
+            guard let self, let pack else { return }
             self.pack = pack
             pack.resume()
         }

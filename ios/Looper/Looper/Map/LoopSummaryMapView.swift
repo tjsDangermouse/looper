@@ -15,7 +15,7 @@ struct LoopSummaryMapView: UIViewRepresentable {
     func makeUIView(context: Context) -> MLNMapView {
         let mapView = MLNMapView(
             frame: .zero,
-            styleURL: Bundle.main.url(forResource: "OSMStyle", withExtension: "json")
+            styleURL: MapStyleConfiguration.styleURL
         )
         mapView.logoView.isHidden = true
         mapView.attributionButton.isHidden = true
@@ -50,6 +50,10 @@ struct LoopSummaryMapView: UIViewRepresentable {
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
             styleReady = true
             draw()
+        }
+
+        func mapView(_ mapView: MLNMapView, didFailToLoadMapWithError error: Error) {
+            print("[Looper summary map] Failed to load \(MapStyleConfiguration.provider) \(MapStyleConfiguration.styleName): \(error.localizedDescription)")
         }
 
         func draw() {
