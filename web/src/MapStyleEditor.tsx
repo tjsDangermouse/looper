@@ -12,14 +12,31 @@ const endpoint = '/__looper-style-editor/config'
 type Group = { name: string; fields: Array<{ key: PaletteKey; label: string; note: string }> }
 
 export const editorGroups: Group[] = [
-  { name: 'Ground', fields: [
+  { name: 'Natural ground', fields: [
     { key: 'background', label: 'Map ground', note: 'Base land colour' },
-    { key: 'residential', label: 'Residential land', note: 'Built-up areas' },
     { key: 'water', label: 'Water', note: 'Sea, lakes and rivers' },
     { key: 'waterLine', label: 'Water lines', note: 'Streams and narrow rivers' },
     { key: 'park', label: 'Parks', note: 'Public green space' },
     { key: 'parkOutline', label: 'Park edge', note: 'Green-space boundary' },
+    { key: 'grass', label: 'Grass and meadows', note: 'Grassland outside designated parks' },
+    { key: 'farmland', label: 'Fields and farmland', note: 'Farms, orchards and vineyards' },
     { key: 'woodland', label: 'Woodland', note: 'Tree-covered land' },
+    { key: 'wetland', label: 'Wetland', note: 'Marshes, bogs and reed beds' },
+    { key: 'sand', label: 'Beaches and sand', note: 'Beaches, dunes and sandy ground' },
+    { key: 'rock', label: 'Rock and scree', note: 'Bare rock, scree and shingle' },
+    { key: 'ice', label: 'Ice and glaciers', note: 'Glaciers and permanent snow' },
+  ] },
+  { name: 'Places and land use', fields: [
+    { key: 'residential', label: 'Residential land', note: 'Built-up residential areas' },
+    { key: 'commercial', label: 'Commercial land', note: 'Shops, offices and retail areas' },
+    { key: 'industrial', label: 'Industrial land', note: 'Industry, garages and rail yards' },
+    { key: 'education', label: 'Education', note: 'Schools, colleges and universities' },
+    { key: 'healthcare', label: 'Healthcare', note: 'Hospitals and healthcare grounds' },
+    { key: 'sports', label: 'Sports and recreation', note: 'Pitches, tracks and playgrounds' },
+    { key: 'cemetery', label: 'Cemeteries', note: 'Cemeteries and graveyards' },
+    { key: 'military', label: 'Military land', note: 'Military and restricted areas' },
+    { key: 'quarry', label: 'Quarries', note: 'Quarries and extraction sites' },
+    { key: 'aerodrome', label: 'Aerodromes', note: 'Airport and airfield ground' },
     { key: 'building', label: 'Buildings', note: 'Building footprints' },
   ] },
   { name: 'Roads', fields: [

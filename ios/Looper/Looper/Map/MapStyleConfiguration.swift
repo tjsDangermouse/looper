@@ -31,13 +31,47 @@ enum MapStyleConfiguration {
         paint(style, ids: ["landuse_residential"], as: MLNFillStyleLayer.self) { $0.fillColor = constant(palette.residential) }
         paint(style, ids: ["park"], as: MLNFillStyleLayer.self) { $0.fillColor = constant(palette.park) }
         paint(style, ids: ["landcover_wood"], as: MLNFillStyleLayer.self) { $0.fillColor = constant(palette.woodland) }
-        paint(style, ids: ["landcover_grass", "landcover_grass_park"], as: MLNFillStyleLayer.self) { $0.fillColor = constant(palette.park) }
+        paint(style, ids: ["landcover_grass", "landcover_grass_park"], as: MLNFillStyleLayer.self) { $0.fillColor = constant(palette.grass) }
+        paint(style, ids: ["landcover_ice"], as: MLNFillStyleLayer.self) { $0.fillColor = constant(palette.ice) }
+        paint(style, ids: ["landcover_sand"], as: MLNFillStyleLayer.self) { $0.fillColor = constant(palette.sand) }
+        paint(style, ids: ["landuse_pitch", "landuse_track"], as: MLNFillStyleLayer.self) { $0.fillColor = constant(palette.sports) }
+        paint(style, ids: ["landuse_cemetery"], as: MLNFillStyleLayer.self) { $0.fillColor = constant(palette.cemetery) }
+        paint(style, ids: ["landuse_school"], as: MLNFillStyleLayer.self) { $0.fillColor = constant(palette.education) }
+        paint(style, ids: ["landuse_hospital"], as: MLNFillStyleLayer.self) { $0.fillColor = constant(palette.healthcare) }
+        paint(style, ids: ["aeroway_fill"], as: MLNFillStyleLayer.self) { $0.fillColor = constant(palette.aerodrome) }
         paint(style, ids: ["water"], as: MLNFillStyleLayer.self) { $0.fillColor = constant(palette.water) }
         paint(style, ids: ["building"], as: MLNFillStyleLayer.self) { $0.fillColor = constant(palette.building) }
         paint(style, ids: ["building-3d"], as: MLNFillExtrusionStyleLayer.self) { $0.fillExtrusionColor = constant(palette.building) }
         paint(style, ids: ["park_outline", "waterway"], as: MLNLineStyleLayer.self) {
             $0.lineColor = constant($0.identifier == "waterway" ? palette.waterLine : palette.parkOutline)
         }
+
+        // Liberty omits several OpenMapTiles land categories. Looper-owned
+        // fills make every category in the editor render on iOS as well.
+        addFillLayer(style, id: "looper-farmland", sourceLayer: "landcover", colour: palette.farmland,
+                     predicate: NSPredicate(format: "%K == %@", "class", "farmland"), below: "park")
+        addFillLayer(style, id: "looper-rock", sourceLayer: "landcover", colour: palette.rock,
+                     predicate: NSPredicate(format: "%K == %@", "class", "rock"), below: "park")
+        addFillLayer(style, id: "looper-wetland-underlay", sourceLayer: "landcover", colour: palette.wetland,
+                     predicate: NSPredicate(format: "%K == %@", "class", "wetland"), below: "landcover_wetland")
+        addFillLayer(style, id: "looper-parkland", sourceLayer: "landcover", colour: palette.park,
+                     predicate: NSPredicate(format: "%K IN %@", "subclass", ["park", "recreation_ground", "village_green", "garden", "golf_course"]), below: "park")
+        addFillLayer(style, id: "looper-park-uses", sourceLayer: "landuse", colour: palette.park,
+                     predicate: NSPredicate(format: "%K IN %@", "class", ["theme_park", "zoo"]), below: "landuse_pitch")
+        addFillLayer(style, id: "looper-commercial", sourceLayer: "landuse", colour: palette.commercial,
+                     predicate: NSPredicate(format: "%K IN %@", "class", ["commercial", "retail"]), below: "landuse_pitch")
+        addFillLayer(style, id: "looper-industrial", sourceLayer: "landuse", colour: palette.industrial,
+                     predicate: NSPredicate(format: "%K IN %@", "class", ["industrial", "garages", "railway"]), below: "landuse_pitch")
+        addFillLayer(style, id: "looper-education", sourceLayer: "landuse", colour: palette.education,
+                     predicate: NSPredicate(format: "%K IN %@", "class", ["university", "college", "kindergarten", "library"]), below: "landuse_pitch")
+        addFillLayer(style, id: "looper-healthcare", sourceLayer: "landuse", colour: palette.healthcare,
+                     predicate: NSPredicate(format: "%K == %@", "class", "healthcare"), below: "landuse_pitch")
+        addFillLayer(style, id: "looper-recreation", sourceLayer: "landuse", colour: palette.sports,
+                     predicate: NSPredicate(format: "%K IN %@", "class", ["stadium", "playground"]), below: "landuse_pitch")
+        addFillLayer(style, id: "looper-military", sourceLayer: "landuse", colour: palette.military,
+                     predicate: NSPredicate(format: "%K == %@", "class", "military"), below: "landuse_pitch")
+        addFillLayer(style, id: "looper-quarry", sourceLayer: "landuse", colour: palette.quarry,
+                     predicate: NSPredicate(format: "%K == %@", "class", "quarry"), below: "landuse_pitch")
 
         let ids = style.layers.map(\.identifier)
         lines(style, ids: ids.filter { $0.hasSuffix("_casing") }, colour: palette.casing, opacity: 0.9)
@@ -74,6 +108,25 @@ enum MapStyleConfiguration {
         paint(style, ids: ids, as: MLNLineStyleLayer.self) {
             $0.lineColor = constant(colour)
             $0.lineOpacity = NSExpression(forConstantValue: opacity)
+        }
+    }
+
+    private static func addFillLayer(_ style: MLNStyle, id: String, sourceLayer: String, colour: String,
+                                     predicate: NSPredicate, below siblingID: String) {
+        if let layer = style.layer(withIdentifier: id) as? MLNFillStyleLayer {
+            layer.fillColor = constant(colour)
+            return
+        }
+        guard let source = style.source(withIdentifier: "openmaptiles") else { return }
+        let layer = MLNFillStyleLayer(identifier: id, source: source)
+        layer.sourceLayerIdentifier = sourceLayer
+        layer.predicate = predicate
+        layer.fillColor = constant(colour)
+        layer.fillOpacity = NSExpression(forConstantValue: 1)
+        if let sibling = style.layer(withIdentifier: siblingID) {
+            style.insertLayer(layer, below: sibling)
+        } else {
+            style.addLayer(layer)
         }
     }
 

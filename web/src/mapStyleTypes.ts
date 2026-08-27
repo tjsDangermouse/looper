@@ -1,6 +1,8 @@
 export const paletteKeys = [
-  'background', 'residential', 'water', 'park', 'parkOutline', 'woodland',
-  'waterLine', 'building', 'casing', 'motorway', 'mainRoad', 'residentialRoad',
+  'background', 'residential', 'commercial', 'industrial', 'education', 'healthcare',
+  'water', 'waterLine', 'park', 'parkOutline', 'grass', 'farmland', 'woodland',
+  'wetland', 'sand', 'rock', 'ice', 'sports', 'cemetery', 'military', 'quarry',
+  'aerodrome', 'building', 'casing', 'motorway', 'mainRoad', 'residentialRoad',
   'serviceRoad', 'footway', 'trail', 'cycleway', 'label', 'labelHalo',
 ] as const
 
