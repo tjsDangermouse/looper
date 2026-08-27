@@ -40,8 +40,8 @@ public let customMapStyles: [MapStyleDefinition] = [
             parkOutline: "#172e00",
             woodland: "#c4e198",
             waterLine: "#00c3ff",
-            building: "#c6c3c3",
-            casing: "#878787",
+            building: "#cccccc",
+            casing: "#c4c4c4",
             motorway: "#f05656",
             mainRoad: "#fde753",
             residentialRoad: "#ffffff",
@@ -55,4 +55,4 @@ public let customMapStyles: [MapStyleDefinition] = [
     )
 ]
 
-public let routeColours = ["#9cc36b","#5fa8d3","#e0a35c"]
+public let routeColours = ["#ff0000","#00a2ff","#ff8800"]

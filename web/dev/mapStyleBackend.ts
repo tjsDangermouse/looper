@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { Plugin } from 'vite'
 import { paletteKeys, type MapStyleCatalogue } from '../src/mapStyleTypes.ts'
 
 const endpoint = '/__looper-style-editor/config'
@@ -57,6 +58,11 @@ export async function loadCatalogue(repositoryRoot: string) {
 }
 
 async function replaceFile(file: string, contents: string) {
+  try {
+    if (await fs.readFile(file, 'utf8') === contents) return
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
   const temporary = `${file}.saving`
   await fs.writeFile(temporary, contents, 'utf8')
   await fs.rename(temporary, file)
@@ -91,10 +97,10 @@ function json(response: ServerResponse, status: number, value: unknown) {
   response.end(JSON.stringify(value))
 }
 
-export function mapStyleEditorPlugin(repositoryRoot: string) {
+export function mapStyleEditorPlugin(repositoryRoot: string): Plugin {
   return {
     name: 'looper-map-style-editor',
-    configureServer(server: { middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void } }) {
+    configureServer(server) {
       server.middlewares.use(async (request, response, next) => {
         if (request.url?.split('?')[0] !== endpoint) return next()
         const address = request.socket.remoteAddress ?? ''
@@ -103,7 +109,16 @@ export function mapStyleEditorPlugin(repositoryRoot: string) {
         }
         try {
           if (request.method === 'GET') return json(response, 200, await loadCatalogue(repositoryRoot))
-          if (request.method === 'PUT') return json(response, 200, await saveCatalogue(repositoryRoot, await requestBody(request)))
+          if (request.method === 'PUT') {
+            const saved = await saveCatalogue(repositoryRoot, await requestBody(request))
+            // The generated module is deliberately excluded from HMR so the
+            // editor stays mounted. Invalidate its server cache quietly so a
+            // later manual reload of the app still reads the new catalogue.
+            const generated = path.join(repositoryRoot, 'web/src/mapStyleConfig.generated.ts')
+            const module = server.moduleGraph.getModuleById(generated)
+            if (module) server.moduleGraph.invalidateModule(module)
+            return json(response, 200, saved)
+          }
           json(response, 405, { error: 'Method not allowed.' })
         } catch (error) {
           json(response, error instanceof SyntaxError ? 400 : 422, { error: error instanceof Error ? error.message : 'Unable to save map styles.' })

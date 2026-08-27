@@ -15,6 +15,11 @@ export default defineConfig(({ mode }) => {
   return {
     server: {
       host: '0.0.0.0',
+      // Saving in the editor rewrites this source module. The editor already
+      // keeps the saved catalogue in React state, so an HMR reload here is
+      // both unnecessary and harmful: it can race Vite's optimized React
+      // dependency URLs and leave the page on a 504 Outdated Optimize Dep.
+      watch: { ignored: ['**/src/mapStyleConfig.generated.ts'] },
       proxy: {
         '/v1': {
           target: env.LOOPER_API_URL || `http://localhost:${env.ROUTE_SERVICE_PORT || 8988}`,
