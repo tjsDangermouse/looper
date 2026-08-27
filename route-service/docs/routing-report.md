@@ -892,3 +892,58 @@ the project's own documentation. What settled it each time was a number, and
 the numbers were cheap — reading a field already in the response, a concurrency
 sweep, one profiler run. The expensive thing was believing a documented claim
 ("the engine tops out around 90 foot-legs a second") that nobody had measured.
+
+---
+
+# The pavement profile costs calls, not search
+
+`looper_foot.json` gained one rule (`looper-foot-2`, `5ffbea4`): every road that
+is not FOOTWAY, PATH, PEDESTRIAN or STEPS is multiplied by 0.1, so a separately
+mapped pavement wins unless the detour is extreme. It shipped unmeasured. The
+same production probe, before and after:
+
+| probe | `looper-foot-1` | `looper-foot-2` | calls | wall |
+| --- | --- | --- | --- | --- |
+| douglas-5km | 1.4 s · 349 calls | 3.4 s · 976 | **+180%** | +143% |
+| douglas-3km | 0.8 s · 207 | 1.4 s · 460 | **+122%** | +75% |
+| onchan-5km | 0.8 s · 267 | 2.6 s · 899 | **+237%** | +225% |
+| peel-5km | 1.8 s · 810 | 2.3 s · 805 | −1% | +28% |
+
+**The engine is doing the same work per call it always did.** Per-call time is
+10.9–16.7 ms against the 11–16 ms recorded in Phase 9, and `visited_nodes` is
+272–884 a call against 190–1,018. Two of the three plausible mechanisms die on
+those two rows alone:
+
+- *The landmark heuristic stopped helping under a 10x weight spread.* No: a leg
+  that had lost its heuristic would settle thousands of nodes, as the Phase 9
+  measurement showed it does (190 with landmarks, 1,304 without). It settles the
+  same few hundred.
+- *The landmarks on disk were prepared against `looper-foot-1`, because
+  `entrypoint.sh` skips the import when a graph already exists.* Same answer,
+  and the call counts prove the profile is live either way.
+
+What is left is that the service asks for two to three times as many legs. The
+fix-ups are where they go: Douglas 5 km attempts 272 pullbacks and 117 budget
+corrections, 40% of all calls, against 43% before the gates went in. A walker
+held on the pavement comes back a different length and a different shape from
+what the corridor aimed at, so more candidates need correcting and more
+corrections fail — pullback keeps 83 of 136, budget 79 of 117.
+
+**Peel is the control, and it behaves.** Its call count did not move (810 → 805)
+because Peel's ground is where the rule has least to say: fewer separately
+mapped pavements, so fewer roads demoted relative to each other. The three urban
+probes, which is where OSM maps pavements as their own ways, are the three that
+doubled. That is the rule doing exactly what it was written to do, at a price
+nobody had put a number on.
+
+Peel's 1.8 s → 2.3 s at a flat call count is the one figure here not explained by
+the above. Single run, and 28% is within what this probe has drifted before.
+
+## Open
+
+The 0.1 multiplier was chosen to make a pavement win "unless it would impose an
+exceptionally large detour", and it does. Whether a milder demotion buys the same
+pavements for fewer calls is one probe per value and has not been run. The
+question to answer before retuning: is the extra time buying better walks, or
+only more attempts at the same ones? The probe counts calls; it does not look at
+the routes.

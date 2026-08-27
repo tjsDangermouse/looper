@@ -4,23 +4,28 @@
 // OSM-derived score built mostly from road class and sidewalk tags. For a
 // loop generator aiming candidates in many directions, that meant every
 // route funnelled onto the same "well-tagged" arterial roads regardless of
-// bearing. The one road-class distinction that matters to Looper is a
-// dedicated pedestrian way: when OSM maps a pavement separately, keep the
-// walker on it rather than hopping between it and the carriageway. This
-// profile therefore keeps the real constraints (impassable, dangerous
-// terrain, private access), treats ordinary roads alike, and strongly
-// prefers dedicated pedestrian infrastructure.
+// bearing: to a walker one residential street is as good as another, but
+// the stock weighting treated them very differently. This profile keeps the
+// real constraints (impassable, dangerous terrain, private access) and
+// drops the road-class preference, so distance and shape decide the route
+// instead.
+//
+// Deliberately absent, for now: a preference for separately mapped pavements.
+// It is wanted — a route that flip-flops between a pavement and its own
+// carriageway confuses both the walker and the turn prompts — but the first
+// attempt at it (`looper-foot-2`, 5ffbea4) demoted every non-pedestrian road
+// by 0.1, and priority divides the weight, so that did not say "prefer a
+// pavement". It said "a pavement is worth walking ten times as far for", and
+// bought every large detour to any footway nearby. It cost 2-3x the engine
+// calls on urban ground for a tie-break worth about 10%. See
+// `docs/routing-report.md`. The replacement is a nudge sized against a
+// measurement of the hopping itself, and lands here as `looper-foot-4`.
 {
   "priority": [
     { "if": "!foot_access || hike_rating >= 2", "multiply_by": "0" },
     { "if": "country == DEU && road_class == BRIDLEWAY && foot_road_access != YES", "multiply_by": "0" },
     { "if": "mtb_rating > 3", "multiply_by": "0.7" },
-    { "if": "foot_road_access == PRIVATE", "multiply_by": "0.1" },
-    // A separately mapped pavement is normally a FOOTWAY. PATH, PEDESTRIAN
-    // and STEPS are also dedicated pedestrian links, so leave their priority
-    // intact. Reducing every other usable road makes a parallel pavement win
-    // unless it would impose an exceptionally large detour.
-    { "if": "road_class != FOOTWAY && road_class != PATH && road_class != PEDESTRIAN && road_class != STEPS", "multiply_by": "0.1" }
+    { "if": "foot_road_access == PRIVATE", "multiply_by": "0.1" }
   ],
   "speed": [
     { "if": "true", "limit_to": "foot_average_speed" }
