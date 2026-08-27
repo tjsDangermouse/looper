@@ -1,6 +1,9 @@
 .map-style-editor-body { margin: 0; overflow: hidden; background: #d9dedb; }
 .style-editor { position: fixed; inset: 0; color: #ecf2ee; background: #d9dedb; }
-.style-editor-map { position: absolute; inset: 0 0 0 370px; }
+/* MapLibre's own stylesheet assigns `.maplibregl-map { position: relative }`.
+   Keep this selector more specific so that rule cannot collapse the otherwise
+   empty preview container to zero height when its canvas is inserted. */
+.style-editor .style-editor-map { position: absolute; top: 0; right: 0; bottom: 0; left: 370px; }
 .style-editor-panel {
   position: absolute; z-index: 2; inset: 0 auto 0 0; width: 370px;
   display: flex; flex-direction: column; background: #17231f;
@@ -35,7 +38,7 @@
 .route-preview-key i { width: 25px; height: 5px; border-radius: 5px; background: linear-gradient(90deg, #9cc36b 0 33%, #5fa8d3 33% 66%, #e0a35c 66%); }
 
 @media (max-width: 720px) {
-  .style-editor-map { inset: 0 0 46dvh; }
+  .style-editor .style-editor-map { top: 0; right: 0; bottom: 46dvh; left: 0; }
   .style-editor-panel { inset: auto 0 0; width: auto; height: 46dvh; border: 0; border-top: 1px solid #34463f; }
   .style-editor-panel header { padding: 14px 16px 11px; }
   .style-editor-panel h1 { font-size: 21px; }
