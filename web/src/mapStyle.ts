@@ -21,12 +21,24 @@ export type LooperPalette = {
 }
 
 export const looperPalette: LooperPalette = {
-  background: '#f4f3ed', residential: '#ecefe9', water: '#c6e4ed',
-  park: '#dcebd6', parkOutline: '#8aac78', woodland: '#c8dec4', waterLine: '#82bdcf',
-  building: '#deded7', casing: '#d5dad5',
-  motorway: '#b7bdc0', mainRoad: '#969fa1', residentialRoad: '#ffffff',
-  serviceRoad: '#c9cec9', footway: '#78934e', trail: '#4f7b31', cycleway: '#168b95',
-  label: '#334249', labelHalo: '#faf9f4',
+  "background": "#e4e4d7",
+  "residential": "#5c793e",
+  "water": "#cae8f1",
+  "park": "#70a300",
+  "parkOutline": "#172e00",
+  "woodland": "#c4e198",
+  "waterLine": "#00c3ff",
+  "building": "#c6c3c3",
+  "casing": "#878787",
+  "motorway": "#f05656",
+  "mainRoad": "#fde753",
+  "residentialRoad": "#ffffff",
+  "serviceRoad": "#ffffff",
+  "footway": "#c9c9c9",
+  "trail": "#359c46",
+  "cycleway": "#ffffff",
+  "label": "#000000",
+  "labelHalo": "#e3e3e3"
 } as const
 
 type StyleMap = Pick<Map, 'addLayer' | 'getLayer' | 'getStyle' | 'setLayoutProperty' | 'setPaintProperty'>

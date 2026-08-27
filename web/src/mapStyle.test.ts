@@ -28,9 +28,8 @@ describe('basemap style', () => {
     expect(mapStyles.looper.url).toBe(mapStyles.default.url)
   })
 
-  it('keeps the Looper map a daylight style', () => {
-    expect(looperPalette.background).toBe('#f4f3ed')
-    expect(looperPalette.label).toBe('#334249')
+  it('uses valid editable colours for every Looper feature', () => {
+    expect(Object.values(looperPalette).every(colour => /^#[0-9a-f]{6}$/i.test(colour))).toBe(true)
   })
 
   it('exposes every Looper colour in the local editor', () => {
