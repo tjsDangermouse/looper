@@ -65,6 +65,14 @@ export const ReverseIcon = ({ size = 20 }: { size?: number }) => (
   </svg>
 )
 
+export const MapLayersIcon = ({ size = 22 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...base}>
+    <path d="m12 3 8.5 4.5L12 12 3.5 7.5 12 3Z" />
+    <path d="m5.5 11 6.5 3.5 6.5-3.5" />
+    <path d="m5.5 15 6.5 3.5 6.5-3.5" />
+  </svg>
+)
+
 // The turn arrow is drawn rather than listed: a stem, a bend through the angle
 // of the turn, and a head on the straight run out of it. One shape covers
 // slight, square and sharp on either side, so the glyph matches the turn being

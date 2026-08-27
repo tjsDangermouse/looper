@@ -1,9 +1,13 @@
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 import './mobile.css'
+import './mapStyleEditor.css'
 import { App } from './App'
+import { MapStyleEditor } from './MapStyleEditor'
 
-if ('serviceWorker' in navigator) window.addEventListener('load', async () => {
+const editingMapStyle = import.meta.env.DEV && window.location.pathname.replace(/\/$/, '') === '/map-style-editor'
+
+if (!editingMapStyle && 'serviceWorker' in navigator) window.addEventListener('load', async () => {
   // updateViaCache:'none' keeps the browser's HTTP cache from serving a stale
   // sw.js, which would pin the app to an old build.
   const registration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
@@ -19,4 +23,4 @@ if ('serviceWorker' in navigator) window.addEventListener('load', async () => {
   // Catch deploys that land while the app is open in the background.
   document.addEventListener('visibilitychange', () => { if (!document.hidden) registration.update() })
 })
-createRoot(document.getElementById('root')!).render(<App />)
+createRoot(document.getElementById('root')!).render(editingMapStyle ? <MapStyleEditor /> : <App />)

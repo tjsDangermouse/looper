@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as maplibregl from 'maplibre-gl'
 import './MapView'
+import { editorGroups } from './MapStyleEditor'
 import { applyLooperStyle, looperPalette, mapStyle, mapStyles } from './mapStyle'
 
 describe('basemap style', () => {
@@ -32,6 +33,11 @@ describe('basemap style', () => {
     expect(looperPalette.label).toBe('#334249')
   })
 
+  it('exposes every Looper colour in the local editor', () => {
+    const editable = editorGroups.flatMap(group => group.fields.map(field => field.key)).sort()
+    expect(editable).toEqual(Object.keys(looperPalette).sort())
+  })
+
   it('makes walking infrastructure prominent and removes noisy POIs', () => {
     const layers = ['background', 'park', 'landcover_wood', 'road_motorway', 'road_minor',
       'road_path_pedestrian', 'poi_r1', 'road_one_way_arrow'].map(id => ({ id }))
@@ -51,5 +57,8 @@ describe('basemap style', () => {
     expect(paint).toContainEqual(['road_path_pedestrian', 'line-color', looperPalette.footway])
     expect(layout).toContainEqual(['poi_r1', 'visibility', 'none'])
     expect(added.map(layer => layer.id)).toEqual(['looper-trails', 'looper-footways', 'looper-cycleways'])
+
+    applyLooperStyle(map as never, { ...looperPalette, trail: '#123456' })
+    expect(paint).toContainEqual(['looper-trails', 'line-color', '#123456'])
   })
 })

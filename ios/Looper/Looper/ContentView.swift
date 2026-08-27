@@ -125,31 +125,55 @@ struct ContentView: View {
 
 private struct MapStylePicker: View {
     @Binding var selection: MapStyleChoice
+    @State private var isOpen = false
 
     var body: some View {
-        HStack(spacing: 3) {
-            ForEach(MapStyleChoice.allCases) { choice in
-                Button { selection = choice } label: {
-                    HStack(spacing: 7) {
-                        Capsule()
-                            .fill(selection == choice ? Color.looperAccent : Color(hex: "61717b"))
-                            .frame(width: 5, height: 15)
-                            .rotationEffect(.degrees(13))
-                        Text(choice.label)
-                            .font(.system(size: 12, weight: .semibold))
+        VStack(alignment: .leading, spacing: 7) {
+            if isOpen {
+                ForEach(Array(MapStyleChoice.allCases.reversed())) { choice in
+                    Button {
+                        selection = choice
+                        withAnimation(.easeOut(duration: 0.16)) { isOpen = false }
+                    } label: {
+                        HStack(spacing: 8) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(choice == .looper ? Color(hex: "dcebd6") : Color(hex: "f3f1eb"))
+                                .frame(width: 25, height: 18)
+                                .overlay(alignment: .bottomTrailing) {
+                                    if choice == .looper {
+                                        Circle().fill(Color(hex: "168b95")).frame(width: 7, height: 7).padding(2)
+                                    }
+                                }
+                            Text(choice.label)
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundStyle(Color(hex: "243640"))
+                        .padding(.horizontal, 9)
+                        .frame(height: 38)
+                        .background(.white, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(selection == choice ? Color(hex: "6e8e49") : Color(hex: "c6cdcf"), lineWidth: selection == choice ? 2 : 1))
+                        .shadow(color: .black.opacity(0.2), radius: 7, y: 4)
                     }
-                    .foregroundStyle(selection == choice ? .white : Color(hex: "c5d0d5"))
-                    .padding(.horizontal, 10)
-                    .frame(height: 34)
-                    .background(selection == choice ? Color.looperLine : .clear, in: RoundedRectangle(cornerRadius: 8))
+                    .accessibilityLabel("\(choice.label) map style")
+                    .accessibilityAddTraits(selection == choice ? .isSelected : [])
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                .accessibilityLabel("\(choice.label) map style")
-                .accessibilityAddTraits(selection == choice ? .isSelected : [])
             }
+
+            Button {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) { isOpen.toggle() }
+            } label: {
+                Image(systemName: "square.3.layers.3d")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(Color(hex: "243640"))
+                    .frame(width: 44, height: 44)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 11))
+                    .overlay(RoundedRectangle(cornerRadius: 11).stroke(Color(hex: "b8c1c4")))
+                    .shadow(color: .black.opacity(0.28), radius: 8, y: 4)
+            }
+            .accessibilityLabel("Choose map style")
+            .accessibilityValue(selection.label)
+            .accessibilityAddTraits(isOpen ? .isSelected : [])
         }
-        .padding(4)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: "82929b").opacity(0.35)))
-        .shadow(color: .black.opacity(0.45), radius: 9, y: 5)
     }
 }

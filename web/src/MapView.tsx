@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { headingGap, routeColours, type Point, type Route } from './lib'
 import { applyLooperStyle, mapStyle, mapStyles, type MapStyleID } from './mapStyle'
+import { MapLayersIcon } from './icons'
 
 // MapLibre GL JS 6 loads vector-tile parsing in a module worker. Vite must
 // bundle that worker explicitly; otherwise production builds look for it next
@@ -38,6 +39,7 @@ function arrowsAlong(pixels: { x: number; y: number }[]) {
 
 export function MapView({ start, routes, selected, position, follow, walking, heading, courseUp, onFollowChange, onPoint, padding }: Props) {
   const container = useRef<HTMLDivElement>(null)
+  const styleControl = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | undefined>(undefined)
   const marker = useRef<maplibregl.Marker | undefined>(undefined)
   const routesRef = useRef(routes)
@@ -53,6 +55,7 @@ export function MapView({ start, routes, selected, position, follow, walking, he
   onPointRef.current = onPoint
   const [paths, setPaths] = useState<Path[]>([])
   const [styleID, setStyleID] = useState<MapStyleID>('default')
+  const [styleMenuOpen, setStyleMenuOpen] = useState(false)
   const styleIDRef = useRef<MapStyleID>('default')
 
   const pad = (): maplibregl.PaddingOptions => ({ top: 0, left: 0, bottom: paddingRef.current?.bottom ?? 0, right: paddingRef.current?.right ?? 0 })
@@ -193,7 +196,24 @@ export function MapView({ start, routes, selected, position, follow, walking, he
     map.easeTo({ center: following ? positionRef.current || startRef.current : startRef.current, zoom: following ? Math.max(map.getZoom(), WALK_ZOOM) : map.getZoom(), padding: pad(), duration: 300 })
   }, [padding?.bottom, padding?.right])
 
+  useEffect(() => {
+    if (!styleMenuOpen) return
+    const closeOutside = (event: PointerEvent) => {
+      if (!styleControl.current?.contains(event.target as Node)) setStyleMenuOpen(false)
+    }
+    const closeWithKeyboard = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setStyleMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOutside)
+    document.addEventListener('keydown', closeWithKeyboard)
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside)
+      document.removeEventListener('keydown', closeWithKeyboard)
+    }
+  }, [styleMenuOpen])
+
   const chooseStyle = (next: MapStyleID) => {
+    setStyleMenuOpen(false)
     if (next === styleIDRef.current) return
     styleIDRef.current = next
     setStyleID(next)
@@ -212,7 +232,10 @@ export function MapView({ start, routes, selected, position, follow, walking, he
   return <><div ref={container} style={{ position: 'fixed', inset: 0 }} aria-label="Douglas, Isle of Man map" /><svg aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 1, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>{paths.map(path => <g key={path.id} opacity={selected ? (path.selected ? 1 : .28) : .9}>
     <polyline points={path.points} fill="none" stroke={path.colour} strokeWidth={path.selected ? 9 : 6} strokeLinecap="round" strokeLinejoin="round" />
     {path.arrows.map((arrow, index) => <path key={index} d="M-4.5,-4 L0,0 L-4.5,4" fill="none" stroke="#fff" strokeWidth={path.selected ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round" transform={`translate(${arrow.x} ${arrow.y}) rotate(${arrow.angle})`} />)}
-  </g>)}</svg>{!walking && <div className="map-style-switch" role="group" aria-label="Map style" style={{ bottom: `calc(${padding?.bottom ?? 0}px + max(12px, env(safe-area-inset-bottom)))` }}>
-    {(Object.keys(mapStyles) as MapStyleID[]).map(id => <button key={id} type="button" className={styleID === id ? 'on' : ''} aria-pressed={styleID === id} onClick={() => chooseStyle(id)}><i aria-hidden="true" />{mapStyles[id].label}</button>)}
+  </g>)}</svg>{!walking && <div ref={styleControl} className={'map-style-control'+(styleMenuOpen ? ' open' : '')} style={{ bottom: `calc(${padding?.bottom ?? 0}px + max(12px, env(safe-area-inset-bottom)))` }}>
+    <div className="map-style-options" role="menu" aria-hidden={!styleMenuOpen}>
+      {(Object.keys(mapStyles) as MapStyleID[]).map((id, index) => <button key={id} type="button" role="menuitemradio" aria-checked={styleID === id} tabIndex={styleMenuOpen ? 0 : -1} style={{ '--style-index': index } as CSSProperties} onClick={() => chooseStyle(id)}><i aria-hidden="true" className={id} />{mapStyles[id].label}</button>)}
+    </div>
+    <button className="map-style-trigger" type="button" aria-label="Choose map style" title="Choose map style" aria-expanded={styleMenuOpen} onClick={() => setStyleMenuOpen(open => !open)}><MapLayersIcon /></button>
   </div>}</>
 }
