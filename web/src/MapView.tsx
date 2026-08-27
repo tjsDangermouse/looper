@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { headingGap, routeColours, type Point, type Route } from './lib'
 import { mapStyle } from './mapStyle'
+
+// MapLibre GL JS 6 loads vector-tile parsing in a module worker. Vite must
+// bundle that worker explicitly; otherwise production builds look for it next
+// to the hashed app chunk and the vector basemap remains blank.
+maplibregl.setWorkerUrl(maplibreWorkerUrl)
 
 type Props = { start: Point; routes: Route[]; selected?: string; position?: Point; follow?: boolean; walking?: boolean; heading?: number; courseUp?: boolean; onFollowChange?: (following: boolean) => void; onPoint: (point: Point) => void; padding?: { bottom: number; right: number } }
 type Arrow = { x: number; y: number; angle: number }

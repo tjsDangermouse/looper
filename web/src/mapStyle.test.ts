@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import * as maplibregl from 'maplibre-gl'
+import './MapView'
 import { mapStyle } from './mapStyle'
 
 describe('basemap style', () => {
@@ -12,5 +14,9 @@ describe('basemap style', () => {
 
   it('does not fall back to the public OpenStreetMap raster service', () => {
     expect(mapStyle.url).not.toContain('tile.openstreetmap.org')
+  })
+
+  it('configures the vector-tile worker for the Vite bundle', () => {
+    expect(maplibregl.getWorkerUrl()).toContain('maplibre-gl-worker')
   })
 })
