@@ -10,22 +10,51 @@
 // drops the road-class preference, so distance and shape decide the route
 // instead.
 //
-// Deliberately absent, for now: a preference for separately mapped pavements.
-// It is wanted — a route that flip-flops between a pavement and its own
-// carriageway confuses both the walker and the turn prompts — but the first
-// attempt at it (`looper-foot-2`, 5ffbea4) demoted every non-pedestrian road
-// by 0.1, and priority divides the weight, so that did not say "prefer a
-// pavement". It said "a pavement is worth walking ten times as far for", and
-// bought every large detour to any footway nearby. It cost 2-3x the engine
-// calls on urban ground for a tie-break worth about 10%. See
-// `docs/routing-report.md`. The replacement is a nudge sized against a
-// measurement of the hopping itself, and lands here as `looper-foot-4`.
+// The one road-class distinction that matters to Looper is a dedicated
+// pedestrian way: where OSM maps a pavement separately, a pavement and its own
+// carriageway weigh near enough the same that the router takes whichever is a
+// few metres shorter, block by block, and the walk crosses and recrosses the
+// road. That is confusing to follow and gives a spoken turn every time.
+//
+// The multiplier below is a tie-break, not a preference, and the difference is
+// the whole lesson of `looper-foot-2`: it used 0.1, and because priority
+// divides the weight, that does not say "prefer a pavement" — it says a
+// pavement is worth walking ten times as far for. It bought every large detour
+// to any footway nearby, legs came back 13-20% long, and at MAX_DISTANCE_ERROR
+// of 0.12 those legs failed the distance gate and were asked for again. Two to
+// three times the engine calls on urban ground, for a tie-break worth 20%.
+//
+// 0.8 is measured, not guessed — `bench/probe-pavement.mjs`, 2026-08-27, seven
+// values over four town legs:
+//
+//   multiplier   douglas seafront   douglas inland   onchan   length
+//   1.0                  3 hops            1 hop     3 hops        -
+//   0.95                 5                 3         3        +0-2%
+//   0.9                  3                 3         1        +2-3%
+//   0.8                  1                 1         1        +2-3%
+//   0.6 / 0.3            1                 1         1          +3%
+//   0.1                  1                 1         5       +13-20%
+//
+// Two findings in that table. A *weak* nudge is worse than none: at 0.95 and
+// 0.9 the route takes the pavement for some stretches and not others, which
+// alternates more than leaving it alone. And 0.8 is the knee — 0.6 and 0.3 are
+// identical to it, so 0.8 is the weakest push that gets the whole effect, and
+// the one that buys the fewest detours. Douglas goes from 13% of the leg on
+// pavement to 97%.
+//
+// Peel is the control and barely moves either way: it has fewest pavements
+// mapped as their own ways. See `docs/routing-report.md`.
 {
   "priority": [
     { "if": "!foot_access || hike_rating >= 2", "multiply_by": "0" },
     { "if": "country == DEU && road_class == BRIDLEWAY && foot_road_access != YES", "multiply_by": "0" },
     { "if": "mtb_rating > 3", "multiply_by": "0.7" },
-    { "if": "foot_road_access == PRIVATE", "multiply_by": "0.1" }
+    { "if": "foot_road_access == PRIVATE", "multiply_by": "0.1" },
+    // A separately mapped pavement is normally a FOOTWAY. PATH, PEDESTRIAN and
+    // STEPS are dedicated pedestrian links too, so they keep full priority. A
+    // fifth of a road's weight is enough to settle the near-tie against the
+    // carriageway beside it, and far too little to pay for a detour.
+    { "if": "road_class != FOOTWAY && road_class != PATH && road_class != PEDESTRIAN && road_class != STEPS", "multiply_by": "0.8" }
   ],
   "speed": [
     { "if": "true", "limit_to": "foot_average_speed" }

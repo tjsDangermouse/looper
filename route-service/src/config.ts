@@ -76,7 +76,7 @@ export const config = {
    * Bumped by hand when the walking profile is retuned. Old answers were
    * generated under the old model and are wrong the moment it changes.
    */
-  profileVersion: process.env.GRAPHHOPPER_PROFILE_VERSION ?? 'looper-foot-3',
+  profileVersion: process.env.GRAPHHOPPER_PROFILE_VERSION ?? 'looper-foot-4',
 } as const
 
 export type Config = typeof config

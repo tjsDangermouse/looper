@@ -947,3 +947,43 @@ pavements for fewer calls is one probe per value and has not been run. The
 question to answer before retuning: is the extra time buying better walks, or
 only more attempts at the same ones? The probe counts calls; it does not look at
 the routes.
+
+## What the pavement preference should have been
+
+`bench/probe-pavement.mjs` asks for four town legs at seven multipliers, sent as
+per-request custom models against the neutral `looper-foot-3` profile, and
+reports hops/km beside the leg's length.
+
+| multiplier | douglas seafront | douglas inland | onchan | peel (control) | length |
+| --- | --- | --- | --- | --- | --- |
+| 1.0 | 3 hops | 1 | 3 | 2 | — |
+| 0.95 | **5** | **3** | 3 | 2 | +0–2% |
+| 0.9 | 3 | **3** | 1 | 2 | +2–3% |
+| **0.8** | **1** | **1** | **1** | 2 | **+2–3%** |
+| 0.6 / 0.3 | 1 | 1 | 1 | 2 | +3% |
+| 0.1 | 1 | 1 | **5** | 2 | **+13–20%** |
+
+**A weak nudge is worse than none.** At 0.95 and 0.9 hopping *increases* on the
+Douglas legs — 3 becomes 5, 1 becomes 3. A weak preference takes the pavement
+for some stretches and not others, and alternating is the thing being paid to
+avoid. Anyone reasoning their way to "start gently and see" — which is exactly
+what was recommended here before the sweep ran — lands in the one region that
+makes the problem worse.
+
+**0.8 is the knee, and it is flat below it.** 0.6 and 0.3 are identical to it on
+every leg, so 0.8 is the weakest push that gets the whole effect and buys the
+fewest detours. Douglas goes from 13% of the leg on pavement to 97%.
+
+**The shipped 0.1 was worse than 0.8 at its own job.** Onchan at 0.1 alternates
+five times against 0.8's once, *and* runs 20.3% long. That second number is the
+slowdown restated from an independent measurement: `MAX_DISTANCE_ERROR` is 0.12,
+so a leg 13–20% long fails the distance gate, is rejected, and is asked for
+again. Two to three times the engine calls, from one multiplier chosen by eye.
+
+Peel moved 3.87 to 3.73 across the whole sweep, as a control with almost no
+separately mapped pavement should.
+
+Shipped as `looper-foot-4`. Still to confirm on the production probe: hops/km
+down from the `looper-foot-3` baseline (douglas-3km 4.24, douglas-5km 3.42,
+onchan-5km 2.63, peel-5km 2.25) with call counts unmoved from 207 / 341 / 267 /
+810. Four single legs are not four loops, and that is the check that matters.
