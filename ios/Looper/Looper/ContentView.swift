@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var model = AppModel(apiBase: Config.apiBase)
+    @State private var mapStyle: MapStyleChoice = .default
 
     var body: some View {
         Group {
@@ -11,6 +12,7 @@ struct ContentView: View {
             } else {
                 ZStack(alignment: .bottom) {
                     MapLibreMapView(
+                        mapStyle: mapStyle,
                         start: model.start,
                         waypoints: model.waypoints,
                         routes: model.screen == .choices || model.screen == .walk ? model.mapRoutes : [],
@@ -71,6 +73,14 @@ struct ContentView: View {
                         .padding(.trailing, 14)
                     }
                 }
+                .overlay(alignment: .bottomLeading) {
+                    if model.screen != .walk {
+                        MapStylePicker(selection: $mapStyle)
+                            .padding(.leading, 12)
+                            .padding(.bottom, model.padding.bottom + 12)
+                            .animation(.easeInOut(duration: 0.3), value: model.padding.bottom)
+                    }
+                }
                 .onPreferenceChange(SheetHeightKey.self) { height in
                     model.padding = (bottom: height, right: 0)
                 }
@@ -110,5 +120,36 @@ struct ContentView: View {
         } message: {
             Text(model.expectationMessage ?? "")
         }
+    }
+}
+
+private struct MapStylePicker: View {
+    @Binding var selection: MapStyleChoice
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(MapStyleChoice.allCases) { choice in
+                Button { selection = choice } label: {
+                    HStack(spacing: 7) {
+                        Capsule()
+                            .fill(selection == choice ? Color.looperAccent : Color(hex: "61717b"))
+                            .frame(width: 5, height: 15)
+                            .rotationEffect(.degrees(13))
+                        Text(choice.label)
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(selection == choice ? .white : Color(hex: "c5d0d5"))
+                    .padding(.horizontal, 10)
+                    .frame(height: 34)
+                    .background(selection == choice ? Color.looperLine : .clear, in: RoundedRectangle(cornerRadius: 8))
+                }
+                .accessibilityLabel("\(choice.label) map style")
+                .accessibilityAddTraits(selection == choice ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: "82929b").opacity(0.35)))
+        .shadow(color: .black.opacity(0.45), radius: 9, y: 5)
     }
 }

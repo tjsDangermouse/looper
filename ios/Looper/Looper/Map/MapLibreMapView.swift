@@ -9,6 +9,7 @@ private let walkZoom: Double = 16
 private let chevronSpacing: NSNumber = 110
 
 struct MapLibreMapView: UIViewRepresentable {
+    var mapStyle: MapStyleChoice
     var start: Point
     var waypoints: [Point]
     var routes: [Route]
@@ -27,7 +28,7 @@ struct MapLibreMapView: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
     func makeUIView(context: Context) -> MLNMapView {
-        let mapView = MLNMapView(frame: .zero, styleURL: MapStyleConfiguration.styleURL)
+        let mapView = MLNMapView(frame: .zero, styleURL: MapStyleConfiguration.styleURL(for: mapStyle))
         mapView.setCenter(CLLocationCoordinate2D(latitude: start.lat, longitude: start.lng), zoomLevel: 13, animated: false)
         mapView.delegate = context.coordinator
         mapView.logoView.isHidden = true
@@ -75,6 +76,7 @@ struct MapLibreMapView: UIViewRepresentable {
         private var startAnnotation: MLNPointAnnotation?
         private var waypointAnnotations: [WaypointAnnotation] = []
         private var styleReady = false
+        private var lastMapStyle: MapStyleChoice
 
         // Previous-value trackers, one per camera effect — each effect only
         // acts when its own inputs actually changed, mirroring a set of
@@ -93,6 +95,7 @@ struct MapLibreMapView: UIViewRepresentable {
 
         init(parent: MapLibreMapView) {
             self.parent = parent
+            self.lastMapStyle = parent.mapStyle
         }
 
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
@@ -119,6 +122,8 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
+            routeLayers.removeAll()
+            if parent.mapStyle == .looper { MapStyleConfiguration.applyLooperStyle(to: style) }
             style.setImage(chevronImage(), forName: "chevron")
             styleReady = true
             sync()
@@ -143,7 +148,15 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         func sync() {
-            guard let mapView, styleReady else { return }
+            guard let mapView else { return }
+            if parent.mapStyle != lastMapStyle {
+                lastMapStyle = parent.mapStyle
+                styleReady = false
+                routeLayers.removeAll()
+                mapView.styleURL = MapStyleConfiguration.styleURL(for: parent.mapStyle)
+                return
+            }
+            guard styleReady else { return }
             // Before the view has a real, laid-out size, none of the camera
             // maths below can do anything but guess — and worse, if it ran
             // anyway it would mark whatever changed (start, padding, ...) as

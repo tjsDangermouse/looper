@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import * as maplibregl from 'maplibre-gl'
 import './MapView'
-import { mapStyle } from './mapStyle'
+import { applyLooperStyle, looperPalette, mapStyle, mapStyles } from './mapStyle'
 
 describe('basemap style', () => {
   it('uses the hosted OpenFreeMap vector style', () => {
     expect(mapStyle).toEqual({
       provider: 'OpenFreeMap',
       name: 'liberty',
+      label: 'Default',
       url: 'https://tiles.openfreemap.org/styles/liberty',
     })
   })
@@ -18,5 +19,32 @@ describe('basemap style', () => {
 
   it('configures the vector-tile worker for the Vite bundle', () => {
     expect(maplibregl.getWorkerUrl()).toContain('maplibre-gl-worker')
+  })
+
+  it('offers Default and Looper without changing tile providers', () => {
+    expect(mapStyles.default.label).toBe('Default')
+    expect(mapStyles.looper.label).toBe('Looper')
+    expect(mapStyles.looper.url).toBe(mapStyles.default.url)
+  })
+
+  it('makes walking infrastructure prominent and removes noisy POIs', () => {
+    const layers = ['background', 'park', 'landcover_wood', 'road_motorway', 'road_minor',
+      'road_path_pedestrian', 'poi_r1', 'road_one_way_arrow'].map(id => ({ id }))
+    const added: Array<{ id: string; paint?: Record<string, unknown> }> = []
+    const paint: Array<[string, string, unknown]> = []
+    const layout: Array<[string, string, unknown]> = []
+    const map = {
+      getStyle: () => ({ layers }),
+      getLayer: (id: string) => layers.some(layer => layer.id === id) || added.some(layer => layer.id === id),
+      setPaintProperty: (id: string, property: string, value: unknown) => paint.push([id, property, value]),
+      setLayoutProperty: (id: string, property: string, value: unknown) => layout.push([id, property, value]),
+      addLayer: (layer: { id: string; paint?: Record<string, unknown> }) => { added.push(layer) },
+    }
+    applyLooperStyle(map as never)
+    expect(paint).toContainEqual(['road_motorway', 'line-color', looperPalette.motorway])
+    expect(paint).toContainEqual(['road_minor', 'line-color', looperPalette.residentialRoad])
+    expect(paint).toContainEqual(['road_path_pedestrian', 'line-color', looperPalette.footway])
+    expect(layout).toContainEqual(['poi_r1', 'visibility', 'none'])
+    expect(added.map(layer => layer.id)).toEqual(['looper-trails', 'looper-footways', 'looper-cycleways'])
   })
 })

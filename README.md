@@ -16,8 +16,8 @@ Looper PWA  ─────►  Looper Route Service  ─────►  self-h
 
 The app talks to Looper's own API for routing. There is no third-party routing provider
 and no routing API key anywhere in this repository. Both clients render their basemap
-with MapLibre using OpenFreeMap's hosted Liberty vector style; map data still comes from
-OpenStreetMap.
+with MapLibre using OpenFreeMap's hosted Liberty vector style. The optional Looper
+treatment restyles those same vector layers; map data still comes from OpenStreetMap.
 
 ## Repository map
 
@@ -36,10 +36,12 @@ extraction boundary.
 
 ## Map rendering
 
-Both clients use MapLibre with OpenFreeMap's hosted Liberty style. Basemap provider
+Both clients use MapLibre with OpenFreeMap's hosted Liberty style. The map switch offers
+the untouched style as **Default** and a runtime, walk-first treatment as **Looper**.
+Looper subdues motorways and POIs, clarifies parks and woodland, and adds strong,
+separately coloured vector layers for footways, trails and cycleways. Basemap style
 configuration is isolated in `web/src/mapStyle.ts` and
-`ios/Looper/Looper/Map/MapStyleConfiguration.swift`, ready for a future hosted Looper
-style URL.
+`ios/Looper/Looper/Map/MapStyleConfiguration.swift`.
 
 - `web/src/MapView.tsx` owns the web map, start/current-location markers, gestures and
   camera. Routes remain screen-space SVG overlays projected by MapLibre, which keeps
