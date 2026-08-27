@@ -5,7 +5,9 @@ import {
   edgeRepeatReport,
   longestRepeatedSection,
   measureTraversals,
+  pavementReport,
   sharedEdgeMetres,
+  type ClassSpan,
   type EdgeSpan,
 } from '../src/loops/edges.js'
 import { parseLeg } from '../src/graphhopper.js'
@@ -286,5 +288,59 @@ describe('the longest stretch walked twice', () => {
       { id: 1, metres: 100, along: 150, direction: [1, 0] },
       { id: 2, metres: 100, along: 250, direction: [1, 0] },
     ])).toBeUndefined()
+  })
+})
+
+/**
+ * Pavement hops on the same hand-checkable line: a span from index i to j is
+ * exactly `(j - i) * 100` metres, so every count and rate below is arithmetic.
+ */
+describe('counting how often a walk changes between pavement and road', () => {
+  const spans = (...values: Array<[string, number, number]>): ClassSpan[] =>
+    values.map(([value, startIndex, endIndex]) => ({ value, startIndex, endIndex }))
+
+  it('counts nothing for a walk entirely on pavement', () => {
+    const report = pavementReport(straightEast(5), spans(['FOOTWAY', 0, 2], ['PATH', 2, 4]))!
+    expect(report.hops).toBe(0)
+    expect(report.pavementMetres).toBeCloseTo(400, 3)
+    expect(report.hopsPerKm).toBe(0)
+  })
+
+  it('counts nothing for a walk entirely on the carriageway', () => {
+    const report = pavementReport(straightEast(5), spans(['RESIDENTIAL', 0, 2], ['TERTIARY', 2, 4]))!
+    expect(report.hops).toBe(0)
+    expect(report.pavementMetres).toBe(0)
+  })
+
+  it('counts a change each way, and rates it per kilometre', () => {
+    // 400 m: pavement, road, pavement, road — three changes.
+    const report = pavementReport(
+      straightEast(5),
+      spans(['FOOTWAY', 0, 1], ['RESIDENTIAL', 1, 2], ['FOOTWAY', 2, 3], ['RESIDENTIAL', 3, 4]),
+    )!
+    expect(report.hops).toBe(3)
+    expect(report.measuredMetres).toBeCloseTo(400, 3)
+    expect(report.hopsPerKm).toBeCloseTo(7.5, 6)
+  })
+
+  it('does not count a boundary between two spans of the same kind', () => {
+    // GraphHopper splits a detail at every edge, so one pavement arrives as
+    // many spans. None of those boundaries is a hop.
+    const report = pavementReport(straightEast(5), spans(['FOOTWAY', 0, 1], ['FOOTWAY', 1, 2], ['STEPS', 2, 4]))!
+    expect(report.hops).toBe(0)
+  })
+
+  it('reports nothing rather than a guess when the detail is missing', () => {
+    expect(pavementReport(straightEast(5), undefined)).toBeUndefined()
+    expect(pavementReport(straightEast(5), [])).toBeUndefined()
+  })
+
+  it('drops malformed spans instead of half-trusting them', () => {
+    const report = pavementReport(
+      straightEast(5),
+      spans(['FOOTWAY', 0, 2], ['RESIDENTIAL', 3, 2], ['RESIDENTIAL', 2, 99]),
+    )!
+    expect(report.hops).toBe(0)
+    expect(report.measuredMetres).toBeCloseTo(200, 3)
   })
 })

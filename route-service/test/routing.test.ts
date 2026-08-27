@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon'
 import { AVOID_PRIORITY, RELAXED_AVOID_PRIORITY } from '../src/loops/avoidance.js'
 import { buildRouteBody, GraphHopperError, parseLeg, maneuverName, isUTurnSign, type GraphHopperLeg } from '../src/graphhopper.js'
+import { pavementReport } from '../src/loops/edges.js'
 import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinAndTrimLegs, joinLegGeometries, routeLegAttempt } from '../src/loops/routing.js'
 import type { LngLat } from '../src/loops/geo.js'
 import { FIXTURE_ORIGIN, at, polyline } from './fixtures/routes.js'
@@ -87,6 +88,23 @@ describe('reading the engine’s answer', () => {
   })
   it('keeps the road class used to distinguish paths from roads', () => {
     expect(parseLeg(payload).steps[0].roadClass).toBe('residential')
+  })
+  it('keeps the road class spans the pavement-hop measure reads', () => {
+    // Per-instruction road class answers "what am I turning onto"; the spans
+    // answer "what did the walk run on, and where", which is what counting
+    // hops needs. The engine spells these lower case, and the measure has to
+    // recognise its own classes in whatever case they arrive.
+    const leg = parseLeg(payload)
+    expect(leg.roadClasses).toEqual([{ value: 'residential', startIndex: 0, endIndex: 1 }])
+    expect(pavementReport(leg.coordinates, leg.roadClasses)!.pavementMetres).toBe(0)
+
+    const onPavement = parseLeg({
+      ...payload,
+      paths: [{ ...payload.paths[0], details: { ...payload.paths[0].details, road_class: [[0, 1, 'footway']] } }],
+    })
+    const report = pavementReport(onPavement.coordinates, onPavement.roadClasses)!
+    expect(report.pavementMetres).toBe(report.measuredMetres)
+    expect(report.hops).toBe(0)
   })
   it('names the manoeuvre without exposing the engine’s numbering', () => {
     expect(maneuverName(-2)).toBe('turn-left')

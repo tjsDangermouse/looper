@@ -1,5 +1,6 @@
 import type { LngLat } from './geo.js'
 import type { CustomModel } from './avoidance.js'
+import { pavementReport } from './edges.js'
 import type { GraphHopperLeg } from '../graphhopper.js'
 
 /**
@@ -113,6 +114,20 @@ export type MetricsSnapshot = {
    */
   visitedNodes: number
   visitedNodeCalls: number
+  /**
+   * How often the legs the engine returned changed between a dedicated
+   * pedestrian way and a carriageway, per kilometre measured.
+   *
+   * Where OSM maps a pavement separately, a pavement and its own carriageway
+   * weigh almost the same, so the router takes whichever is a few metres
+   * shorter and the line crosses the road repeatedly. That is confusing to
+   * look at and gives a spoken turn each time. Reported and never read by the
+   * algorithm — it exists so the profile can be tuned against a number rather
+   * than against screenshots.
+   */
+  pavementHops: number
+  pavementHopMetres: number
+  pavementHopsPerKm: number
   candidatesBuilt: number
   candidatesRouted: number
   candidatesPassed: number
@@ -174,6 +189,8 @@ export class RequestMetrics {
   private visitedNodes = 0
   /** Calls that reported one, which is not every call — see `visitedNodes`. */
   private visitedNodeCalls = 0
+  private pavementHops = 0
+  private pavementHopMetres = 0
   private candidatesBuilt = 0
   private candidatesRouted = 0
   private candidatesPassed = 0
@@ -197,10 +214,14 @@ export class RequestMetrics {
     this.startedAt = now()
   }
 
-  countCall(purpose: RoutePurpose, elapsedMs = 0, routedLegs = 1, avoidanceAreas = 0, visitedNodes?: number) {
+  countCall(purpose: RoutePurpose, elapsedMs = 0, routedLegs = 1, avoidanceAreas = 0, visitedNodes?: number, pavement?: { hops: number; measuredMetres: number }) {
     this.counts.set(purpose, (this.counts.get(purpose) ?? 0) + 1)
     this.routedLegs += routedLegs
     this.engineMs += elapsedMs
+    if (pavement) {
+      this.pavementHops += pavement.hops
+      this.pavementHopMetres += pavement.measuredMetres
+    }
     if (visitedNodes !== undefined) {
       this.visitedNodes += visitedNodes
       this.visitedNodeCalls++
@@ -270,6 +291,9 @@ export class RequestMetrics {
       callsByPurpose,
       routedLegs: this.routedLegs,
       engineMs: Math.round(this.engineMs),
+      pavementHops: this.pavementHops,
+      pavementHopMetres: this.pavementHopMetres,
+      pavementHopsPerKm: this.pavementHopMetres > 0 ? (this.pavementHops * 1000) / this.pavementHopMetres : 0,
       visitedNodes: this.visitedNodes,
       visitedNodeCalls: this.visitedNodeCalls,
       candidatesBuilt: this.candidatesBuilt,
@@ -330,14 +354,16 @@ export function countingRouter(
   const counted = async (points: LngLat[], customModel: CustomModel | undefined, purpose: RoutePurpose = 'other') => {
     const began = now()
     let visitedNodes: number | undefined
+    let pavement: { hops: number; measuredMetres: number } | undefined
     try {
       const leg = await route(points, customModel, purpose)
       visitedNodes = leg.visitedNodes
+      pavement = pavementReport(leg.coordinates, leg.roadClasses)
       return leg
     } finally {
       // A call that threw is still a call, and still cost the engine time. It
       // simply has no node count to report, which is what `undefined` says.
-      metrics.countCall(purpose, now() - began, Math.max(1, points.length - 1), customModel?.areas?.features?.length ?? 0, visitedNodes)
+      metrics.countCall(purpose, now() - began, Math.max(1, points.length - 1), customModel?.areas?.features?.length ?? 0, visitedNodes, pavement)
     }
   }
   Object.defineProperty(counted, COUNTED_BY, { value: metrics, enumerable: false })

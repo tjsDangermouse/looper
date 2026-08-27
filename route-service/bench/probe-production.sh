@@ -51,8 +51,14 @@ total = metrics['graphhopperCalls'] or 1
 # bidirectional Dijkstra over the whole island settles far more.
 seen = metrics.get('visitedNodeCalls') or 0
 nodes = f"nodes/call={metrics['visitedNodes']/seen:8.0f}" if seen else "nodes/call=       -"
+# How often the engine's legs changed between a dedicated pedestrian way and a
+# carriageway. A walk flip-flopping across the road is confusing to follow and
+# gives a spoken turn each time; this is the number the walking profile is
+# tuned against. Absent on a build older than the measure.
+hops = metrics.get('pavementHopsPerKm')
+hopstr = f"hops/km={hops:5.2f}" if hops is not None else "hops/km=    -"
 print(f"{name:16} {ended-began:5.1f}s routes={routes} calls={metrics['graphhopperCalls']:4} "
-      f"ms/call={metrics['engineMs']/total:5.1f} {nodes} par={metrics['engineMs']/max(1, metrics['totalMs']):4.2f}x "
+      f"ms/call={metrics['engineMs']/total:5.1f} {nodes} {hopstr} par={metrics['engineMs']/max(1, metrics['totalMs']):4.2f}x "
       f"pull={calls['join-pullback']:3} budget={calls['leg-budget']:3} stage={stage}")
 print(f"{'':16} fixups kept: {kept}")
 areas = metrics.get('engineMsByAreas')

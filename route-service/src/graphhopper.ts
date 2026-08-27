@@ -1,6 +1,6 @@
 import type { LngLat } from './loops/geo.js'
 import type { CustomModel } from './loops/avoidance.js'
-import type { EdgeSpan } from './loops/edges.js'
+import type { ClassSpan, EdgeSpan } from './loops/edges.js'
 
 /**
  * The only thing that talks to GraphHopper.
@@ -35,6 +35,11 @@ export type GraphHopperLeg = {
    * uses these has a geometric fallback.
    */
   edges?: EdgeSpan[]
+  /**
+   * Which road class each stretch of the line ran on, when the engine
+   * reported it. Feeds the pavement-hop measure; absent is ordinary.
+   */
+  roadClasses?: ClassSpan[]
   /**
    * How many nodes the engine settled to answer this, from its own `hints`.
    *
@@ -255,6 +260,7 @@ export function parseLeg(payload: any): GraphHopperLeg {
     endIndex: instruction?.interval?.[1],
   }))
   const edges = parseEdgeSpans(path?.details?.edge_id, coordinates.length)
+  const classSpans = parseClassSpans(roadClasses, coordinates.length)
   // GraphHopper reports this beside the paths rather than inside one, and
   // spells it with a dot in the key. A build that does not report it is not a
   // build that is broken.
@@ -265,6 +271,7 @@ export function parseLeg(payload: any): GraphHopperLeg {
     durationSeconds: Number(path.time ?? 0) / 1000,
     steps,
     ...(edges ? { edges } : {}),
+    ...(classSpans ? { roadClasses: classSpans } : {}),
     ...(Number.isFinite(visited) ? { visitedNodes: visited } : {}),
   }
 }
@@ -286,6 +293,29 @@ function parseEdgeSpans(details: unknown, pointCount: number): EdgeSpan[] | unde
     if (!Number.isInteger(startIndex) || !Number.isInteger(endIndex) || !Number.isInteger(id)) continue
     if (startIndex < 0 || endIndex >= pointCount || endIndex <= startIndex) continue
     spans.push({ id, startIndex, endIndex })
+  }
+  return spans.length ? spans : undefined
+}
+
+/**
+ * The same triples as `parseEdgeSpans`, kept as spans rather than collapsed
+ * onto instructions. A step's road class answers "what am I turning onto";
+ * these answer "what did the walk actually run on, and where" — which is what
+ * counting pavement hops needs, since a hop happens mid-step as often as at
+ * one. Malformed triples are dropped on the same principle: half-trusted data
+ * produces a wrong number that looks like a right one.
+ */
+function parseClassSpans(details: Array<[number, number, string]>, pointCount: number): ClassSpan[] | undefined {
+  if (!Array.isArray(details) || !details.length) return undefined
+  const spans: ClassSpan[] = []
+  for (const entry of details) {
+    if (!Array.isArray(entry) || entry.length < 3) continue
+    const [startIndex, endIndex, value] = entry
+    if (typeof startIndex !== 'number' || typeof endIndex !== 'number') continue
+    if (typeof value !== 'string' || !value) continue
+    if (!Number.isInteger(startIndex) || !Number.isInteger(endIndex)) continue
+    if (startIndex < 0 || endIndex >= pointCount || endIndex <= startIndex) continue
+    spans.push({ value, startIndex, endIndex })
   }
   return spans.length ? spans : undefined
 }

@@ -229,3 +229,87 @@ export function longestRepeatedSection(traversals: EdgeTraversal[]): { fromAlong
   }
   return best
 }
+
+/** One stretch of a route on one road class, as GraphHopper reports it. */
+export type ClassSpan = {
+  value: string
+  startIndex: number
+  endIndex: number
+}
+
+/**
+ * The road classes a walker treats as a pavement rather than a road: ground
+ * laid down for people on foot. Anything else is a carriageway shared with
+ * traffic, however quiet.
+ */
+export const PEDESTRIAN_ROAD_CLASSES = new Set(['FOOTWAY', 'PATH', 'PEDESTRIAN', 'STEPS'])
+
+export type PavementReport = {
+  /** Metres walked on dedicated pedestrian ways. */
+  pavementMetres: number
+  /** Metres of the measured stretch, pedestrian and carriageway together. */
+  measuredMetres: number
+  /** Times the walk changed between pavement and carriageway. */
+  hops: number
+  /** Hops per kilometre walked — the comparable figure. */
+  hopsPerKm: number
+}
+
+/**
+ * How often a walk changes its mind about whether it is on the pavement.
+ *
+ * Where OSM maps a pavement as its own way, a pavement and its carriageway are
+ * near enough the same weight that the router takes whichever is a few metres
+ * shorter, block by block. The line then crosses and recrosses the road, which
+ * is confusing to look at and produces a turn prompt every time. Nothing has
+ * ever counted it, so every attempt to tune it against has been an argument
+ * about screenshots.
+ *
+ * Counted as *transitions*, not as classes: a walk entirely on pavements and a
+ * walk entirely on roads both score zero, because neither leaves the walker
+ * wondering which side of the street they are meant to be on. Only alternation
+ * costs. Per kilometre, so a 10 km walk is comparable with a 3 km one.
+ *
+ * Consecutive spans of the same kind are one stretch — GraphHopper splits a
+ * detail at every edge, so a single pavement is many spans and none of those
+ * boundaries is a hop.
+ *
+ * Unclassified ground is skipped rather than guessed at, and skipped without
+ * breaking the run: a gap in the detail is missing data, and treating it as a
+ * carriageway would invent two hops around every hole.
+ */
+export function pavementReport(coordinates: LngLat[], spans: ClassSpan[] | undefined): PavementReport | undefined {
+  if (!spans?.length || coordinates.length < 2) return undefined
+  const project = projector(coordinates[0])
+  const flat = coordinates.map(project)
+  const cumulative = new Float64Array(flat.length)
+  for (let index = 1; index < flat.length; index++) {
+    cumulative[index] = cumulative[index - 1] + distanceBetween(flat[index - 1], flat[index])
+  }
+
+  const ordered = [...spans].sort((a, b) => a.startIndex - b.startIndex)
+  let pavementMetres = 0
+  let measuredMetres = 0
+  let hops = 0
+  let previous: boolean | undefined
+  for (const span of ordered) {
+    const { startIndex: from, endIndex: to } = span
+    if (!Number.isInteger(from) || !Number.isInteger(to)) continue
+    if (from < 0 || to >= flat.length || to <= from) continue
+    const metres = cumulative[to] - cumulative[from]
+    if (!(metres > 0)) continue
+    const pedestrian = PEDESTRIAN_ROAD_CLASSES.has(span.value.toUpperCase())
+    measuredMetres += metres
+    if (pedestrian) pavementMetres += metres
+    if (previous !== undefined && previous !== pedestrian) hops++
+    previous = pedestrian
+  }
+
+  if (!(measuredMetres > 0)) return undefined
+  return {
+    pavementMetres,
+    measuredMetres,
+    hops,
+    hopsPerKm: (hops * 1000) / measuredMetres,
+  }
+}
