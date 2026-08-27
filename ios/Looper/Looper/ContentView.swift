@@ -137,11 +137,11 @@ private struct MapStylePicker: View {
                     } label: {
                         HStack(spacing: 8) {
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(choice == .looper ? Color(hex: "dcebd6") : Color(hex: "f3f1eb"))
+                                .fill(Color(hex: choice.palette?.park ?? "f3f1eb"))
                                 .frame(width: 25, height: 18)
                                 .overlay(alignment: .bottomTrailing) {
-                                    if choice == .looper {
-                                        Circle().fill(Color(hex: "168b95")).frame(width: 7, height: 7).padding(2)
+                                    if let palette = choice.palette {
+                                        Circle().fill(Color(hex: palette.water)).frame(width: 7, height: 7).padding(2)
                                     }
                                 }
                             Text(choice.label)

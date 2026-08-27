@@ -37,14 +37,15 @@ extraction boundary.
 ## Map rendering
 
 Both clients use MapLibre with OpenFreeMap's hosted Liberty style. The map switch offers
-the untouched style as **Default** and a light, walk-first treatment as **Looper**.
+the untouched style as **Default** plus every custom style saved in the catalogue.
 Looper subdues motorways and POIs, clarifies parks and woodland, and adds strong,
 separately coloured vector layers for footways, trails and cycleways. Basemap style
-configuration is isolated in `web/src/mapStyle.ts` and
-`ios/Looper/Looper/Map/MapStyleConfiguration.swift`.
-Run the local editor at `/map-style-editor` from the web development server to tune every
-Looper colour against live vector tiles and sample routes; its draft persists locally and
-can be copied as JSON.
+configuration is rendered by `web/src/mapStyle.ts` and
+`ios/Looper/Looper/Map/MapStyleConfiguration.swift`. Run the local editor at
+`/map-style-editor` from the web development server to create and manage styles, tune
+their colours against live vector tiles, and edit the shared route-option colours. Its
+**Save to apps** button updates `map-styles.json` and regenerates the TypeScript and Swift
+configuration files; no palette copying is required.
 
 - `web/src/MapView.tsx` owns the web map, start/current-location markers, gestures and
   camera. Routes remain screen-space SVG overlays projected by MapLibre, which keeps

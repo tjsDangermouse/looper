@@ -1,45 +1,22 @@
 import type { LineLayerSpecification, Map } from 'maplibre-gl'
+import { customMapStyles } from './mapStyleConfig.generated'
+import type { MapPalette } from './mapStyleTypes'
 
-export type MapStyleID = 'default' | 'looper'
+export type MapStyleID = string
 
 const libertyURL = 'https://tiles.openfreemap.org/styles/liberty'
 
-export const mapStyles = {
-  default: { provider: 'OpenFreeMap', name: 'liberty', label: 'Default', url: libertyURL },
-  looper: { provider: 'OpenFreeMap', name: 'looper', label: 'Looper', url: libertyURL },
-} as const
+export const mapStyles = [
+  { id: 'default', provider: 'OpenFreeMap', name: 'liberty', label: 'Default', url: libertyURL },
+  ...customMapStyles.map(style => ({ id: style.id, provider: 'OpenFreeMap', name: style.id, label: style.name, url: libertyURL, palette: style.palette })),
+]
 
 // Kept for callers that only need the unmodified basemap URL.
-export const mapStyle = mapStyles.default
+export const mapStyle = mapStyles[0]
 
-export type LooperPalette = {
-  background: string; residential: string; water: string
-  park: string; parkOutline: string; woodland: string; waterLine: string
-  building: string; casing: string; motorway: string; mainRoad: string
-  residentialRoad: string; serviceRoad: string; footway: string; trail: string
-  cycleway: string; label: string; labelHalo: string
-}
-
-export const looperPalette: LooperPalette = {
-  "background": "#e4e4d7",
-  "residential": "#5c793e",
-  "water": "#cae8f1",
-  "park": "#70a300",
-  "parkOutline": "#172e00",
-  "woodland": "#c4e198",
-  "waterLine": "#00c3ff",
-  "building": "#c6c3c3",
-  "casing": "#878787",
-  "motorway": "#f05656",
-  "mainRoad": "#fde753",
-  "residentialRoad": "#ffffff",
-  "serviceRoad": "#ffffff",
-  "footway": "#c9c9c9",
-  "trail": "#359c46",
-  "cycleway": "#ffffff",
-  "label": "#000000",
-  "labelHalo": "#e3e3e3"
-} as const
+export type LooperPalette = MapPalette
+export const looperPalette = customMapStyles[0].palette
+export const customMapStyle = (id: MapStyleID) => customMapStyles.find(style => style.id === id)
 
 type StyleMap = Pick<Map, 'addLayer' | 'getLayer' | 'getStyle' | 'setLayoutProperty' | 'setPaintProperty'>
 

@@ -123,7 +123,7 @@ struct MapLibreMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
             routeLayers.removeAll()
-            if parent.mapStyle == .looper { MapStyleConfiguration.applyLooperStyle(to: style) }
+            MapStyleConfiguration.apply(parent.mapStyle, to: style)
             style.setImage(chevronImage(), forName: "chevron")
             styleReady = true
             sync()

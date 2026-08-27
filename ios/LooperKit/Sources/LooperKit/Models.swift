@@ -134,7 +134,3 @@ public struct Route: Codable, Equatable {
         self.reversed = reversed
     }
 }
-
-/// One palette for both the drawn lines and the swatch on each route card, so
-/// a colour on the map names the same loop in the list.
-public let routeColours = ["#9cc36b", "#5fa8d3", "#e0a35c"]

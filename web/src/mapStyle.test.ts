@@ -7,6 +7,7 @@ import { applyLooperStyle, looperPalette, mapStyle, mapStyles } from './mapStyle
 describe('basemap style', () => {
   it('uses the hosted OpenFreeMap vector style', () => {
     expect(mapStyle).toEqual({
+      id: 'default',
       provider: 'OpenFreeMap',
       name: 'liberty',
       label: 'Default',
@@ -23,9 +24,8 @@ describe('basemap style', () => {
   })
 
   it('offers Default and Looper without changing tile providers', () => {
-    expect(mapStyles.default.label).toBe('Default')
-    expect(mapStyles.looper.label).toBe('Looper')
-    expect(mapStyles.looper.url).toBe(mapStyles.default.url)
+    expect(mapStyles.map(style => style.label)).toEqual(['Default', 'Looper'])
+    expect(mapStyles[1].url).toBe(mapStyles[0].url)
   })
 
   it('uses valid editable colours for every Looper feature', () => {

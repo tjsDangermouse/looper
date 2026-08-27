@@ -23,7 +23,16 @@ production. A deployment-ready example is in `.env.example`.
 
 Run the normal development server, then open
 [`http://localhost:5173/map-style-editor`](http://localhost:5173/map-style-editor).
-Every Looper basemap category has a live colour control. Drafts save automatically in
-that browser; **Copy palette JSON** produces the values needed to update the shared web
-and iOS style configuration. The coloured loops on the preview map use the app's real
-route colours, so they act as a contrast check rather than another editable basemap layer.
+The editor manages the complete custom-style catalogue and the route-option colours.
+You can create, duplicate, rename and delete styles while every palette change appears
+on the live vector map. **Save to apps** validates the catalogue and writes all three
+tracked files together:
+
+- `../map-styles.json` — the human-readable source of truth.
+- `src/mapStyleConfig.generated.ts` — consumed by the web app.
+- `../ios/LooperKit/Sources/LooperKit/MapStyleConfig.generated.swift` — consumed by iOS.
+
+The write endpoint exists only in the local Vite development server and refuses remote
+connections. Do not edit the generated TypeScript or Swift files by hand; reopen the
+editor, make the change, and save again. Restart or rebuild the iOS app after saving so
+Xcode recompiles the generated Swift package source.

@@ -3,7 +3,7 @@ import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { headingGap, routeColours, type Point, type Route } from './lib'
-import { applyLooperStyle, mapStyle, mapStyles, type MapStyleID } from './mapStyle'
+import { applyLooperStyle, customMapStyle, mapStyle, mapStyles, type MapStyleID } from './mapStyle'
 import { MapLayersIcon } from './icons'
 
 // MapLibre GL JS 6 loads vector-tile parsing in a module worker. Vite must
@@ -126,7 +126,8 @@ export function MapView({ start, routes, selected, position, follow, walking, he
     map.on('click', event => onPointRef.current([event.lngLat.lng, event.lngLat.lat]))
     map.on('load', redraw)
     map.on('style.load', () => {
-      if (styleIDRef.current === 'looper') applyLooperStyle(map)
+      const selectedStyle = customMapStyle(styleIDRef.current)
+      if (selectedStyle) applyLooperStyle(map, selectedStyle.palette)
       redraw()
     })
     map.on('move', redraw)
@@ -219,13 +220,14 @@ export function MapView({ start, routes, selected, position, follow, walking, he
     setStyleID(next)
     const map = mapRef.current
     if (!map) return
-    if (next === 'looper') {
-      applyLooperStyle(map)
+    const selectedStyle = customMapStyle(next)
+    if (selectedStyle) {
+      applyLooperStyle(map, selectedStyle.palette)
       redraw()
     } else {
       // A non-diffed reload restores an exact, unmodified Liberty style;
       // otherwise MapLibre can retain runtime paint mutations.
-      map.setStyle(mapStyles.default.url, { diff: false })
+      map.setStyle(mapStyle.url, { diff: false })
     }
   }
 
@@ -234,7 +236,7 @@ export function MapView({ start, routes, selected, position, follow, walking, he
     {path.arrows.map((arrow, index) => <path key={index} d="M-4.5,-4 L0,0 L-4.5,4" fill="none" stroke="#fff" strokeWidth={path.selected ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round" transform={`translate(${arrow.x} ${arrow.y}) rotate(${arrow.angle})`} />)}
   </g>)}</svg>{!walking && <div ref={styleControl} className={'map-style-control'+(styleMenuOpen ? ' open' : '')} style={{ bottom: `calc(${padding?.bottom ?? 0}px + max(12px, env(safe-area-inset-bottom)))` }}>
     <div className="map-style-options" role="menu" aria-hidden={!styleMenuOpen}>
-      {(Object.keys(mapStyles) as MapStyleID[]).map((id, index) => <button key={id} type="button" role="menuitemradio" aria-checked={styleID === id} tabIndex={styleMenuOpen ? 0 : -1} style={{ '--style-index': index } as CSSProperties} onClick={() => chooseStyle(id)}><i aria-hidden="true" className={id} />{mapStyles[id].label}</button>)}
+      {mapStyles.map((style, index) => <button key={style.id} type="button" role="menuitemradio" aria-checked={styleID === style.id} tabIndex={styleMenuOpen ? 0 : -1} style={{ '--style-index': index } as CSSProperties} onClick={() => chooseStyle(style.id)}><i aria-hidden="true" style={'palette' in style ? { background: `linear-gradient(135deg, ${style.palette.park} 0 45%, ${style.palette.water} 46% 65%, ${style.palette.background} 66%)` } : undefined} />{style.label}</button>)}
     </div>
     <button className="map-style-trigger" type="button" aria-label="Choose map style" title="Choose map style" aria-expanded={styleMenuOpen} onClick={() => setStyleMenuOpen(open => !open)}><MapLayersIcon /></button>
   </div>}</>

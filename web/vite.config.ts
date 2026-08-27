@@ -1,5 +1,10 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { mapStyleEditorPlugin } from './dev/mapStyleBackend.ts'
+
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 // The app talks only to Looper's own route service. In development that
 // service runs in Docker (or via `npm run dev` inside ../route-service)
@@ -17,6 +22,6 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    plugins: [react()],
+    plugins: [react(), mapStyleEditorPlugin(repositoryRoot)],
   }
 })
