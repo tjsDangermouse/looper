@@ -777,3 +777,118 @@ silently ignored. Narrowing the sweep and spreading it across the batch answer
 different questions (*which* shapes are worth trying, and in *what order*), so
 asking for both now means both: the waves are filtered to the narrow set. Only
 a test comparing the two flags on the same fixture caught it.
+
+---
+
+# Phase 9 — the engine was never the constraint
+
+Phase 8 ended with a Douglas 5 km at 343 calls and 4.0 s, and a conclusion that
+looked solid: at 89 engine calls a second against an engine documented to top
+out near 90, the request was throughput-bound, and only sending fewer calls
+could help. That conclusion was wrong in its premise, and four hypotheses had
+to die before the actual cause turned up.
+
+| probe | before Phase 8 | after Phase 8 | **after Phase 9** |
+| --- | --- | --- | --- |
+| douglas-5km | 5.4 s · 425 calls | 4.0 s · 343 | **1.4 s · 349** |
+| douglas-3km | 2.5 s · 240 | 1.7 s · 150 | **0.8 s · 207** |
+| onchan-5km | 4.9 s · 419 | 3.7 s · 269 | **0.8 s · 267** |
+| peel-5km | 10.6 s · 941 | 8.6 s · 787 | **1.8 s · 810** |
+
+The call count barely moved. Everything above came from stopping the service
+wasting its own CPU.
+
+## Four hypotheses, and what killed each
+
+**"CH is off, so every leg is close to a Dijkstra over the island."** The
+service had never recorded how much work the engine does — `visited_nodes`
+existed only in the synthetic bench's fake engine. Reading it off real answers
+gave 190 to 1,018 nodes a call. That is a tiny search. At 60 ms a call it is
+eighty microseconds a node, and a Dijkstra settles millions a second.
+
+**"Landmarks are inert under a per-request custom model."** GraphHopper's forum
+says as much, and `config.yml` claims the opposite. Measured directly: 190
+nodes with landmarks, 1,304 without. Landmarks were working exactly as the
+config claimed, and the avoidance model cost nothing — 190 nodes whether one
+area was attached or eight.
+
+**"We ask for too much per leg."** Instructions, three path details and
+unencoded geometry are requested on every leg including the three in five
+thrown away unseen. Stripping each in turn moved a call by about a
+millisecond, inside the noise.
+
+**"The container is starved of CPU."** The opposite. A concurrency sweep
+against the engine gave 211 calls a second at one at a time, 794 at six, 882 at
+twelve. The engine scales fine and answers a leg in ~5 ms. Production was
+getting 90 a second at 53 ms each.
+
+## What it actually was
+
+A nine-fold gap between what the engine could do and what the service was
+asking of it, and the missing time was ours. Profiling the offline bench put
+**47% of all CPU in polygon-clipping**, plus 13% more in its inner module and
+7.5% in the buffer. `buildAvoidanceAreas` runs synchronously in Node before
+every routing call, and cost up to **85 ms** — so the event loop was the queue,
+and every "concurrent" leg waited behind geometry being built for another one.
+
+That also explains the finding recorded in `docker-compose.prod.yml` a day
+earlier, where raising `ROUTING_CONCURRENCY` from six to twelve doubled the
+time per call and *reduced* throughput. It was read then as a saturated engine.
+It was more geometry interleaved on one thread.
+
+Three things were wrong with how the corridors were built, none of them
+necessary:
+
+1. **It buffered the raw routed line.** GraphHopper emits a vertex every few
+   metres, so a 1,400 m leg arrived with 281 points, each becoming several
+   corridor vertices that then had to be clipped. Thinning the line first takes
+   it to 35 points; the corridor is 25 m wide, and detail finer than that was
+   never going to survive the buffer.
+2. **It merged all corridors, then cut the start circle from the merged
+   whole** — 45 ms and 35 ms, the two dominant phases. The merge was already
+   documented here as an optimisation rather than a requirement.
+3. **It clipped exactly where it did not need to.** The start circle exists so
+   the one street off the doorstep is not penalised. Turf clips with
+   arbitrary-precision arithmetic; dropping the near-start points from the line
+   before buffering is a distance test each, and the corridor differs by about
+   two per cent of its area.
+
+**84.5 ms to 2.2 ms** for four legs walked, and nearly flat with leg count
+where it used to climb.
+
+## What the fix broke, and how it showed
+
+Dropping the merge left one priority rule per corridor, and GraphHopper applies
+each matching rule in turn — so ground under two overlapping corridors was
+multiplied twice, four hundredfold rather than twentyfold, and corridors
+overlap precisely where a walk crosses its own path. Production showed it as a
+`4-7` polygon bucket that had never existed before and a Douglas 3 km going
+from 150 calls to 207. One rule naming every corridor — `in_a || in_b` — says
+what was always meant: this ground has been walked, once.
+
+A test caught the other one. Trimming by vertex threw an entire corridor away
+when a leg had only two vertices spanning the circle — which real legs never
+have, and the synthetic fixtures do. A corridor that silently does not exist is
+the worst failure available here: the walk stops being steered and nothing says
+so. The line is now cut where it crosses the boundary.
+
+## What is still open
+
+The Douglas 3 km call count did not come back. It was 150 before Phase 9 and is
+207 after, and the corridor shapes changing is the only candidate — smaller
+corridors steer less hard, so more candidates get built. It is the one figure
+in the probe set that moved the wrong way, and it is unexplained rather than
+understood.
+
+Per-call time is now 11-16 ms against an engine floor near 5 ms. Whatever
+occupies the remaining 6-11 ms is the next thing worth profiling, and the same
+method applies: the profiler found this in one run, after four plausible
+hypotheses had each been wrong.
+
+## The methodological point
+
+Every one of the four dead hypotheses was plausible, and two were supported by
+the project's own documentation. What settled it each time was a number, and
+the numbers were cheap — reading a field already in the response, a concurrency
+sweep, one profiler run. The expensive thing was believing a documented claim
+("the engine tops out around 90 foot-legs a second") that nobody had measured.

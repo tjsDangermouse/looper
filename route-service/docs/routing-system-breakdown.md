@@ -468,14 +468,15 @@ probe.**
   needs a real-ground A/B.
 - **Waypoint requests offer 1–2 walks, not 3**, on the live engine. Fixed from
   "returns nothing", not finished.
-- **Standard loops are still ~5 s** for a 5 km Douglas request (415 calls). The
-  levers are closed one by one: the engine saturates at ~90 legs/s, per-call
-  cost is a ~40 ms floor, the fix-ups earn 60–69% of their calls, and the
-  corner sweep is now ordered. What remains is that a 5 km loop needs ~400
-  point-to-point searches. `progressiveCornerSweep` and `diversityAwareEarlyStop`
-  now ship on and take a Douglas 5 km from 425 calls and 5.4 s to **343 and
-  4.0 s**; the remaining 343 is still the same structural question — though see
-  §12 on why the call count was never what made a request slow.
+- **Standard loops are now ~1.4 s** for a 5 km Douglas request, and Peel — the
+  worst ground measured — went from 10.6 s to **1.8 s**. Almost none of that
+  came from the call count, which barely moved: it came from finding that the
+  engine was never the constraint. GraphHopper answers 793 calls a second at
+  this concurrency, a leg costs it ~5 ms and 190 nodes, and the service was
+  getting 90 a second because it spent up to 85 ms of its own single-threaded
+  CPU building anti-retrace corridors before each call. See the Phase 9 report.
+  The remaining ~11-16 ms a call, against an engine floor near 5 ms, is what is
+  left to chase.
 - **415 and 162 were never the same measurement**, and the gap is not a
   discrepancy to reconcile. 415 is a production Douglas probe; 162 is the
   synthetic straight-line fixture in `test/generate.test.ts`, on different
@@ -494,10 +495,15 @@ probe.**
   synthetic networks walk at almost exactly the assumed pace; the pin work was
   neutral there too, and production overturned it. Waypoint changes want the
   probe, not the bench.
-- **Peel 5 km is the worst ground measured**, at 787 calls and 8.6 s. It passes
-  only 4 candidates in 24, so it is the case both stopping rules serve worst.
-  Fix-ups are 39% of its calls (`join-pullback` alone 206), which is where to
-  look next now that the corridor cost is down.
+- **Peel still costs the most calls**, at 810 for 1.8 s. It passes only 4
+  candidates in 24, so it is the case both stopping rules serve worst, and
+  fix-ups are a quarter of its calls (`join-pullback` alone 206). Worth
+  revisiting only if calls start mattering again: at ~11 ms each they no longer
+  dominate the way they did.
+- **A Douglas 3 km costs 207 calls where it cost 150**, from the corridor shapes
+  changing in Phase 9 — smaller corridors steer less hard, so more candidates
+  are built. Unexplained rather than understood, and the only figure in the
+  probe set that moved the wrong way. Everything else is within a few per cent.
 - `GRAPHHOPPER_MAX_CONCURRENCY` / `GRAPHHOPPER_MAX_QUEUE` remain untuned
   against a load test.
 - Horizontal GraphHopper replicas + a service-level admission queue.
