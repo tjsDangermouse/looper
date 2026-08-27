@@ -19,7 +19,7 @@ export const customMapStyles: CustomMapStyle[] = [
       "mainRoad": "#fde753",
       "residentialRoad": "#ffffff",
       "serviceRoad": "#ffffff",
-      "footway": "#c9c9c9",
+      "footway": "#bfc167",
       "trail": "#359c46",
       "cycleway": "#ffffff",
       "label": "#000000",
@@ -28,4 +28,4 @@ export const customMapStyles: CustomMapStyle[] = [
   }
 ]
 
-export const routeColours = ["#ff0000","#00a2ff","#ff8800"]
+export const routeColours = ["#ff7438","#00a2ff","#d151e1"]

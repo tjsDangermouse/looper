@@ -46,7 +46,7 @@ public let customMapStyles: [MapStyleDefinition] = [
             mainRoad: "#fde753",
             residentialRoad: "#ffffff",
             serviceRoad: "#ffffff",
-            footway: "#c9c9c9",
+            footway: "#bfc167",
             trail: "#359c46",
             cycleway: "#ffffff",
             label: "#000000",
@@ -55,4 +55,4 @@ public let customMapStyles: [MapStyleDefinition] = [
     )
 ]
 
-public let routeColours = ["#ff0000","#00a2ff","#ff8800"]
+public let routeColours = ["#ff7438","#00a2ff","#d151e1"]

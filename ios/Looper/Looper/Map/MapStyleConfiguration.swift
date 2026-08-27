@@ -45,7 +45,8 @@ enum MapStyleConfiguration {
         lines(style, ids: ids.filter { $0.range(of: #"^(road|bridge|tunnel)_(trunk_primary|secondary_tertiary|link)$"#, options: .regularExpression) != nil }, colour: palette.mainRoad, opacity: 0.88)
         lines(style, ids: ids.filter { $0.range(of: #"^(road|bridge|tunnel)_(minor|street)$"#, options: .regularExpression) != nil }, colour: palette.residentialRoad, opacity: 1)
         lines(style, ids: ids.filter { $0.range(of: #"^(road|bridge|tunnel)_service_track$"#, options: .regularExpression) != nil }, colour: palette.serviceRoad, opacity: 0.9)
-        lines(style, ids: ids.filter { $0.range(of: #"^(road|bridge|tunnel)_path_pedestrian$"#, options: .regularExpression) != nil }, colour: palette.footway, opacity: 1)
+        style.layer(withIdentifier: "road_path_pedestrian")?.isVisible = false
+        lines(style, ids: ["bridge_path_pedestrian", "tunnel_path_pedestrian"], colour: palette.footway, opacity: 1)
 
         for id in ["poi_r20", "poi_r7", "poi_r1"] { style.layer(withIdentifier: id)?.isVisible = false }
         paint(style, ids: ["poi_transit"], as: MLNSymbolStyleLayer.self) {
@@ -57,11 +58,11 @@ enum MapStyleConfiguration {
             $0.textHaloColor = constant(palette.labelHalo)
         }
 
-        addWalkingLayer(style, id: "looper-trails", colour: palette.trail, width: 3,
+        addWalkingLayer(style, id: "looper-trails", colour: palette.trail, minimumZoom: 13, widths: [1, 1.8, 3.5],
                         predicate: NSPredicate(format: "%K == %@ OR %K IN %@", "class", "track", "subclass", ["path", "track"]), dashed: true)
-        addWalkingLayer(style, id: "looper-footways", colour: palette.footway, width: 3.4,
+        addWalkingLayer(style, id: "looper-footways", colour: palette.footway, minimumZoom: 14, widths: [0.8, 1.5, 3.5],
                         predicate: NSPredicate(format: "%K == %@ OR %K IN %@", "class", "pedestrian", "subclass", ["footway", "steps"]))
-        addWalkingLayer(style, id: "looper-cycleways", colour: palette.cycleway, width: 3.8,
+        addWalkingLayer(style, id: "looper-cycleways", colour: palette.cycleway, minimumZoom: 13, widths: [1, 1.8, 3.8],
                         predicate: NSPredicate(format: "%K == %@ OR %K == %@", "class", "cycleway", "subclass", "cycleway"))
     }
 
@@ -76,22 +77,23 @@ enum MapStyleConfiguration {
         }
     }
 
-    private static func addWalkingLayer(_ style: MLNStyle, id: String, colour: String, width: Double,
+    private static func addWalkingLayer(_ style: MLNStyle, id: String, colour: String, minimumZoom: Double, widths: [Double],
                                         predicate: NSPredicate, dashed: Bool = false) {
         guard style.layer(withIdentifier: id) == nil,
               let source = style.source(withIdentifier: "openmaptiles") else { return }
         let layer = MLNLineStyleLayer(identifier: id, source: source)
         layer.sourceLayerIdentifier = "transportation"
-        layer.predicate = predicate
-        layer.minimumZoomLevel = 11
+        let surfaceOnly = NSPredicate(format: "NOT (%K IN %@)", "brunnel", ["bridge", "tunnel"])
+        layer.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [surfaceOnly, predicate])
+        layer.minimumZoomLevel = Float(minimumZoom)
         layer.lineColor = constant(colour)
-        layer.lineWidth = NSExpression(forConstantValue: width)
+        layer.lineWidth = NSExpression(mglJSONObject: ["interpolate", ["linear"], ["zoom"], 14, widths[0], 16, widths[1], 19, widths[2]])
         layer.lineOpacity = NSExpression(forConstantValue: 1)
         layer.lineCap = NSExpression(forConstantValue: "round")
         layer.lineJoin = NSExpression(forConstantValue: "round")
         if dashed { layer.lineDashPattern = NSExpression(forConstantValue: [2, 1.4]) }
-        if let labels = style.layer(withIdentifier: "road_one_way_arrow") {
-            style.insertLayer(layer, below: labels)
+        if let roads = style.layer(withIdentifier: "road_motorway_link_casing") {
+            style.insertLayer(layer, below: roads)
         } else {
             style.addLayer(layer)
         }

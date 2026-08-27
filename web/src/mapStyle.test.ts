@@ -39,8 +39,8 @@ describe('basemap style', () => {
 
   it('makes walking infrastructure prominent and removes noisy POIs', () => {
     const layers = ['background', 'park', 'landcover_wood', 'road_motorway', 'road_minor',
-      'road_path_pedestrian', 'poi_r1', 'road_one_way_arrow'].map(id => ({ id }))
-    const added: Array<{ id: string; paint?: Record<string, unknown> }> = []
+      'road_path_pedestrian', 'road_motorway_link_casing', 'poi_r1', 'road_one_way_arrow'].map(id => ({ id }))
+    const added: Array<{ id: string; minzoom?: number; paint?: Record<string, unknown> }> = []
     const paint: Array<[string, string, unknown]> = []
     const layout: Array<[string, string, unknown]> = []
     const map = {
@@ -53,9 +53,12 @@ describe('basemap style', () => {
     applyLooperStyle(map as never)
     expect(paint).toContainEqual(['road_motorway', 'line-color', looperPalette.motorway])
     expect(paint).toContainEqual(['road_minor', 'line-color', looperPalette.residentialRoad])
-    expect(paint).toContainEqual(['road_path_pedestrian', 'line-color', looperPalette.footway])
+    expect(layout).toContainEqual(['road_path_pedestrian', 'visibility', 'none'])
     expect(layout).toContainEqual(['poi_r1', 'visibility', 'none'])
     expect(added.map(layer => layer.id)).toEqual(['looper-trails', 'looper-footways', 'looper-cycleways'])
+    const footways = added.find(layer => layer.id === 'looper-footways')!
+    expect(footways.minzoom).toBe(14)
+    expect(footways.paint?.['line-width']).toEqual(['interpolate', ['linear'], ['zoom'], 14, 0.8, 16, 1.5, 19, 3.5])
 
     applyLooperStyle(map as never, { ...looperPalette, trail: '#123456' })
     expect(paint).toContainEqual(['looper-trails', 'line-color', '#123456'])

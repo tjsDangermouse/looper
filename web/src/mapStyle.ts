@@ -1,4 +1,4 @@
-import type { LineLayerSpecification, Map } from 'maplibre-gl'
+import type { ExpressionSpecification, LineLayerSpecification, Map } from 'maplibre-gl'
 import { customMapStyles } from './mapStyleConfig.generated'
 import type { MapPalette } from './mapStyleTypes'
 
@@ -60,9 +60,11 @@ export function applyLooperStyle(map: StyleMap, palette: LooperPalette = looperP
   setPaint(map, service, 'line-color', palette.serviceRoad)
   setPaint(map, service, 'line-opacity', 0.9)
 
-  const paths = lineIDs(map, /^(road|bridge|tunnel)_path_pedestrian$/)
-  setPaint(map, paths, 'line-color', palette.footway)
-  setPaint(map, paths, 'line-opacity', 1)
+  // Liberty's surface path layer would duplicate the categorized Looper
+  // overlays below. Keep its bridge/tunnel treatment, but let Looper own the
+  // ordinary surface geometry so it can distinguish trails and footways.
+  if (map.getLayer('road_path_pedestrian')) map.setLayoutProperty('road_path_pedestrian', 'visibility', 'none')
+  setPaint(map, ['bridge_path_pedestrian', 'tunnel_path_pedestrian'], 'line-color', palette.footway)
 
   for (const id of ['poi_r20', 'poi_r7', 'poi_r1']) {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none')
@@ -78,30 +80,33 @@ export function applyLooperStyle(map: StyleMap, palette: LooperPalette = looperP
   addWalkingLayer(map, 'looper-trails', palette.trail, [
     'any', ['==', ['get', 'class'], 'track'],
     ['match', ['get', 'subclass'], ['path', 'track'], true, false],
-  ], [1.4, 2.5, 6], [2, 1.4])
+  ], 13, [1, 1.8, 3.5], [2, 1.4])
   addWalkingLayer(map, 'looper-footways', palette.footway, [
     'any', ['==', ['get', 'class'], 'pedestrian'],
     ['match', ['get', 'subclass'], ['footway', 'steps'], true, false],
-  ], [1.5, 3, 7])
+  ], 14, [0.8, 1.5, 3.5])
   addWalkingLayer(map, 'looper-cycleways', palette.cycleway, [
     'any', ['==', ['get', 'class'], 'cycleway'], ['==', ['get', 'subclass'], 'cycleway'],
-  ], [1.7, 3.4, 7.5])
+  ], 13, [1, 1.8, 3.8])
 }
 
 function addWalkingLayer(map: StyleMap, id: string, colour: string,
-  filter: LineLayerSpecification['filter'], widths: [number, number, number], dash?: number[]) {
+  filter: NonNullable<LineLayerSpecification['filter']>, minzoom: number, widths: [number, number, number], dash?: number[]) {
+  const width: ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 14, widths[0], 16, widths[1], 19, widths[2]]
   if (map.getLayer(id)) {
     map.setPaintProperty(id, 'line-color', colour)
+    map.setPaintProperty(id, 'line-width', width as never)
     return
   }
   const layer: LineLayerSpecification = {
-    id, type: 'line', source: 'openmaptiles', 'source-layer': 'transportation', minzoom: 11, filter,
+    id, type: 'line', source: 'openmaptiles', 'source-layer': 'transportation', minzoom,
+    filter: ['all', ['match', ['get', 'brunnel'], ['bridge', 'tunnel'], false, true], filter] as never,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': colour, 'line-opacity': 1,
-      'line-width': ['interpolate', ['linear'], ['zoom'], 11, widths[0], 15, widths[1], 19, widths[2]],
+      'line-width': width,
       ...(dash ? { 'line-dasharray': dash } : {}),
     },
   }
-  map.addLayer(layer, map.getLayer('road_one_way_arrow') ? 'road_one_way_arrow' : undefined)
+  map.addLayer(layer, map.getLayer('road_motorway_link_casing') ? 'road_motorway_link_casing' : undefined)
 }
