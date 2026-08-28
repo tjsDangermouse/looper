@@ -1,6 +1,7 @@
 # Looper
 
-A mobile-first PWA for finding circular walks that bring you back to where you started.
+Finding circular walks that bring you back to where you started, as a native iPhone and
+Apple Watch app and as a mobile-first web PWA.
 
 Looper generates its own loops. It proposes rings of waypoints around you, routes each
 leg of the ring separately while holding the ground already walked against the next leg,
@@ -8,13 +9,27 @@ measures every finished candidate, and offers only the ones that are genuinely l
 Nothing here asks a routing engine for a "round trip".
 
 ```text
-Looper PWA  ─────►  Looper Route Service  ─────►  self-hosted GraphHopper
- (Vite/React)          POST /v1/loops              (walking graph)
-                                                          │
-                                                   OpenStreetMap PBF
+Looper iOS + watchOS  ─┐
+    (Swift/LooperKit)  │
+                       ├──►  Looper Route Service  ─────►  self-hosted GraphHopper
+Looper PWA  ───────────┘        POST /v1/loops              (walking graph)
+ (Vite/React)                                                       │
+                                                             OpenStreetMap PBF
+
+map-styles.json  ──►  generated Swift + TypeScript palettes  ──►  both clients
+   (style editor, web dev server only)
 ```
 
-The app talks to Looper's own API for routing. There is no third-party routing provider
+Two first-class clients, one API. The iOS app is native Swift — not a wrapper around the
+PWA — with an Apple Watch companion for live guidance, and it shares no source code with
+the web app. Both meet the route service only through
+[Loop API v1](route-service/contracts/loop-api/v1.md).
+
+Map styling is shared rather than duplicated: a style editor served by the web development
+server writes `map-styles.json` and regenerates the Swift and TypeScript palette files
+from it, so a colour is picked once and both clients get it.
+
+Both apps talk to Looper's own API for routing. There is no third-party routing provider
 and no routing API key anywhere in this repository. Both clients render their basemap
 with MapLibre using OpenFreeMap's hosted Liberty vector style. The optional Looper
 treatment restyles those same vector layers; map data still comes from OpenStreetMap.
@@ -24,9 +39,11 @@ treatment restyles those same vector layers; map data still comes from OpenStree
 | Path | What it is |
 | --- | --- |
 | `web/` | The web PWA — [web guide](web/README.md) |
-| `ios/` | iPhone and Apple Watch apps — [iOS guide](ios/README.md) |
+| `ios/` | Native iPhone and Apple Watch apps, and the shared `LooperKit` package — [iOS guide](ios/README.md) |
 | `route-service/` | Route API and all of its deployment assets — [service guide](route-service/README.md) |
 | `route-service/contracts/loop-api/v1.md` | Versioned API contract shared by the web and iOS clients |
+| `map-styles.json` | The map style catalogue: source of truth for both clients' palettes |
+| `web/dev/mapStyleBackend.ts` | The style editor's backend, a Vite dev-server plugin — development only, never shipped |
 
 The three product areas have no source-code imports between them. The web and
 iOS clients meet the route service only through [Loop API v1](route-service/contracts/loop-api/v1.md).
@@ -41,11 +58,30 @@ the untouched style as **Default** plus every custom style saved in the catalogu
 Looper subdues motorways and POIs, clarifies parks and woodland, and adds strong,
 separately coloured vector layers for footways, trails and cycleways. Basemap style
 configuration is rendered by `web/src/mapStyle.ts` and
-`ios/Looper/Looper/Map/MapStyleConfiguration.swift`. Run the local editor at
-`/map-style-editor` from the web development server to create and manage styles, tune
-their colours against live vector tiles, and edit the shared route-option colours. Its
-**Save to apps** button updates `map-styles.json` and regenerates the TypeScript and Swift
-configuration files; no palette copying is required.
+`ios/Looper/Looper/Map/MapStyleConfiguration.swift`.
+
+### The style editor and its backend
+
+Run the editor at `/map-style-editor` from the web development server to create and manage
+styles, tune their colours against live vector tiles, and edit the shared route-option
+colours. **Save to apps** writes `map-styles.json` and regenerates both platform files, so
+a palette is never copied by hand between web and iOS.
+
+The backend is `web/dev/mapStyleBackend.ts`, a Vite plugin serving a single endpoint
+(`/__looper-style-editor/config`). Two things about it are deliberate:
+
+- **It is development-only.** It writes files in the repository, so it exists solely in the
+  dev server and is never part of a production build. Nothing in the deployed PWA can
+  reach it.
+- **It validates before it writes.** `validateCatalogue` checks the version, style IDs,
+  names, every palette key, and the route colours, and rejects unknown palette fields. The
+  files it writes are generated and committed, so a bad save is a bad commit — the
+  validation is what keeps a typo out of both clients at once.
+
+Regenerated output — `web/src/mapStyleConfig.generated.ts` and
+`ios/LooperKit/Sources/LooperKit/MapStyleConfig.generated.swift` — is committed, and edited
+only through the editor. Change `map-styles.json` and the two generated files together, or
+the clients disagree about what colour something is.
 
 - `web/src/MapView.tsx` owns the web map, start/current-location markers, gestures and
   camera. Routes remain screen-space SVG overlays projected by MapLibre, which keeps
@@ -220,6 +256,111 @@ at any distance. Only if even the length is out of reach does it return nothing.
 
 The fallback never mixes with clean loops: a walk that retraces is offered only when there
 is no clean one at all, so the list is never a quiet blend of two different answers.
+
+## Changing the walking profile
+
+`route-service/graphhopper/looper_foot.json` is the custom model GraphHopper routes with.
+It is a small file and it is the highest-leverage thing in the repository: a one-line
+change to it moved the whole service by 2–3× in August 2026. Read this before touching it.
+
+### Priority divides the weight
+
+GraphHopper's weight is roughly `distance / (speed × priority)`. So `multiply_by: 0.1` on a
+road class does **not** mean "prefer the alternative a bit". It means *the alternative is
+worth walking ten times as far for*. That is almost never what is wanted, and the cost does
+not show up as a slower engine — it shows up as a slower **service**:
+
+1. Legs come back longer and bent, because the router took a large detour.
+2. Longer legs miss what the corridor aimed at and blow `MAX_DISTANCE_ERROR` (0.12).
+3. The candidate is rejected, and Looper asks again. And again.
+
+Measured: a 0.1 demotion on non-pedestrian roads made legs 13–20% long and cost **2–3× the
+engine calls** on urban ground, while `ms/call` and `visited_nodes` never moved. If a
+profile change makes things slow, look at call counts before you look at the engine.
+
+### Nudges are not preferences, and weak nudges are worse than none
+
+Where OSM maps a pavement as its own way, a pavement and its carriageway weigh near enough
+the same that the router takes whichever is a few metres shorter, block by block. Settling
+that near-tie needs a *nudge*. But the sweep found the effect is not monotonic — at 0.95 and
+0.9, hopping got **worse** than no preference at all, because the route takes the pavement
+for some stretches and not others. 0.8 was the knee, and 0.6 and 0.3 were identical to it.
+
+Reasoning had picked 0.9. Reasoning was wrong, and only in the one region that makes the
+problem worse. **Sweep it; don't estimate it.**
+
+### Measure it with the tools that exist
+
+```bash
+bench/probe-pavement.mjs     # sweep a multiplier over real legs — hops/km vs leg length
+bench/probe-production.sh    # whole requests: calls, ms/call, nodes/call, hops/km
+bench/probe-engine.mjs       # one leg against the engine, with and without landmarks
+```
+
+`probe-pavement.mjs` sends candidate values as **per-request** custom models, which compose
+*multiplicatively* with the profile — so it only reads correctly against a neutral profile.
+Sweeping against an already-demoting profile measures every value ten times too strong.
+
+Trust **call counts and hops/km**: they have been byte-stable across runs. Do not trust
+wall-clock — the same work measured three times in one evening gave 1.3 s, 1.9 s and 3.4 s.
+
+### Deploying a profile change requires a graph rebuild
+
+This is the operational trap, and it has bitten twice.
+
+`looper_foot.json` is `COPY`'d into the **GraphHopper** image, not the route service, so a
+profile change means rebuilding `graphhopper-iom` *and* `graphhopper-england` with
+`--build`. Without it Compose reuses the old image and the deploy silently does nothing —
+which looks exactly like a change that had no effect. Check what actually landed:
+
+```bash
+docker compose -p looper_router -f docker-compose.prod.yml exec graphhopper-iom cat /gh/looper_foot.json
+```
+
+Then both engines will fail their healthcheck and restart-loop. Observed twice, on two
+different profile changes, and cleared both times by deleting the graph volumes; the logs
+were never actually read, so the *reason* is inferred rather than established — most likely
+that landmarks are prepared against the profile's weighting and GraphHopper will not serve a
+graph prepared under a different one. `entrypoint.sh` cannot save you either way:
+`graph_ready()` only checks that `edges` exists, so it keeps trying to serve a graph the
+engine rejects. If it happens again, read the logs first and settle it:
+
+```bash
+docker compose -p looper_router -f docker-compose.prod.yml logs --tail=40 graphhopper-iom
+```
+
+Then delete the graph volumes and let them reimport:
+
+```bash
+docker compose -p looper_router -f docker-compose.prod.yml down
+docker volume rm looper_router_graph-cache-iom looper_router_graph-cache-england
+docker compose -p looper_router -f docker-compose.prod.yml up -d
+```
+
+**Keep `osm-data`** — it holds the downloaded extracts, and deleting it re-downloads
+England for nothing. Do the Isle of Man first and confirm it comes up healthy before
+committing to the England import, which is the long one.
+
+Bump `profileVersion` in `route-service/src/config.ts` with every profile change. It is a
+cache epoch, so it always goes forward — never back to a previous value, even when the
+weighting itself is a revert.
+
+### Open
+
+Shipping the 0.8 pavement nudge regressed **waypoint mode**: `wp-two` went from 54 engine
+calls to 379, the backbone rejects all 24 plans (`shapeless`, `u-turns`,
+`out-and-back-spur`) and falls back to `legacy-guides`. Unexplained. The likely mechanism is
+that pavement routing adds crossings and set-backs, so the backbone comes back wigglier and
+trips shape gates — `MAX_U_TURNS` is 1, and stepping onto a pavement and back may read as a
+U-turn. Standard loops are unaffected and improved.
+
+Also unresolved: `hops/km` counts *all* pedestrian-to-carriageway transitions, so a walk
+legitimately turning onto a park path scores the same as a confusing flip-flop. It is a good
+relative signal and a poor absolute one. Single legs improved 3 hops → 1 under the nudge;
+whole loops only 3–20%, and the gap is probably this.
+
+The full history, including four wrong hypotheses that each cost a day, is in
+[`route-service/docs/routing-report.md`](route-service/docs/routing-report.md).
 
 ## Checks
 
