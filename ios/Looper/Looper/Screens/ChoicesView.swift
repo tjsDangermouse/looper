@@ -8,14 +8,14 @@ struct ChoicesView: View {
     var body: some View {
         VStack(spacing: 0) {
             BottomSheet {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("your choices")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             Text("Pick a loop")
-                                .font(.title2.bold())
+                                .font(.system(size: 17, weight: .bold))
                         }
                         Spacer()
                         Button {
@@ -23,7 +23,7 @@ struct ChoicesView: View {
                         } label: {
                             Image(systemName: "arrow.triangle.2.circlepath")
                         }
-                        .buttonStyle(IconButtonStyle(background: .looperRaised, bordered: true))
+                        .buttonStyle(IconButtonStyle(diameter: 32, background: .looperRaised, bordered: true))
                         .foregroundStyle(model.busy ? Color.looperAccent : .white)
                         .scaleEffect(refreshPulse ? 1.12 : 1)
                         .animation(
@@ -41,14 +41,14 @@ struct ChoicesView: View {
                         } label: {
                             Image(systemName: "arrow.left.arrow.right")
                         }
-                        .buttonStyle(IconButtonStyle(background: .looperRaised, bordered: true))
+                        .buttonStyle(IconButtonStyle(diameter: 32, background: .looperRaised, bordered: true))
                         .foregroundStyle(model.reversed ? Color.looperAccent : .white)
                         Button {
                             model.screen = .planner
                         } label: {
                             Image(systemName: "pencil")
                         }
-                        .buttonStyle(IconButtonStyle(background: .looperRaised, bordered: true))
+                        .buttonStyle(IconButtonStyle(diameter: 32, background: .looperRaised, bordered: true))
                         .accessibilityLabel("Edit")
                     }
 
@@ -64,12 +64,12 @@ struct ChoicesView: View {
                                 model.selected = route
                                 model.showsRouteOverlay = true
                             } label: {
-                            HStack(spacing: 12) {
+                            HStack(spacing: 10) {
                                 Circle()
                                     .fill(Color(hex: routeColours[index % routeColours.count]))
                                     .frame(width: 12, height: 12)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(route.name).font(.headline)
+                                    Text(route.name).font(.subheadline.weight(.semibold))
                                     Text("\(formatDistance(route.distanceMeters, unit: model.unit)) · \(formatTime(secondsForDistance(route.distanceMeters, paceMinutesPerKm: model.activePaceMinutesPerKm))) · \(abs(Int(route.targetDifferencePercent)))% \(route.targetDifferencePercent < 0 ? "shorter" : "longer")")
                                         .font(.footnote)
                                         .foregroundStyle(.secondary)
@@ -80,8 +80,8 @@ struct ChoicesView: View {
                                         .foregroundStyle(Color(hex: "9cc36b"))
                                 }
                             }
-                            .padding(.leading, 12)
-                            .padding(.vertical, 12)
+                            .padding(.leading, 10)
+                            .padding(.vertical, 8)
                             .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -97,7 +97,7 @@ struct ChoicesView: View {
                             .buttonStyle(.plain)
                             .accessibilityLabel(model.isFavorite(route) ? "Remove \(route.name) from saved routes" : "Save \(route.name) for later")
                         }
-                        .frame(minHeight: 64)
+                        .frame(minHeight: 48)
                         .frame(maxWidth: .infinity)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
@@ -109,7 +109,7 @@ struct ChoicesView: View {
         }
         .safeAreaInset(edge: .bottom) {
             if let selected = model.selected {
-                VStack(spacing: 6) {
+                VStack(spacing: 4) {
                     Button {
                         if model.waypointsNeedSearch { model.findRoutes() }
                         else { model.beginWalk(selected) }
@@ -133,10 +133,19 @@ struct ChoicesView: View {
                             .transition(.opacity)
                     }
                 }
-                .padding(.bottom, 8)
+                .padding(.bottom, 4)
                 .animation(.easeOut(duration: 0.2), value: model.startupNotice)
             }
         }
+        // The Start walk pill is a bottom safe-area inset, so it lifts the
+        // sheet without being part of it. Measuring here — outside the inset
+        // — reports the whole bottom chrome, which is what the map (and the
+        // layer button floating above it) has to stay clear of.
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: SheetHeightKey.self, value: proxy.size.height)
+            }
+        )
         // The Watch is shown whichever loop is chosen here, so Start on the
         // wrist knows what it is starting before a walk begins.
         .onAppear { if let selected = model.selected { model.prepareWatch(for: selected) } }

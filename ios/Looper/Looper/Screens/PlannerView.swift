@@ -10,16 +10,10 @@ struct PlannerView: View {
     var body: some View {
         BottomSheet {
             VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top) {
-                    Text("How far shall we Loop?")
-                        .font(.system(size: 17, weight: .bold))
-                    Spacer()
-                    Button(action: model.requestLocation) {
-                        Image(systemName: "location.fill")
-                    }
-                    .buttonStyle(IconButtonStyle(diameter: 32, background: .looperRaised, bordered: true))
-                    .accessibilityLabel("Use my location")
-                }
+                // "Use my location" recentres the map, so it lives on the
+                // map itself (ContentView's chrome) rather than in here.
+                Text("How far shall we Loop?")
+                    .font(.system(size: 17, weight: .bold))
 
                 HStack(spacing: 8) {
                     Picker("Activity", selection: $model.activity) {

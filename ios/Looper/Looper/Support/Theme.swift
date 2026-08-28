@@ -22,5 +22,11 @@ extension Color {
     static let looperRaised = Color(hex: "0d2437")
     static let looperLine = Color(hex: "1d3448")
     static let looperAccent = Color(hex: "9cc36b")
+    /// Map chrome floats over the map, so it is translucent rather than
+    /// solid — plain alpha, because MapLibre draws into a Metal layer that a
+    /// material's backdrop cannot sample.
+    static let looperGlass = Color.white.opacity(0.32)
+    static let looperGlassLine = Color(hex: "b8c1c4").opacity(0.8)
+    static let looperOnGlass = Color(hex: "243640")
     static let looperOnAccent = Color(hex: "06180a")
 }

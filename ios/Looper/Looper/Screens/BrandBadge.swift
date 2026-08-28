@@ -12,12 +12,13 @@ struct BrandBadge: View {
             Text("LOOPER")
                 .font(.system(size: 12, weight: .bold))
                 .tracking(1.1)
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.looperOnGlass)
         }
         .padding(.leading, 9)
         .padding(.trailing, 13)
         .padding(.vertical, 7)
-        .background(Color.looperSheet, in: Capsule())
+        .background(Color.looperGlass, in: Capsule())
+        .overlay(Capsule().stroke(Color.looperGlassLine))
         .shadow(color: .black.opacity(0.25), radius: 10, y: 6)
     }
 }

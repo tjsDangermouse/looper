@@ -55,22 +55,35 @@ struct ContentView: View {
                         HStack(spacing: 10) {
                             Button(action: model.returnHome) {
                                 Image(systemName: "house.fill")
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(Color.looperOnGlass)
                             }
-                            .buttonStyle(IconButtonStyle())
+                            .buttonStyle(IconButtonStyle.glass)
                             .accessibilityLabel("Home")
 
                             Button {
                                 model.showingVoiceSettings = true
                             } label: {
                                 Image(systemName: "gearshape.fill")
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(Color.looperOnGlass)
                             }
-                            .buttonStyle(IconButtonStyle())
+                            .buttonStyle(IconButtonStyle.glass)
                             .accessibilityLabel("Settings")
                         }
                         .padding(.top, 8)
                         .padding(.trailing, 14)
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if model.screen == .planner {
+                        Button(action: model.requestLocation) {
+                            Image(systemName: "location.fill")
+                                .foregroundStyle(Color.looperOnGlass)
+                        }
+                        .buttonStyle(IconButtonStyle.glass)
+                        .accessibilityLabel("Use my location")
+                        .padding(.trailing, 14)
+                        .padding(.bottom, model.padding.bottom + 12)
+                        .animation(.easeInOut(duration: 0.3), value: model.padding.bottom)
                     }
                 }
                 .overlay(alignment: .bottomLeading) {
@@ -165,10 +178,10 @@ private struct MapStylePicker: View {
             } label: {
                 Image(systemName: "square.3.layers.3d")
                     .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(Color(hex: "243640"))
+                    .foregroundStyle(Color.looperOnGlass)
                     .frame(width: 44, height: 44)
-                    .background(Color.white.opacity(0.32), in: RoundedRectangle(cornerRadius: 11))
-                    .overlay(RoundedRectangle(cornerRadius: 11).stroke(Color(hex: "b8c1c4").opacity(0.8)))
+                    .background(Color.looperGlass, in: RoundedRectangle(cornerRadius: 11))
+                    .overlay(RoundedRectangle(cornerRadius: 11).stroke(Color.looperGlassLine))
                     .shadow(color: .black.opacity(0.28), radius: 8, y: 4)
             }
             .accessibilityLabel("Choose map style")
