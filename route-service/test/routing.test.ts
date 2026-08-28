@@ -560,6 +560,28 @@ describe('joining legs into a walk somebody would recognise', () => {
     expect(trimmed.distanceMeters).toBeLessThan(joined.distanceMeters)
   })
 
+  it('keeps later turn positions aligned after cutting a spike from an earlier step', () => {
+    const coordinates = [at(0, 0), at(200, 0), at(200, 20), at(200, 0), at(400, 0), at(400, 200)]
+    const withInstructionedSpike: GraphHopperLeg = {
+      coordinates,
+      distanceMeters: 640,
+      durationSeconds: 460,
+      steps: [
+        { instruction: 'Head east', distanceMeters: 200, durationSeconds: 140, sign: 0, startIndex: 0, endIndex: 1 },
+        // This is the stretch that contained the removed out-and-back. If its
+        // original 240 m survives, every turn after it is called 40 m late.
+        { instruction: 'Turn right onto Main Street', distanceMeters: 240, durationSeconds: 170, sign: 2, startIndex: 1, endIndex: 4 },
+        { instruction: 'Turn left onto North Road', distanceMeters: 200, durationSeconds: 150, sign: -2, startIndex: 4, endIndex: 5 },
+        { instruction: 'Arrive', distanceMeters: 0, durationSeconds: 0, sign: 4, startIndex: 5, endIndex: 5 },
+      ],
+    }
+
+    const trimmed = joinAndTrimLegs([withInstructionedSpike])
+    expect(trimmed.steps.map(step => step.distanceMeters)).toEqual([
+      expect.closeTo(200, 0), expect.closeTo(200, 0), expect.closeTo(200, 0), 0,
+    ])
+  })
+
   it('leaves a walk with nothing wrong with it exactly as it was', () => {
     const clean = leg(polyline([[0, 0], [400, 0], [400, 400]]))
     const trimmed = joinAndTrimLegs([clean])

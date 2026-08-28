@@ -69,6 +69,9 @@ final class AppModel: ObservableObject {
 
     let compassAvailable = LocationManager.headingAvailable
     let health: HealthIntegration
+    /// Kept on the model so Settings can show and export the same on-device
+    /// event stream used by the navigation and speech code.
+    let navigationLogger = NavigationLogger.shared
     /// The Apple Watch, if there is one. Always present as an object; it
     /// reports `.unavailable` when there is no Watch to talk to, and every
     /// path through this model works with it in that state.
@@ -107,7 +110,7 @@ final class AppModel: ObservableObject {
     init(
         apiBase: String,
         locationManager: LocationManager = LocationManager(),
-        speechManager: SpeechManager = SpeechManager(),
+        speechManager: SpeechManager? = nil,
         httpClient: LoopsHTTPClient = URLSessionLoopsHTTPClient(),
         routeStore: RouteStore = RouteStore(),
         favoritesStore: FavoritesStore = FavoritesStore(),
@@ -117,7 +120,7 @@ final class AppModel: ObservableObject {
     ) {
         self.apiBase = apiBase
         self.locationManager = locationManager
-        self.speechManager = speechManager
+        self.speechManager = speechManager ?? SpeechManager()
         self.httpClient = httpClient
         self.routeStore = routeStore
         self.favoritesStore = favoritesStore
@@ -125,7 +128,7 @@ final class AppModel: ObservableObject {
         self.sessionStore = sessionStore
         self.health = health ?? HealthIntegration()
         self.favoriteRoutes = favoritesStore.load()
-        self.selectedVoiceIdentifier = speechManager.selectedVoiceIdentifier
+        self.selectedVoiceIdentifier = self.speechManager.selectedVoiceIdentifier
         restoreSession()
         connectWatch()
         #if DEBUG
@@ -490,6 +493,15 @@ final class AppModel: ObservableObject {
         routeStore.save(route)
         routeTileCache.cache(route)
         startRecording(route, id: plan.sessionID, owner: owner)
+        navigationLogger.recordRoute(route, sessionID: plan.sessionID, activity: activity, unit: unit)
+        navigationLogger.log("navigation.started", details: [
+            "sessionID": plan.sessionID,
+            "routeID": route.id,
+            "routeName": route.name,
+            "plannedDistanceM": rounded(route.distanceMeters),
+            "muted": String(muted),
+            "watchOwner": owner == .watch ? "watch" : "phone"
+        ])
         startWalkWatch()
         startWatchStateFeed()
     }
@@ -501,6 +513,11 @@ final class AppModel: ObservableObject {
     func endWalk() {
         guard hasActiveWalk || session?.isFinished == false else { return }
         let finished = finishRecording()
+        navigationLogger.log("navigation.ended", details: [
+            "progressM": rounded(progress),
+            "offRoute": String(offRoute),
+            "reason": finished?.arrivedAt == nil ? "manual-or-watch" : "arrived"
+        ])
         hasActiveWalk = false
         following = false
         courseUp = false
@@ -530,6 +547,7 @@ final class AppModel: ObservableObject {
         guard hasActiveWalk, !isPaused else { return }
         isPaused = true
         pausedAt = Date()
+        navigationLogger.log("navigation.paused", details: ["progressM": rounded(progress)])
         speechManager.stop()
         watch.send(command: .pause, sessionID: session?.id)
         pushWatchState(force: true)
@@ -544,6 +562,7 @@ final class AppModel: ObservableObject {
         }
         pausedAt = nil
         isPaused = false
+        navigationLogger.log("navigation.resumed", details: ["progressM": rounded(progress)])
         // The next fix decides what to say; nothing is repeated from before
         // the pause just because the walker stood still for a while.
         spoken = ""
@@ -783,6 +802,11 @@ final class AppModel: ObservableObject {
                 if isPaused { continue }
                 if update.accuracy > 100 {
                     locationState = "Waiting for a more accurate location…"
+                    navigationLogger.log("location.rejected", details: [
+                        "accuracyM": rounded(update.accuracy),
+                        "latitude": rounded(update.point.lat, decimals: 5),
+                        "longitude": rounded(update.point.lng, decimals: 5)
+                    ])
                     continue
                 }
                 locationState = ""
@@ -795,8 +819,24 @@ final class AppModel: ObservableObject {
                 )
                 walked = safeProgress
                 progress = safeProgress
+                let wasOffRoute = offRoute
                 badFixes = match.distanceToRoute > 55 ? badFixes + 1 : 0
                 offRoute = badFixes >= 3
+                navigationLogger.log("location.accepted", details: [
+                    "accuracyM": rounded(update.accuracy),
+                    "latitude": rounded(update.point.lat, decimals: 5),
+                    "longitude": rounded(update.point.lng, decimals: 5),
+                    "distanceToRouteM": rounded(match.distanceToRoute),
+                    "candidateProgressM": rounded(match.distanceAlong),
+                    "safeProgressM": rounded(safeProgress),
+                    "badFixes": String(badFixes),
+                    "nextTurnDistanceM": turn.map { rounded($0.distanceAway) } ?? "none"
+                ])
+                if wasOffRoute != offRoute {
+                    navigationLogger.log("navigation.offRouteChanged", details: [
+                        "offRoute": String(offRoute), "distanceToRouteM": rounded(match.distanceToRoute)
+                    ])
+                }
                 if record(update, on: selected) {
                     // This is the same idempotent path used by both End
                     // buttons. It presents the summary and tells the Watch to
@@ -817,14 +857,31 @@ final class AppModel: ObservableObject {
     // Speak each turn once per distance band, plus one warning when the walk
     // strays off the loop. Falls silent on mute or on leaving the walk screen.
     private func announceIfNeeded() {
-        guard screen == .walk, !muted, !isPaused else { return }
+        guard screen == .walk, !muted, !isPaused else {
+            navigationLogger.log("guidance.suppressed", details: [
+                "screen": String(describing: screen), "muted": String(muted), "paused": String(isPaused)
+            ])
+            return
+        }
         if offRoute {
-            if spoken != "off" { spoken = "off"; speechManager.speak("You are off the planned loop. Head back to the route.") }
+            if spoken != "off" {
+                spoken = "off"
+                let text = "You are off the planned loop. Head back to the route."
+                navigationLogger.log("guidance.queued", details: ["kind": "offRoute", "text": text, "progressM": rounded(progress)])
+                speechManager.speak(text)
+            }
             return
         }
         if spoken == "off" { spoken = "" }
         if let turn, let announcement = turnAnnouncement(turn.announcementInput, unit: unit) {
-            if spoken != announcement.key { spoken = announcement.key; speechManager.speak(announcement.text) }
+            if spoken != announcement.key {
+                spoken = announcement.key
+                navigationLogger.log("guidance.queued", details: [
+                    "kind": "turn", "key": announcement.key, "text": announcement.text,
+                    "turnDistanceM": rounded(turn.distanceAway), "progressM": rounded(progress)
+                ])
+                speechManager.speak(announcement.text)
+            }
             return
         }
         if turn == nil,
@@ -832,12 +889,15 @@ final class AppModel: ObservableObject {
            hasArrived(selected, progressMeters: progress),
            spoken != "home" {
             spoken = "home"
-            speechManager.speak("You are back where you started.")
+            let text = "You are back where you started."
+            navigationLogger.log("guidance.queued", details: ["kind": "arrival", "text": text, "progressM": rounded(progress)])
+            speechManager.speak(text)
         }
     }
 
     func toggleMute() {
         muted.toggle()
+        navigationLogger.log("navigation.muteChanged", details: ["muted": String(muted), "progressM": rounded(progress)])
         if muted { speechManager.stop() } else { speechManager.prime(); spoken = "" }
     }
 
@@ -858,6 +918,10 @@ final class AppModel: ObservableObject {
         selectedVoiceIdentifier = voice.identifier
         speechManager.prime()
         speechManager.speak("In 100 metres, turn left. Your walk is ready.")
+    }
+
+    private func rounded(_ value: Double, decimals: Int = 1) -> String {
+        String(format: "%.*f", decimals, value)
     }
 
     // The compass is only read while it is being used.

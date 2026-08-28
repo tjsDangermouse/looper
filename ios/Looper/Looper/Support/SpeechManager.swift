@@ -3,11 +3,14 @@ import AVFoundation
 /// Turn-by-turn voice guidance. Configured for background playback so
 /// announcements keep firing while the phone is locked — the PWA limitation
 /// this native app exists to fix.
+@MainActor
 final class SpeechManager: NSObject {
     private nonisolated(unsafe) let synthesizer = AVSpeechSynthesizer()
     private let selectedVoiceKey = "selectedVoiceIdentifier"
+    private let navigationLogger: NavigationLogger
 
-    override init() {
+    init(navigationLogger: NavigationLogger? = nil) {
+        self.navigationLogger = navigationLogger ?? .shared
         super.init()
         synthesizer.delegate = self
     }
@@ -47,11 +50,22 @@ final class SpeechManager: NSObject {
     }
 
     func prime() {
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.duckOthers])
-        try? AVAudioSession.sharedInstance().setActive(true)
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.duckOthers])
+            try AVAudioSession.sharedInstance().setActive(true)
+            navigationLogger.log("speech.audioSessionPrimed")
+        } catch {
+            navigationLogger.log("speech.audioSessionFailed", details: ["error": error.localizedDescription])
+        }
     }
 
     func speak(_ text: String) {
+        let interrupted = synthesizer.isSpeaking
+        navigationLogger.log("speech.requested", details: [
+            "text": text,
+            "interruptedPrevious": String(interrupted),
+            "voice": selectedVoice?.identifier ?? "system-default"
+        ])
         let utterance = AVSpeechUtterance(string: text)
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         utterance.voice = selectedVoice
@@ -61,6 +75,7 @@ final class SpeechManager: NSObject {
     }
 
     func stop() {
+        navigationLogger.log("speech.stopRequested", details: ["wasSpeaking": String(synthesizer.isSpeaking)])
         synthesizer.stopSpeaking(at: .immediate)
         deactivate()
     }
@@ -94,8 +109,24 @@ final class SpeechManager: NSObject {
     }
 }
 
-extension SpeechManager: AVSpeechSynthesizerDelegate {
+extension SpeechManager: @preconcurrency AVSpeechSynthesizerDelegate {
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
+        Task { @MainActor in
+            navigationLogger.log("speech.started", details: ["text": utterance.speechString])
+        }
+    }
+
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        Task { @MainActor in
+            navigationLogger.log("speech.finished", details: ["text": utterance.speechString])
+        }
+        deactivate()
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        Task { @MainActor in
+            navigationLogger.log("speech.cancelled", details: ["text": utterance.speechString])
+        }
         deactivate()
     }
 }

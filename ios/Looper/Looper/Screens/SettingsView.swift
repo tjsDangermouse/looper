@@ -1,5 +1,6 @@
 import LooperKit
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -26,6 +27,20 @@ struct SettingsView: View {
                     }
                 } footer: {
                     Text("Save a route from your choices to keep it here for later.")
+                }
+
+                if NavigationLogger.includedInThisBuild {
+                    Section {
+                        NavigationLink {
+                            NavigationDiagnosticsView(logger: model.navigationLogger)
+                        } label: {
+                            Label("Navigation diagnostics", systemImage: "waveform.path.ecg")
+                        }
+                    } header: {
+                        Text("Temporary testing")
+                    } footer: {
+                        Text("Export a local record of GPS progress and spoken guidance to help investigate navigation issues.")
+                    }
                 }
 
                 Section {
@@ -76,6 +91,61 @@ struct SettingsView: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+/// Intentionally only reachable while the temporary navigation logger is
+/// included in the app. Sharing uses the standard iOS sheet, so Mail,
+/// Messages, Files, and any installed bug-reporting app can receive the
+/// plain-text file without the app needing an account or network access.
+private struct NavigationDiagnosticsView: View {
+    @ObservedObject var logger: NavigationLogger
+    @State private var exportURL: URL?
+    @State private var copied = false
+
+    var body: some View {
+        List {
+            Section {
+                Toggle("Record navigation events", isOn: $logger.isRecordingEnabled)
+                Text("\(logger.entryCount) event\(logger.entryCount == 1 ? "" : "s") saved on this device")
+                    .foregroundStyle(.secondary)
+            } footer: {
+                Text("The log includes the complete selected-route geometry, its turn steps and positions, location fixes, route-progress calculations, and speech events. It stays on this device until you share it.")
+            }
+
+            Section("Export") {
+                if let exportURL {
+                    ShareLink(item: exportURL) {
+                        Label("Share text file", systemImage: "square.and.arrow.up")
+                    }
+                    Button {
+                        if let text = try? String(contentsOf: exportURL, encoding: .utf8) {
+                            UIPasteboard.general.string = text
+                            copied = true
+                        }
+                    } label: {
+                        Label(copied ? "Copied" : "Copy to clipboard", systemImage: copied ? "checkmark" : "doc.on.doc")
+                    }
+                } else {
+                    Text("No log file could be prepared.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section {
+                Button("Clear saved diagnostics", role: .destructive) {
+                    logger.clear()
+                    refreshExport()
+                }
+            }
+        }
+        .navigationTitle("Navigation diagnostics")
+        .onAppear(perform: refreshExport)
+        .onChange(of: logger.entryCount) { _, _ in refreshExport() }
+    }
+
+    private func refreshExport() {
+        exportURL = logger.makeExport()
     }
 }
 

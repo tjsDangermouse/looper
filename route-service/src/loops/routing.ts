@@ -501,7 +501,41 @@ export const joinAndTrimLegs = (
    * passes.
    */
   protectedPoints: LngLat[] = [],
-) => trimTinySpikes(joinLegGeometries(legs), protectedPoints)
+) => alignStepsWithGeometry(trimTinySpikes(joinLegGeometries(legs), protectedPoints))
+
+/**
+ * GraphHopper's instruction intervals point into the route line. Trimming a
+ * short out-and-back changes that line, so retaining the engine's original
+ * per-step distances makes every later turn appear too far away to a client
+ * that (correctly) measures its position on the final line. Derive each
+ * instruction's walked distance from that final geometry: then progress and
+ * turn boundaries share one ruler. The
+ * route's advertised distance remains GraphHopper's engine measurement,
+ * which is used elsewhere for route-selection and tolerances.
+ */
+function alignStepsWithGeometry(joined: {
+  coordinates: LngLat[]
+  steps: GraphHopperStep[]
+  distanceMeters: number
+  durationSeconds: number
+  edges?: EdgeSpan[]
+}): typeof joined {
+  const cumulative = [0]
+  for (let index = 1; index < joined.coordinates.length; index++) {
+    cumulative.push(cumulative[index - 1] + haversine(joined.coordinates[index - 1], joined.coordinates[index]))
+  }
+  const steps = joined.steps.map(step => {
+    const start = step.startIndex
+    const end = step.endIndex
+    // An arrival is deliberately zero length. A malformed or unavailable
+    // interval cannot be safely remapped, so leave that one untouched rather
+    // than inventing a position for its instruction.
+    if (step.distanceMeters <= 0 || start === undefined || end === undefined
+      || start < 0 || end <= start || end >= cumulative.length) return step
+    return { ...step, distanceMeters: cumulative[end] - cumulative[start] }
+  })
+  return { ...joined, steps }
+}
 
 /**
  * Cut any backtrack under TINY_SPIKE_ROUND_TRIP_METRES straight out of the

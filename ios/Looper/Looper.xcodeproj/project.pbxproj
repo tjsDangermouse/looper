@@ -47,6 +47,7 @@
 		C08051705770F95DD9E3F92B /* Icons.swift in Sources */ = {isa = PBXBuildFile; fileRef = D96BFD021638C638473CB574 /* Icons.swift */; };
 		C411CA3A8A7B47B01F8B7584 /* LooperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A64D791F4AECBFEFC9B0213 /* LooperApp.swift */; };
 		C9A3449A63B42278C81FCA9B /* WatchLinkSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35198FC815755AEB4575E048 /* WatchLinkSession.swift */; };
+		CE50AAD703D0D2D966F0537B /* NavigationLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D2B9EBE1558A9702C75C760 /* NavigationLogger.swift */; };
 		D1AB71CC6AD8E33E5D664EA5 /* WatchTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E33785FF60ED31E1654AE6 /* WatchTheme.swift */; };
 		DB4CC7575D4A1E08A04356AE /* RouteTileCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 892C896BBE805E15C40FF985 /* RouteTileCache.swift */; };
 		DCDD0185C9E9410E447D827D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6851BB396678CA888E4FFC3E /* RootView.swift */; };
@@ -84,6 +85,7 @@
 /* Begin PBXFileReference section */
 		0260C72DA86CF4538286A4A7 /* SpeechManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechManager.swift; sourceTree = "<group>"; };
 		1A64D791F4AECBFEFC9B0213 /* LooperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LooperApp.swift; sourceTree = "<group>"; };
+		1D2B9EBE1558A9702C75C760 /* NavigationLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationLogger.swift; sourceTree = "<group>"; };
 		1F0674DB03F3533231684C80 /* Looper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Looper.entitlements; sourceTree = "<group>"; };
 		26CD672EEBDFF7271B57A496 /* ChoicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChoicesView.swift; sourceTree = "<group>"; };
 		2A5B8DAB14ACD3F6921BB9CD /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
@@ -203,6 +205,7 @@
 				EE795470AA6E8611DA7750F8 /* HealthKitService.swift */,
 				D96BFD021638C638473CB574 /* Icons.swift */,
 				2A5B8DAB14ACD3F6921BB9CD /* LocationManager.swift */,
+				1D2B9EBE1558A9702C75C760 /* NavigationLogger.swift */,
 				CA5BC29876B8514C886B3BB7 /* RouteStore.swift */,
 				892C896BBE805E15C40FF985 /* RouteTileCache.swift */,
 				6BE92C8BC17D92224E09728C /* SessionStore.swift */,
@@ -414,6 +417,7 @@
 				C411CA3A8A7B47B01F8B7584 /* LooperApp.swift in Sources */,
 				463B58E0CF7C44C0F1A8E884 /* MapLibreMapView.swift in Sources */,
 				FCE45C47731FF90344AB868D /* MapStyleConfiguration.swift in Sources */,
+				CE50AAD703D0D2D966F0537B /* NavigationLogger.swift in Sources */,
 				2563DCC062E820C93E6AC2E7 /* PlannerView.swift in Sources */,
 				B176A7380FD731F6AC1BF0E0 /* RouteStore.swift in Sources */,
 				DB4CC7575D4A1E08A04356AE /* RouteTileCache.swift in Sources */,
