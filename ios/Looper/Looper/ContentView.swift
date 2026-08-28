@@ -167,8 +167,8 @@ private struct MapStylePicker: View {
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(Color(hex: "243640"))
                     .frame(width: 44, height: 44)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 11))
-                    .overlay(RoundedRectangle(cornerRadius: 11).stroke(Color(hex: "b8c1c4")))
+                    .background(Color.white.opacity(0.32), in: RoundedRectangle(cornerRadius: 11))
+                    .overlay(RoundedRectangle(cornerRadius: 11).stroke(Color(hex: "b8c1c4").opacity(0.8)))
                     .shadow(color: .black.opacity(0.28), radius: 8, y: 4)
             }
             .accessibilityLabel("Choose map style")

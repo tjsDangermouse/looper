@@ -17,7 +17,7 @@ struct BottomSheet<Content: View>: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.bottom, isCollapsed ? 4 : 24)
+        .padding(.bottom, isCollapsed ? 4 : 8)
         .frame(maxWidth: .infinity)
         .background(
             Color.looperSheet
@@ -40,7 +40,7 @@ struct BottomSheet<Content: View>: View {
         Capsule()
             .fill(Color.secondary.opacity(0.4))
             .frame(width: 36, height: 5)
-            .padding(.vertical, 14)
+            .padding(.vertical, 7)
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
             .onTapGesture { isCollapsed.toggle() }

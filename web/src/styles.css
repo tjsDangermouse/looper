@@ -102,7 +102,9 @@ h1 { font-size: clamp(46px, 15vw, 68px); line-height: .95; letter-spacing: -.05e
 }
 .map-style-trigger {
   width: 44px; height: 44px; padding: 0; border-radius: 11px;
-  background: #fff; color: #243640; border: 1px solid #b8c1c4;
+  background: #ffffffb0; color: #243640; border: 1px solid #b8c1c4cc;
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
   box-shadow: 0 4px 15px #0004;
 }
 .map-style-trigger:active { transform: translateY(1px); }

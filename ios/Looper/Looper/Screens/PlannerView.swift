@@ -9,19 +9,19 @@ struct PlannerView: View {
 
     var body: some View {
         BottomSheet {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top) {
                     Text("How far shall we Loop?")
-                        .font(.title2.bold())
+                        .font(.system(size: 17, weight: .bold))
                     Spacer()
                     Button(action: model.requestLocation) {
                         Image(systemName: "location.fill")
                     }
-                    .buttonStyle(IconButtonStyle(background: .looperRaised, bordered: true))
+                    .buttonStyle(IconButtonStyle(diameter: 32, background: .looperRaised, bordered: true))
                     .accessibilityLabel("Use my location")
                 }
 
-                HStack(spacing: 12) {
+                HStack(spacing: 8) {
                     Picker("Activity", selection: $model.activity) {
                         Label("Walk", systemImage: "figure.walk")
                             .labelStyle(.iconOnly)
@@ -31,7 +31,7 @@ struct PlannerView: View {
                             .tag(Activity.running)
                     }
                     .pickerStyle(.segmented)
-                    .controlSize(.large)
+                    .controlSize(.small)
 
                     Picker("Plan by", selection: $model.mode) {
                         Label("Distance", systemImage: "ruler")
@@ -42,14 +42,14 @@ struct PlannerView: View {
                             .tag(LoopMode.time)
                     }
                     .pickerStyle(.segmented)
-                    .controlSize(.large)
+                    .controlSize(.small)
                 }
 
                 Text(model.mode == .distance ? "Your distance" : "Your time")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                HStack(spacing: 12) {
+                HStack(spacing: 8) {
                     TextField(model.mode == .distance ? "Distance" : "Minutes", text: $model.amount)
                         .keyboardType(.decimalPad)
                         .textFieldStyle(.roundedBorder)
@@ -61,7 +61,7 @@ struct PlannerView: View {
                             Text("mi").tag(LooperKit.Unit.mi)
                         }
                         .pickerStyle(.segmented)
-                        .frame(width: 120)
+                        .frame(width: 96)
                     } else {
                         Text("minutes").foregroundStyle(.secondary)
                     }
@@ -86,10 +86,10 @@ struct PlannerView: View {
                     Label(model.busy ? findingMessages[model.findingStage] : "Find my loops", systemImage: "arrow.triangle.2.circlepath")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(PrimaryButtonStyle(height: 44, cornerRadius: 12, fontSize: 15))
                 .disabled(model.busy)
             }
-            .padding(.top, 4)
+            .padding(.top, 2)
         }
     }
 }
