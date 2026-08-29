@@ -1,0 +1,69 @@
+{
+  "corpusCalls" : 368,
+  "repeats" : 7,
+  "configs" : [ {
+    "name" : "baseline",
+    "what" : "exactly what Looper sends today",
+    "pathFingerprint" : "1375ccf1edc3fe54",
+    "total" : {
+      "calls" : 368,
+      "ms" : 157.89,
+      "meanMs" : 0.43,
+      "medianMs" : 0.38,
+      "p95Ms" : 0.87,
+      "maxMs" : 1.17,
+      "visitedNodes" : 72712,
+      "meanVisitedNodes" : 197,
+      "serializeMs" : 29.26,
+      "algoInitMs" : 9.53,
+      "searchMsFloor" : 4.0
+    },
+    "byClass" : {
+      "lower-bound-profile" : {
+        "calls" : 368,
+        "ms" : 157.89,
+        "meanMs" : 0.43,
+        "medianMs" : 0.38,
+        "p95Ms" : 0.87,
+        "maxMs" : 1.17,
+        "visitedNodes" : 72712,
+        "meanVisitedNodes" : 197,
+        "serializeMs" : 29.26,
+        "algoInitMs" : 9.53,
+        "searchMsFloor" : 4.0
+      }
+    }
+  }, {
+    "name" : "lm-off",
+    "what" : "flexible routing, no landmark heuristic",
+    "pathFingerprint" : "1375ccf1edc3fe54",
+    "total" : {
+      "calls" : 368,
+      "ms" : 163.08,
+      "meanMs" : 0.44,
+      "medianMs" : 0.4,
+      "p95Ms" : 0.93,
+      "maxMs" : 1.6,
+      "visitedNodes" : 164410,
+      "meanVisitedNodes" : 446,
+      "serializeMs" : 17.49,
+      "algoInitMs" : 10.86,
+      "searchMsFloor" : 1.0
+    },
+    "byClass" : {
+      "lower-bound-profile" : {
+        "calls" : 368,
+        "ms" : 163.08,
+        "meanMs" : 0.44,
+        "medianMs" : 0.4,
+        "p95Ms" : 0.93,
+        "maxMs" : 1.6,
+        "visitedNodes" : 164410,
+        "meanVisitedNodes" : 446,
+        "serializeMs" : 17.49,
+        "algoInitMs" : 10.86,
+        "searchMsFloor" : 1.0
+      }
+    }
+  } ]
+}

@@ -42,7 +42,7 @@ All paths relative to the repository root of `graphhopper/graphhopper` at
 | `core/.../routing/AStarBidirection.java` | `AStarBidirection` | **the search** | dependency | no |
 | `core/.../routing/AbstractNonCHBidirAlgo.java`, `AbstractBidirAlgo.java` | — | its base classes | dependency | no |
 | `core/.../routing/BidirPathExtractor.java`, `PathExtractor.java` | — | path extraction | dependency | no |
-| `core/.../routing/lm/LMRoutingAlgorithmFactory.java` | `LMRoutingAlgorithmFactory` | picks `astarbi` when no algorithm is named | dependency | no |
+| `core/.../routing/lm/LMRoutingAlgorithmFactory.java` | `LMRoutingAlgorithmFactory` | picks `astarbi` when no algorithm is named; also the source of the active-landmark default, `min(prepared/2, 12)` | dependency | no |
 | `core/.../routing/lm/LMApproximator.java` | `LMApproximator` | the landmark heuristic; `max(lm, beeline)` | dependency | no |
 | `core/.../routing/lm/LandmarkStorage.java` | `LandmarkStorage` | 16 landmarks, `landmarks_foot` | dependency | no |
 | `core/.../routing/lm/PrepareLandmarks.java` | `PrepareLandmarks` | preparation at import | dependency | no |
@@ -50,6 +50,8 @@ All paths relative to the repository root of `graphhopper/graphhopper` at
 | `core/.../routing/weighting/custom/CustomWeighting.java` | `CustomWeighting` | **the weighting** | dependency | no |
 | `core/.../routing/weighting/custom/CustomModelParser.java` | `CustomModelParser` | compiles the model via Janino | dependency | no |
 | `core/.../routing/weighting/custom/FindMinMax.java` | `FindMinMax` | `checkLMConstraints`: why LM stays legal under avoidance | dependency | no |
+| `core/.../routing/weighting/BeelineWeightApproximator.java` | `BeelineWeightApproximator` | the other half of `max(lm, beeline)`; the half that adapts to the request weighting | dependency | no |
+| `core/.../routing/Dijkstra.java` | `Dijkstra` | not on the request path — the exact answer the Phase 2 heuristic measurement is checked against | dependency | no |
 | `core/.../routing/DefaultWeightingFactory.java` | `DefaultWeightingFactory` | merges profile + request custom models | dependency | no |
 | `web-api/.../util/CustomModel.java` | `CustomModel` | `merge`; the avoidance model's Java shape | dependency | no |
 | `core/.../routing/querygraph/QueryGraph.java` | `QueryGraph` | **virtual nodes and edges**; mid-edge starts | dependency | no |
@@ -81,3 +83,6 @@ copied.
 | `gh-harness/src/main/java/com/looper/routing/LooperRoutingCore.java` | the narrow facade; configures and calls GraphHopper, implements nothing |
 | `gh-harness/src/main/java/com/looper/routing/Harness.java` | the equivalence benchmark |
 | `gh-harness/src/main/java/com/looper/routing/Serve.java` | JDK HTTP transport so a TypeScript caller can reach the core |
+| `gh-harness/src/main/java/com/looper/routing/Lab.java` | Phase 2: replays the captured workload under named GraphHopper configurations |
+| `gh-harness/src/main/java/com/looper/routing/Heuristic.java` | Phase 2: measures the landmark and beeline bounds against an exact Dijkstra |
+| `gh-harness/src/main/java/com/looper/routing/ModelCost.java` | Phase 2: times `createWeighting` alone, on a compiled-class cache hit and miss |

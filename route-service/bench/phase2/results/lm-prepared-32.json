@@ -1,0 +1,411 @@
+{
+  "corpusCalls" : 1863,
+  "repeats" : 5,
+  "configs" : [ {
+    "name" : "baseline",
+    "what" : "exactly what Looper sends today",
+    "pathFingerprint" : "1870f0e9ee1b1ff0",
+    "total" : {
+      "calls" : 1863,
+      "ms" : 2238.56,
+      "meanMs" : 1.2,
+      "medianMs" : 0.79,
+      "p95Ms" : 3.56,
+      "maxMs" : 10.77,
+      "visitedNodes" : 988086,
+      "meanVisitedNodes" : 530,
+      "serializeMs" : 116.74,
+      "algoInitMs" : 49.65,
+      "searchMsFloor" : 517.0
+    },
+    "byClass" : {
+      "plain" : {
+        "calls" : 368,
+        "ms" : 152.93,
+        "meanMs" : 0.42,
+        "medianMs" : 0.36,
+        "p95Ms" : 0.89,
+        "maxMs" : 1.1,
+        "visitedNodes" : 70128,
+        "meanVisitedNodes" : 190,
+        "serializeMs" : 22.5,
+        "algoInitMs" : 9.78,
+        "searchMsFloor" : 0.0
+      },
+      "avoid-strong" : {
+        "calls" : 1227,
+        "ms" : 1720.63,
+        "meanMs" : 1.4,
+        "medianMs" : 0.93,
+        "p95Ms" : 4.07,
+        "maxMs" : 10.77,
+        "visitedNodes" : 744840,
+        "meanVisitedNodes" : 607,
+        "serializeMs" : 76.71,
+        "algoInitMs" : 32.83,
+        "searchMsFloor" : 432.0
+      },
+      "avoid-relaxed" : {
+        "calls" : 268,
+        "ms" : 365.0,
+        "meanMs" : 1.36,
+        "medianMs" : 0.96,
+        "p95Ms" : 3.82,
+        "maxMs" : 6.65,
+        "visitedNodes" : 173118,
+        "meanVisitedNodes" : 645,
+        "serializeMs" : 17.53,
+        "algoInitMs" : 7.04,
+        "searchMsFloor" : 85.0
+      }
+    }
+  }, {
+    "name" : "active-4",
+    "what" : "4 active landmarks",
+    "pathFingerprint" : "1870f0e9ee1b1ff0",
+    "total" : {
+      "calls" : 1863,
+      "ms" : 2193.39,
+      "meanMs" : 1.18,
+      "medianMs" : 0.78,
+      "p95Ms" : 3.48,
+      "maxMs" : 10.31,
+      "visitedNodes" : 1040434,
+      "meanVisitedNodes" : 558,
+      "serializeMs" : 93.34,
+      "algoInitMs" : 46.97,
+      "searchMsFloor" : 493.0
+    },
+    "byClass" : {
+      "plain" : {
+        "calls" : 368,
+        "ms" : 149.68,
+        "meanMs" : 0.41,
+        "medianMs" : 0.35,
+        "p95Ms" : 0.85,
+        "maxMs" : 1.11,
+        "visitedNodes" : 79602,
+        "meanVisitedNodes" : 216,
+        "serializeMs" : 14.99,
+        "algoInitMs" : 8.22,
+        "searchMsFloor" : 0.0
+      },
+      "avoid-strong" : {
+        "calls" : 1227,
+        "ms" : 1681.13,
+        "meanMs" : 1.37,
+        "medianMs" : 0.9,
+        "p95Ms" : 3.78,
+        "maxMs" : 10.31,
+        "visitedNodes" : 779518,
+        "meanVisitedNodes" : 635,
+        "serializeMs" : 63.19,
+        "algoInitMs" : 31.65,
+        "searchMsFloor" : 406.0
+      },
+      "avoid-relaxed" : {
+        "calls" : 268,
+        "ms" : 362.58,
+        "meanMs" : 1.35,
+        "medianMs" : 0.96,
+        "p95Ms" : 4.06,
+        "maxMs" : 5.94,
+        "visitedNodes" : 181314,
+        "meanVisitedNodes" : 676,
+        "serializeMs" : 15.17,
+        "algoInitMs" : 7.1,
+        "searchMsFloor" : 87.0
+      }
+    }
+  }, {
+    "name" : "active-8",
+    "what" : "8 active landmarks",
+    "pathFingerprint" : "1870f0e9ee1b1ff0",
+    "total" : {
+      "calls" : 1863,
+      "ms" : 2131.03,
+      "meanMs" : 1.14,
+      "medianMs" : 0.75,
+      "p95Ms" : 3.36,
+      "maxMs" : 9.98,
+      "visitedNodes" : 988086,
+      "meanVisitedNodes" : 530,
+      "serializeMs" : 89.54,
+      "algoInitMs" : 49.22,
+      "searchMsFloor" : 481.0
+    },
+    "byClass" : {
+      "plain" : {
+        "calls" : 368,
+        "ms" : 146.12,
+        "meanMs" : 0.4,
+        "medianMs" : 0.35,
+        "p95Ms" : 0.84,
+        "maxMs" : 1.09,
+        "visitedNodes" : 70128,
+        "meanVisitedNodes" : 190,
+        "serializeMs" : 14.71,
+        "algoInitMs" : 9.35,
+        "searchMsFloor" : 0.0
+      },
+      "avoid-strong" : {
+        "calls" : 1227,
+        "ms" : 1637.18,
+        "meanMs" : 1.33,
+        "medianMs" : 0.89,
+        "p95Ms" : 3.75,
+        "maxMs" : 9.98,
+        "visitedNodes" : 744840,
+        "meanVisitedNodes" : 607,
+        "serializeMs" : 60.74,
+        "algoInitMs" : 32.25,
+        "searchMsFloor" : 397.0
+      },
+      "avoid-relaxed" : {
+        "calls" : 268,
+        "ms" : 347.73,
+        "meanMs" : 1.3,
+        "medianMs" : 0.91,
+        "p95Ms" : 3.8,
+        "maxMs" : 6.44,
+        "visitedNodes" : 173118,
+        "meanVisitedNodes" : 645,
+        "serializeMs" : 14.09,
+        "algoInitMs" : 7.62,
+        "searchMsFloor" : 84.0
+      }
+    }
+  }, {
+    "name" : "active-12",
+    "what" : "12 active landmarks",
+    "pathFingerprint" : "1870f0e9ee1b1ff0",
+    "total" : {
+      "calls" : 1863,
+      "ms" : 2149.53,
+      "meanMs" : 1.15,
+      "medianMs" : 0.75,
+      "p95Ms" : 3.51,
+      "maxMs" : 10.11,
+      "visitedNodes" : 970572,
+      "meanVisitedNodes" : 520,
+      "serializeMs" : 90.76,
+      "algoInitMs" : 49.12,
+      "searchMsFloor" : 488.0
+    },
+    "byClass" : {
+      "plain" : {
+        "calls" : 368,
+        "ms" : 146.19,
+        "meanMs" : 0.4,
+        "medianMs" : 0.34,
+        "p95Ms" : 0.83,
+        "maxMs" : 1.03,
+        "visitedNodes" : 64200,
+        "meanVisitedNodes" : 174,
+        "serializeMs" : 14.56,
+        "algoInitMs" : 9.25,
+        "searchMsFloor" : 0.0
+      },
+      "avoid-strong" : {
+        "calls" : 1227,
+        "ms" : 1648.46,
+        "meanMs" : 1.34,
+        "medianMs" : 0.88,
+        "p95Ms" : 3.78,
+        "maxMs" : 10.11,
+        "visitedNodes" : 734430,
+        "meanVisitedNodes" : 598,
+        "serializeMs" : 62.31,
+        "algoInitMs" : 32.39,
+        "searchMsFloor" : 402.0
+      },
+      "avoid-relaxed" : {
+        "calls" : 268,
+        "ms" : 354.89,
+        "meanMs" : 1.32,
+        "medianMs" : 0.9,
+        "p95Ms" : 4.0,
+        "maxMs" : 6.77,
+        "visitedNodes" : 171942,
+        "meanVisitedNodes" : 641,
+        "serializeMs" : 13.89,
+        "algoInitMs" : 7.48,
+        "searchMsFloor" : 86.0
+      }
+    }
+  }, {
+    "name" : "active-16",
+    "what" : "16 active landmarks",
+    "pathFingerprint" : "1870f0e9ee1b1ff0",
+    "total" : {
+      "calls" : 1863,
+      "ms" : 2171.66,
+      "meanMs" : 1.17,
+      "medianMs" : 0.75,
+      "p95Ms" : 3.53,
+      "maxMs" : 10.41,
+      "visitedNodes" : 965070,
+      "meanVisitedNodes" : 518,
+      "serializeMs" : 87.82,
+      "algoInitMs" : 48.35,
+      "searchMsFloor" : 520.0
+    },
+    "byClass" : {
+      "plain" : {
+        "calls" : 368,
+        "ms" : 146.76,
+        "meanMs" : 0.4,
+        "medianMs" : 0.35,
+        "p95Ms" : 0.82,
+        "maxMs" : 1.19,
+        "visitedNodes" : 63276,
+        "meanVisitedNodes" : 171,
+        "serializeMs" : 14.25,
+        "algoInitMs" : 7.94,
+        "searchMsFloor" : 0.0
+      },
+      "avoid-strong" : {
+        "calls" : 1227,
+        "ms" : 1668.21,
+        "meanMs" : 1.36,
+        "medianMs" : 0.89,
+        "p95Ms" : 3.92,
+        "maxMs" : 10.41,
+        "visitedNodes" : 731532,
+        "meanVisitedNodes" : 596,
+        "serializeMs" : 59.48,
+        "algoInitMs" : 33.96,
+        "searchMsFloor" : 430.0
+      },
+      "avoid-relaxed" : {
+        "calls" : 268,
+        "ms" : 356.68,
+        "meanMs" : 1.33,
+        "medianMs" : 0.92,
+        "p95Ms" : 3.85,
+        "maxMs" : 6.81,
+        "visitedNodes" : 170262,
+        "meanVisitedNodes" : 635,
+        "serializeMs" : 14.09,
+        "algoInitMs" : 6.45,
+        "searchMsFloor" : 90.0
+      }
+    }
+  }, {
+    "name" : "active-24",
+    "what" : "24 active landmarks",
+    "pathFingerprint" : "1870f0e9ee1b1ff0",
+    "total" : {
+      "calls" : 1863,
+      "ms" : 2226.44,
+      "meanMs" : 1.2,
+      "medianMs" : 0.76,
+      "p95Ms" : 3.65,
+      "maxMs" : 11.0,
+      "visitedNodes" : 958894,
+      "meanVisitedNodes" : 514,
+      "serializeMs" : 88.77,
+      "algoInitMs" : 44.1,
+      "searchMsFloor" : 567.0
+    },
+    "byClass" : {
+      "plain" : {
+        "calls" : 368,
+        "ms" : 153.22,
+        "meanMs" : 0.42,
+        "medianMs" : 0.36,
+        "p95Ms" : 0.87,
+        "maxMs" : 1.7,
+        "visitedNodes" : 62470,
+        "meanVisitedNodes" : 169,
+        "serializeMs" : 14.79,
+        "algoInitMs" : 8.07,
+        "searchMsFloor" : 0.0
+      },
+      "avoid-strong" : {
+        "calls" : 1227,
+        "ms" : 1704.96,
+        "meanMs" : 1.39,
+        "medianMs" : 0.9,
+        "p95Ms" : 3.95,
+        "maxMs" : 11.0,
+        "visitedNodes" : 726042,
+        "meanVisitedNodes" : 591,
+        "serializeMs" : 60.05,
+        "algoInitMs" : 29.71,
+        "searchMsFloor" : 468.0
+      },
+      "avoid-relaxed" : {
+        "calls" : 268,
+        "ms" : 368.27,
+        "meanMs" : 1.37,
+        "medianMs" : 0.95,
+        "p95Ms" : 3.95,
+        "maxMs" : 7.47,
+        "visitedNodes" : 170382,
+        "meanVisitedNodes" : 635,
+        "serializeMs" : 13.93,
+        "algoInitMs" : 6.32,
+        "searchMsFloor" : 99.0
+      }
+    }
+  }, {
+    "name" : "active-32",
+    "what" : "32 active landmarks",
+    "pathFingerprint" : "1870f0e9ee1b1ff0",
+    "total" : {
+      "calls" : 1863,
+      "ms" : 2289.81,
+      "meanMs" : 1.23,
+      "medianMs" : 0.77,
+      "p95Ms" : 3.69,
+      "maxMs" : 11.73,
+      "visitedNodes" : 960212,
+      "meanVisitedNodes" : 515,
+      "serializeMs" : 88.23,
+      "algoInitMs" : 48.84,
+      "searchMsFloor" : 622.0
+    },
+    "byClass" : {
+      "plain" : {
+        "calls" : 368,
+        "ms" : 155.9,
+        "meanMs" : 0.42,
+        "medianMs" : 0.37,
+        "p95Ms" : 0.86,
+        "maxMs" : 1.09,
+        "visitedNodes" : 61838,
+        "meanVisitedNodes" : 168,
+        "serializeMs" : 14.51,
+        "algoInitMs" : 7.86,
+        "searchMsFloor" : 0.0
+      },
+      "avoid-strong" : {
+        "calls" : 1227,
+        "ms" : 1753.48,
+        "meanMs" : 1.43,
+        "medianMs" : 0.92,
+        "p95Ms" : 4.08,
+        "maxMs" : 11.73,
+        "visitedNodes" : 726746,
+        "meanVisitedNodes" : 592,
+        "serializeMs" : 59.36,
+        "algoInitMs" : 32.83,
+        "searchMsFloor" : 507.0
+      },
+      "avoid-relaxed" : {
+        "calls" : 268,
+        "ms" : 380.43,
+        "meanMs" : 1.42,
+        "medianMs" : 0.96,
+        "p95Ms" : 4.78,
+        "maxMs" : 7.2,
+        "visitedNodes" : 171628,
+        "meanVisitedNodes" : 640,
+        "serializeMs" : 14.35,
+        "algoInitMs" : 8.15,
+        "searchMsFloor" : 115.0
+      }
+    }
+  } ]
+}

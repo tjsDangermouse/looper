@@ -244,6 +244,18 @@ because `looper_foot.json` replaces the road-class preference entirely.
 
 ## Recommended Phase 2
 
+**Answered.** See
+[GRAPHHOPPER_LOOPER_PHASE2_PERFORMANCE.md](GRAPHHOPPER_LOOPER_PHASE2_PERFORMANCE.md).
+The first recommendation below was the right question and the answer is no: a
+preparation that anticipates avoidance is not expressible, because GraphHopper
+keys one landmark storage per profile and a request cannot select among several.
+The same trick *does* work for the lower-bound model through a dedicated
+profile — 2.27× fewer nodes, route-identical — but that model turns out to have
+zero production calls. And the premise underneath both was too generous to the
+engine: measured against the real call mix rather than these fixtures,
+GraphHopper spends 19% of what Looper calls engine time, and the search itself
+4%. No engine configuration moves whole-generation latency at all.
+
 The evidence points somewhere slightly different from where the brief expected.
 
 Removing the server bought a 3.2× smaller jar, 230 MiB, and a 2.7× faster warm

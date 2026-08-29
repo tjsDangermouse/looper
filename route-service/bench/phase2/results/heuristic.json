@@ -1,0 +1,465 @@
+{
+  "preparedLandmarks" : 16,
+  "activeLandmarks" : 8,
+  "landmarkWeighting" : "custom",
+  "landmarkWeightResolution" : 1.035376,
+  "samplesPerCase" : 80,
+  "landmarks" : [ {
+    "subnetwork" : 1,
+    "node" : 27756,
+    "lat" : 54.0618767,
+    "lon" : -4.7628545
+  }, {
+    "subnetwork" : 1,
+    "node" : 3825,
+    "lat" : 54.2063351,
+    "lon" : -4.4071386
+  }, {
+    "subnetwork" : 1,
+    "node" : 23539,
+    "lat" : 54.323776,
+    "lon" : -4.4046917
+  }, {
+    "subnetwork" : 1,
+    "node" : 16582,
+    "lat" : 54.1504389,
+    "lon" : -4.5315245
+  }, {
+    "subnetwork" : 1,
+    "node" : 30248,
+    "lat" : 54.0542902,
+    "lon" : -4.6243649
+  }, {
+    "subnetwork" : 1,
+    "node" : 19037,
+    "lat" : 54.2278084,
+    "lon" : -4.6773543
+  }, {
+    "subnetwork" : 1,
+    "node" : 3547,
+    "lat" : 54.2214624,
+    "lon" : -4.3988929
+  }, {
+    "subnetwork" : 1,
+    "node" : 10799,
+    "lat" : 54.1427755,
+    "lon" : -4.5054481
+  }, {
+    "subnetwork" : 1,
+    "node" : 32233,
+    "lat" : 54.1085887,
+    "lon" : -4.6787626
+  }, {
+    "subnetwork" : 1,
+    "node" : 14580,
+    "lat" : 54.1765012,
+    "lon" : -4.4839834
+  }, {
+    "subnetwork" : 1,
+    "node" : 9222,
+    "lat" : 54.1473776,
+    "lon" : -4.4778947
+  }, {
+    "subnetwork" : 1,
+    "node" : 22335,
+    "lat" : 54.3205276,
+    "lon" : -4.4904515
+  }, {
+    "subnetwork" : 1,
+    "node" : 18626,
+    "lat" : 54.2027398,
+    "lon" : -4.6290883
+  }, {
+    "subnetwork" : 1,
+    "node" : 33780,
+    "lat" : 54.0975785,
+    "lon" : -4.6201171
+  }, {
+    "subnetwork" : 1,
+    "node" : 12669,
+    "lat" : 54.1519579,
+    "lon" : -4.4901474
+  }, {
+    "subnetwork" : 1,
+    "node" : 30299,
+    "lat" : 54.0718748,
+    "lon" : -4.6610809
+  } ],
+  "cases" : [ {
+    "name" : "plain",
+    "minWeightPerDistance" : 0.24,
+    "weighting" : "custom",
+    "sampledNodes" : 80,
+    "samples" : [ {
+      "node" : 8516,
+      "exactRemainingWeight" : 2319.1038,
+      "beelineBound" : 708.1942,
+      "chosenBound" : 2317.6315,
+      "landmarkDecided" : true,
+      "tightness" : 0.9994
+    }, {
+      "node" : 6049,
+      "exactRemainingWeight" : 823.3369,
+      "beelineBound" : 240.1021,
+      "chosenBound" : 822.5486,
+      "landmarkDecided" : true,
+      "tightness" : 0.999
+    }, {
+      "node" : 6009,
+      "exactRemainingWeight" : 937.0422,
+      "beelineBound" : 277.5874,
+      "chosenBound" : 936.4399,
+      "landmarkDecided" : true,
+      "tightness" : 0.9994
+    }, {
+      "node" : 8529,
+      "exactRemainingWeight" : 2254.9604,
+      "beelineBound" : 688.0718,
+      "chosenBound" : 2253.4382,
+      "landmarkDecided" : true,
+      "tightness" : 0.9993
+    }, {
+      "node" : 7838,
+      "exactRemainingWeight" : 1530.1616,
+      "beelineBound" : 472.8249,
+      "chosenBound" : 1529.7104,
+      "landmarkDecided" : true,
+      "tightness" : 0.9997
+    }, {
+      "node" : 8681,
+      "exactRemainingWeight" : 2548.8241,
+      "beelineBound" : 773.8653,
+      "chosenBound" : 2547.485,
+      "landmarkDecided" : true,
+      "tightness" : 0.9995
+    }, {
+      "node" : 6982,
+      "exactRemainingWeight" : 195.8094,
+      "beelineBound" : 50.8091,
+      "chosenBound" : 195.1107,
+      "landmarkDecided" : true,
+      "tightness" : 0.9964
+    }, {
+      "node" : 5963,
+      "exactRemainingWeight" : 1157.7366,
+      "beelineBound" : 349.4153,
+      "chosenBound" : 1156.975,
+      "landmarkDecided" : true,
+      "tightness" : 0.9993
+    }, {
+      "node" : 7730,
+      "exactRemainingWeight" : 1866.9287,
+      "beelineBound" : 582.5662,
+      "chosenBound" : 1866.2076,
+      "landmarkDecided" : true,
+      "tightness" : 0.9996
+    }, {
+      "node" : 5992,
+      "exactRemainingWeight" : 980.9643,
+      "beelineBound" : 291.2099,
+      "chosenBound" : 979.9257,
+      "landmarkDecided" : true,
+      "tightness" : 0.9989
+    }, {
+      "node" : 5937,
+      "exactRemainingWeight" : 1211.0007,
+      "beelineBound" : 367.0654,
+      "chosenBound" : 1209.7792,
+      "landmarkDecided" : true,
+      "tightness" : 0.999
+    }, {
+      "node" : 8584,
+      "exactRemainingWeight" : 2361.614,
+      "beelineBound" : 721.7555,
+      "chosenBound" : 2360.0819,
+      "landmarkDecided" : true,
+      "tightness" : 0.9994
+    } ],
+    "landmarkDecidedFraction" : 1.0,
+    "meanBeelineTightness" : 0.297,
+    "meanChosenTightness" : 0.9984,
+    "medianChosenTightness" : 0.9994
+  }, {
+    "name" : "avoidance 0.2 (relaxed)",
+    "minWeightPerDistance" : 0.24,
+    "weighting" : "custom",
+    "sampledNodes" : 80,
+    "samples" : [ {
+      "node" : 6164,
+      "exactRemainingWeight" : 1668.2087,
+      "beelineBound" : 269.5389,
+      "chosenBound" : 932.2984,
+      "landmarkDecided" : true,
+      "tightness" : 0.5589
+    }, {
+      "node" : 7093,
+      "exactRemainingWeight" : 728.6865,
+      "beelineBound" : 63.6779,
+      "chosenBound" : 252.0564,
+      "landmarkDecided" : true,
+      "tightness" : 0.3459
+    }, {
+      "node" : 5407,
+      "exactRemainingWeight" : 2058.5171,
+      "beelineBound" : 396.7444,
+      "chosenBound" : 1322.6352,
+      "landmarkDecided" : true,
+      "tightness" : 0.6425
+    }, {
+      "node" : 12910,
+      "exactRemainingWeight" : 3475.8933,
+      "beelineBound" : 722.1876,
+      "chosenBound" : 2455.3365,
+      "landmarkDecided" : true,
+      "tightness" : 0.7064
+    }, {
+      "node" : 6158,
+      "exactRemainingWeight" : 1629.5389,
+      "beelineBound" : 267.1276,
+      "chosenBound" : 892.9541,
+      "landmarkDecided" : true,
+      "tightness" : 0.548
+    }, {
+      "node" : 8691,
+      "exactRemainingWeight" : 3854.7609,
+      "beelineBound" : 779.4771,
+      "chosenBound" : 2580.617,
+      "landmarkDecided" : true,
+      "tightness" : 0.6695
+    }, {
+      "node" : 5585,
+      "exactRemainingWeight" : 2354.4781,
+      "beelineBound" : 478.994,
+      "chosenBound" : 1617.7173,
+      "landmarkDecided" : true,
+      "tightness" : 0.6871
+    }, {
+      "node" : 10128,
+      "exactRemainingWeight" : 3794.1837,
+      "beelineBound" : 779.64,
+      "chosenBound" : 2575.4401,
+      "landmarkDecided" : true,
+      "tightness" : 0.6788
+    }, {
+      "node" : 7110,
+      "exactRemainingWeight" : 684.8827,
+      "beelineBound" : 53.776,
+      "chosenBound" : 208.5706,
+      "landmarkDecided" : true,
+      "tightness" : 0.3045
+    }, {
+      "node" : 13069,
+      "exactRemainingWeight" : 3308.224,
+      "beelineBound" : 696.6644,
+      "chosenBound" : 2335.2329,
+      "landmarkDecided" : true,
+      "tightness" : 0.7059
+    }, {
+      "node" : 6932,
+      "exactRemainingWeight" : 538.4985,
+      "beelineBound" : 25.7761,
+      "chosenBound" : 85.3608,
+      "landmarkDecided" : true,
+      "tightness" : 0.1585
+    }, {
+      "node" : 12839,
+      "exactRemainingWeight" : 3740.1793,
+      "beelineBound" : 770.1031,
+      "chosenBound" : 2565.0864,
+      "landmarkDecided" : true,
+      "tightness" : 0.6858
+    } ],
+    "landmarkDecidedFraction" : 0.9241,
+    "meanBeelineTightness" : 0.1648,
+    "meanChosenTightness" : 0.5364,
+    "medianChosenTightness" : 0.6695
+  }, {
+    "name" : "avoidance 0.05 (strong)",
+    "minWeightPerDistance" : 0.24,
+    "weighting" : "custom",
+    "sampledNodes" : 80,
+    "samples" : [ {
+      "node" : 6164,
+      "exactRemainingWeight" : 2030.1735,
+      "beelineBound" : 269.5389,
+      "chosenBound" : 932.2984,
+      "landmarkDecided" : true,
+      "tightness" : 0.4592
+    }, {
+      "node" : 7093,
+      "exactRemainingWeight" : 1090.6512,
+      "beelineBound" : 63.6779,
+      "chosenBound" : 252.0564,
+      "landmarkDecided" : true,
+      "tightness" : 0.2311
+    }, {
+      "node" : 5407,
+      "exactRemainingWeight" : 2420.4819,
+      "beelineBound" : 396.7444,
+      "chosenBound" : 1322.6352,
+      "landmarkDecided" : true,
+      "tightness" : 0.5464
+    }, {
+      "node" : 12910,
+      "exactRemainingWeight" : 3837.858,
+      "beelineBound" : 722.1876,
+      "chosenBound" : 2455.3365,
+      "landmarkDecided" : true,
+      "tightness" : 0.6398
+    }, {
+      "node" : 6158,
+      "exactRemainingWeight" : 1991.5037,
+      "beelineBound" : 267.1276,
+      "chosenBound" : 892.9541,
+      "landmarkDecided" : true,
+      "tightness" : 0.4484
+    }, {
+      "node" : 8691,
+      "exactRemainingWeight" : 4216.7256,
+      "beelineBound" : 779.4771,
+      "chosenBound" : 2580.617,
+      "landmarkDecided" : true,
+      "tightness" : 0.612
+    }, {
+      "node" : 5585,
+      "exactRemainingWeight" : 2716.4429,
+      "beelineBound" : 478.994,
+      "chosenBound" : 1617.7173,
+      "landmarkDecided" : true,
+      "tightness" : 0.5955
+    }, {
+      "node" : 10128,
+      "exactRemainingWeight" : 4156.1484,
+      "beelineBound" : 779.64,
+      "chosenBound" : 2575.4401,
+      "landmarkDecided" : true,
+      "tightness" : 0.6197
+    }, {
+      "node" : 7110,
+      "exactRemainingWeight" : 1046.8475,
+      "beelineBound" : 53.776,
+      "chosenBound" : 208.5706,
+      "landmarkDecided" : true,
+      "tightness" : 0.1992
+    }, {
+      "node" : 13069,
+      "exactRemainingWeight" : 3670.1888,
+      "beelineBound" : 696.6644,
+      "chosenBound" : 2335.2329,
+      "landmarkDecided" : true,
+      "tightness" : 0.6363
+    }, {
+      "node" : 6932,
+      "exactRemainingWeight" : 900.4632,
+      "beelineBound" : 25.7761,
+      "chosenBound" : 85.3608,
+      "landmarkDecided" : true,
+      "tightness" : 0.0948
+    }, {
+      "node" : 12839,
+      "exactRemainingWeight" : 4102.1441,
+      "beelineBound" : 770.1031,
+      "chosenBound" : 2565.0864,
+      "landmarkDecided" : true,
+      "tightness" : 0.6253
+    } ],
+    "landmarkDecidedFraction" : 0.9241,
+    "meanBeelineTightness" : 0.1359,
+    "meanChosenTightness" : 0.4482,
+    "medianChosenTightness" : 0.5955
+  }, {
+    "name" : "distance_influence 2000",
+    "minWeightPerDistance" : 2.24,
+    "weighting" : "custom",
+    "sampledNodes" : 80,
+    "samples" : [ {
+      "node" : 5943,
+      "exactRemainingWeight" : 4423.4009,
+      "beelineBound" : 3338.307,
+      "chosenBound" : 3338.307,
+      "landmarkDecided" : false,
+      "tightness" : 0.7547
+    }, {
+      "node" : 8282,
+      "exactRemainingWeight" : 8196.8622,
+      "beelineBound" : 6280.6314,
+      "chosenBound" : 6280.6314,
+      "landmarkDecided" : false,
+      "tightness" : 0.7662
+    }, {
+      "node" : 7724,
+      "exactRemainingWeight" : 7139.8294,
+      "beelineBound" : 5519.107,
+      "chosenBound" : 5519.107,
+      "landmarkDecided" : false,
+      "tightness" : 0.773
+    }, {
+      "node" : 6087,
+      "exactRemainingWeight" : 2526.0642,
+      "beelineBound" : 1842.69,
+      "chosenBound" : 1842.69,
+      "landmarkDecided" : false,
+      "tightness" : 0.7295
+    }, {
+      "node" : 7822,
+      "exactRemainingWeight" : 5469.211,
+      "beelineBound" : 4194.4591,
+      "chosenBound" : 4194.4591,
+      "landmarkDecided" : false,
+      "tightness" : 0.7669
+    }, {
+      "node" : 7840,
+      "exactRemainingWeight" : 5725.7886,
+      "beelineBound" : 4404.1551,
+      "chosenBound" : 4404.1551,
+      "landmarkDecided" : false,
+      "tightness" : 0.7692
+    }, {
+      "node" : 8288,
+      "exactRemainingWeight" : 8104.9289,
+      "beelineBound" : 6234.4177,
+      "chosenBound" : 6234.4177,
+      "landmarkDecided" : false,
+      "tightness" : 0.7692
+    }, {
+      "node" : 6069,
+      "exactRemainingWeight" : 2570.3165,
+      "beelineBound" : 1873.4725,
+      "chosenBound" : 1873.4725,
+      "landmarkDecided" : false,
+      "tightness" : 0.7289
+    }, {
+      "node" : 6090,
+      "exactRemainingWeight" : 2200.0967,
+      "beelineBound" : 1598.9283,
+      "chosenBound" : 1598.9283,
+      "landmarkDecided" : false,
+      "tightness" : 0.7268
+    }, {
+      "node" : 8378,
+      "exactRemainingWeight" : 7280.4751,
+      "beelineBound" : 5626.8723,
+      "chosenBound" : 5626.8723,
+      "landmarkDecided" : false,
+      "tightness" : 0.7729
+    }, {
+      "node" : 6009,
+      "exactRemainingWeight" : 3495.9026,
+      "beelineBound" : 2590.8157,
+      "chosenBound" : 2590.8157,
+      "landmarkDecided" : false,
+      "tightness" : 0.7411
+    }, {
+      "node" : 7817,
+      "exactRemainingWeight" : 5440.213,
+      "beelineBound" : 4170.6047,
+      "chosenBound" : 4170.6047,
+      "landmarkDecided" : false,
+      "tightness" : 0.7666
+    } ],
+    "landmarkDecidedFraction" : 0.0,
+    "meanBeelineTightness" : 0.7469,
+    "meanChosenTightness" : 0.7469,
+    "medianChosenTightness" : 0.7591
+  } ]
+}

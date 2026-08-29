@@ -2,6 +2,7 @@ import type { LngLat } from './geo.js'
 import type { CustomModel } from './avoidance.js'
 import { pavementReport } from './edges.js'
 import type { GraphHopperLeg } from '../graphhopper.js'
+import { appendFileSync } from 'node:fs'
 
 /**
  * What one request actually cost.
@@ -338,6 +339,55 @@ export class RequestMetrics {
  * wrapper is transparent: same arguments, same result, same thrown errors —
  * a failed call still cost the engine the work, so it is still counted.
  */
+/**
+ * A JSONL record of every engine call, written only when `LOOPER_TRACE_FILE`
+ * names a file.
+ *
+ * The counters above say what a request cost in aggregate. This says what each
+ * individual call was: which class of custom model it carried, how big the
+ * corridor set was, what it cost and how much graph it settled. It exists so
+ * that engine experiments can be replayed against the real workload rather
+ * than against fixtures chosen by hand, and it is off unless asked for —
+ * appending a line per call is cheap, but "cheap" is not "free" and production
+ * is not a benchmark.
+ */
+const TRACE_FILE = process.env.LOOPER_TRACE_FILE
+/**
+ * Whether each traced call also carries the points and custom model it was
+ * made with, so the corpus can be replayed against a bare engine. Separate
+ * from the trace itself because the corridors dominate the file size — a
+ * twelve-area model is tens of kilobytes — and most questions do not need it.
+ */
+const TRACE_BODIES = process.env.LOOPER_TRACE_BODIES === '1'
+
+/**
+ * Which weighting a call actually asked for, from the model itself rather than
+ * from the caller's intent. `purpose` says which fixup is paying; this says
+ * what the engine was handed, which is what its search behaviour depends on.
+ */
+export type RequestClass = 'plain' | 'avoid-strong' | 'avoid-relaxed' | 'avoid-other' | 'lower-bound' | 'mixed'
+
+export function classifyRequest(model: CustomModel | undefined): RequestClass {
+  if (!model) return 'plain'
+  const multiplier = model.priority?.[0]?.multiply_by
+  const hasDistanceInfluence = model.distance_influence !== undefined
+  if (multiplier === undefined) return hasDistanceInfluence ? 'lower-bound' : 'plain'
+  if (hasDistanceInfluence) return 'mixed'
+  const value = Number(multiplier)
+  if (value === 0.05) return 'avoid-strong'
+  if (value === 0.2) return 'avoid-relaxed'
+  return 'avoid-other'
+}
+
+function trace(record: Record<string, unknown>) {
+  if (!TRACE_FILE) return
+  try {
+    appendFileSync(TRACE_FILE, JSON.stringify(record) + '\n')
+  } catch {
+    // A benchmark's notebook is not allowed to break the thing it is watching.
+  }
+}
+
 const COUNTED_BY = Symbol('looper.countedBy')
 type Counted = { [COUNTED_BY]?: RequestMetrics }
 
@@ -363,7 +413,18 @@ export function countingRouter(
     } finally {
       // A call that threw is still a call, and still cost the engine time. It
       // simply has no node count to report, which is what `undefined` says.
-      metrics.countCall(purpose, now() - began, Math.max(1, points.length - 1), customModel?.areas?.features?.length ?? 0, visitedNodes, pavement)
+      const elapsed = now() - began
+      metrics.countCall(purpose, elapsed, Math.max(1, points.length - 1), customModel?.areas?.features?.length ?? 0, visitedNodes, pavement)
+      trace({
+        purpose,
+        class: classifyRequest(customModel),
+        points: points.length,
+        areas: customModel?.areas?.features?.length ?? 0,
+        areaVertices: customModel?.areas?.features?.reduce((sum, f) => sum + (f.geometry.coordinates[0]?.length ?? 0), 0) ?? 0,
+        ms: elapsed,
+        visitedNodes,
+        ...(TRACE_BODIES ? { points, model: customModel ?? null } : {}),
+      })
     }
   }
   Object.defineProperty(counted, COUNTED_BY, { value: metrics, enumerable: false })

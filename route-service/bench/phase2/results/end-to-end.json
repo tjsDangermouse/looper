@@ -1,0 +1,357 @@
+{
+ "repeats": 9,
+ "results": {
+  "P0 baseline — 16 prepared / 8 active": [
+   {
+    "name": "douglas-5km",
+    "medianMs": 368,
+    "p95Ms": 473,
+    "maxMs": 473,
+    "minMs": 355,
+    "routes": [
+     {
+      "distanceMeters": 5064,
+      "quality": 82.6,
+      "repeatedFraction": null,
+      "geometryHash": "2a4ead1341bfccc3"
+     },
+     {
+      "distanceMeters": 4930,
+      "quality": 82.5,
+      "repeatedFraction": null,
+      "geometryHash": "4a6a2e9c4760baf9"
+     },
+     {
+      "distanceMeters": 4446,
+      "quality": 58.7,
+      "repeatedFraction": null,
+      "geometryHash": "9e014a947d2da438"
+     }
+    ],
+    "callRange": [
+     291,
+     291
+    ],
+    "medianEngineMs": 1705,
+    "medianVisited": 230182
+   },
+   {
+    "name": "douglas-3km",
+    "medianMs": 217,
+    "p95Ms": 242,
+    "maxMs": 242,
+    "minMs": 207,
+    "routes": [
+     {
+      "distanceMeters": 3011,
+      "quality": 81.9,
+      "repeatedFraction": null,
+      "geometryHash": "dcbd5e05f54d1427"
+     },
+     {
+      "distanceMeters": 2768,
+      "quality": 62.1,
+      "repeatedFraction": null,
+      "geometryHash": "1c3c9204fae8c946"
+     },
+     {
+      "distanceMeters": 2702,
+      "quality": 57.9,
+      "repeatedFraction": null,
+      "geometryHash": "cd00e8887d555ffc"
+     }
+    ],
+    "callRange": [
+     215,
+     221
+    ],
+    "medianEngineMs": 1079,
+    "medianVisited": 98462
+   },
+   {
+    "name": "peel-5km",
+    "medianMs": 652,
+    "p95Ms": 721,
+    "maxMs": 721,
+    "minMs": 629,
+    "routes": [
+     {
+      "distanceMeters": 4877,
+      "quality": 72.7,
+      "repeatedFraction": null,
+      "geometryHash": "e554af26e0fb0824"
+     },
+     {
+      "distanceMeters": 4727,
+      "quality": 63.6,
+      "repeatedFraction": null,
+      "geometryHash": "5f1e085c4c50adcc"
+     },
+     {
+      "distanceMeters": 4885,
+      "quality": 63.3,
+      "repeatedFraction": null,
+      "geometryHash": "7ca874104df094ec"
+     }
+    ],
+    "callRange": [
+     743,
+     779
+    ],
+    "medianEngineMs": 3129,
+    "medianVisited": 151764
+   },
+   {
+    "name": "onchan-5km",
+    "medianMs": 192,
+    "p95Ms": 323,
+    "maxMs": 323,
+    "minMs": 163,
+    "routes": [
+     {
+      "distanceMeters": 4850,
+      "quality": 76.3,
+      "repeatedFraction": null,
+      "geometryHash": "1804cc97201b4b14"
+     },
+     {
+      "distanceMeters": 5034,
+      "quality": 69.8,
+      "repeatedFraction": null,
+      "geometryHash": "01a7bda9010a9735"
+     },
+     {
+      "distanceMeters": 5295,
+      "quality": 57.4,
+      "repeatedFraction": null,
+      "geometryHash": "03f3de9df2fcc027"
+     }
+    ],
+    "callRange": [
+     181,
+     181
+    ],
+    "medianEngineMs": 901,
+    "medianVisited": 67820
+   },
+   {
+    "name": "wp-one",
+    "medianMs": 121,
+    "p95Ms": 141,
+    "maxMs": 141,
+    "minMs": 120,
+    "routes": [
+     {
+      "distanceMeters": 6911,
+      "quality": 57.2,
+      "repeatedFraction": null,
+      "geometryHash": "ddc541ee0a0f8982"
+     }
+    ],
+    "callRange": [
+     34,
+     34
+    ],
+    "medianEngineMs": 88,
+    "medianVisited": 27992
+   },
+   {
+    "name": "wp-two",
+    "medianMs": 744,
+    "p95Ms": 755,
+    "maxMs": 755,
+    "minMs": 721,
+    "routes": [
+     {
+      "distanceMeters": 9410,
+      "quality": 51.3,
+      "repeatedFraction": null,
+      "geometryHash": "b2b830e6b22f6479"
+     }
+    ],
+    "callRange": [
+     379,
+     379
+    ],
+    "medianEngineMs": 2258,
+    "medianVisited": 410270
+   }
+  ],
+  "P2 64 prepared / 12 active": [
+   {
+    "name": "douglas-5km",
+    "medianMs": 358,
+    "p95Ms": 405,
+    "maxMs": 405,
+    "minMs": 341,
+    "routes": [
+     {
+      "distanceMeters": 5064,
+      "quality": 82.6,
+      "repeatedFraction": null,
+      "geometryHash": "2a4ead1341bfccc3"
+     },
+     {
+      "distanceMeters": 4930,
+      "quality": 82.5,
+      "repeatedFraction": null,
+      "geometryHash": "4a6a2e9c4760baf9"
+     },
+     {
+      "distanceMeters": 4446,
+      "quality": 58.7,
+      "repeatedFraction": null,
+      "geometryHash": "9e014a947d2da438"
+     }
+    ],
+    "callRange": [
+     291,
+     291
+    ],
+    "medianEngineMs": 1647,
+    "medianVisited": 230182
+   },
+   {
+    "name": "douglas-3km",
+    "medianMs": 215,
+    "p95Ms": 229,
+    "maxMs": 229,
+    "minMs": 205,
+    "routes": [
+     {
+      "distanceMeters": 3011,
+      "quality": 81.9,
+      "repeatedFraction": null,
+      "geometryHash": "dcbd5e05f54d1427"
+     },
+     {
+      "distanceMeters": 2768,
+      "quality": 62.1,
+      "repeatedFraction": null,
+      "geometryHash": "1c3c9204fae8c946"
+     },
+     {
+      "distanceMeters": 2702,
+      "quality": 57.9,
+      "repeatedFraction": null,
+      "geometryHash": "cd00e8887d555ffc"
+     }
+    ],
+    "callRange": [
+     215,
+     221
+    ],
+    "medianEngineMs": 1050,
+    "medianVisited": 98462
+   },
+   {
+    "name": "peel-5km",
+    "medianMs": 631,
+    "p95Ms": 643,
+    "maxMs": 643,
+    "minMs": 611,
+    "routes": [
+     {
+      "distanceMeters": 4877,
+      "quality": 72.7,
+      "repeatedFraction": null,
+      "geometryHash": "e554af26e0fb0824"
+     },
+     {
+      "distanceMeters": 4727,
+      "quality": 63.6,
+      "repeatedFraction": null,
+      "geometryHash": "5f1e085c4c50adcc"
+     },
+     {
+      "distanceMeters": 4885,
+      "quality": 63.3,
+      "repeatedFraction": null,
+      "geometryHash": "7ca874104df094ec"
+     }
+    ],
+    "callRange": [
+     743,
+     763
+    ],
+    "medianEngineMs": 3042,
+    "medianVisited": 151764
+   },
+   {
+    "name": "onchan-5km",
+    "medianMs": 161,
+    "p95Ms": 168,
+    "maxMs": 168,
+    "minMs": 156,
+    "routes": [
+     {
+      "distanceMeters": 4850,
+      "quality": 76.3,
+      "repeatedFraction": null,
+      "geometryHash": "1804cc97201b4b14"
+     },
+     {
+      "distanceMeters": 5034,
+      "quality": 69.8,
+      "repeatedFraction": null,
+      "geometryHash": "01a7bda9010a9735"
+     },
+     {
+      "distanceMeters": 5295,
+      "quality": 57.4,
+      "repeatedFraction": null,
+      "geometryHash": "03f3de9df2fcc027"
+     }
+    ],
+    "callRange": [
+     181,
+     181
+    ],
+    "medianEngineMs": 776,
+    "medianVisited": 67820
+   },
+   {
+    "name": "wp-one",
+    "medianMs": 123,
+    "p95Ms": 134,
+    "maxMs": 134,
+    "minMs": 121,
+    "routes": [
+     {
+      "distanceMeters": 6911,
+      "quality": 57.2,
+      "repeatedFraction": null,
+      "geometryHash": "ddc541ee0a0f8982"
+     }
+    ],
+    "callRange": [
+     34,
+     34
+    ],
+    "medianEngineMs": 88,
+    "medianVisited": 27992
+   },
+   {
+    "name": "wp-two",
+    "medianMs": 745,
+    "p95Ms": 773,
+    "maxMs": 773,
+    "minMs": 720,
+    "routes": [
+     {
+      "distanceMeters": 9410,
+      "quality": 51.3,
+      "repeatedFraction": null,
+      "geometryHash": "b2b830e6b22f6479"
+     }
+    ],
+    "callRange": [
+     379,
+     379
+    ],
+    "medianEngineMs": 2262,
+    "medianVisited": 410270
+   }
+  ]
+ }
+}

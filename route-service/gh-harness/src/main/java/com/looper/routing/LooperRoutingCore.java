@@ -62,6 +62,20 @@ public final class LooperRoutingCore implements AutoCloseable {
      * rather than at a second import that might differ.
      */
     public static LooperRoutingCore open(Path configYml, Path graphDir, String profileName) throws Exception {
+        return open(configYml, graphDir, profileName, java.util.Map.of());
+    }
+
+    /**
+     * The same, with named overrides applied to the configuration after the
+     * file is read and before the graph is opened.
+     *
+     * Settings GraphHopper consumes at load time — `routing.lm.active_landmarks`
+     * is the one Phase 2 needs — cannot be moved by a request hint, so an
+     * experiment on them has to open its own engine. The overrides are ordinary
+     * `GraphHopperConfig` keys and nothing interprets them here: an unknown key
+     * behaves exactly as it would in `config.yml`.
+     */
+    public static LooperRoutingCore open(Path configYml, Path graphDir, String profileName, java.util.Map<String, Object> overrides) throws Exception {
         ObjectMapper yaml = Jackson.initObjectMapper(new ObjectMapper(new YAMLFactory()));
         JsonNode root = yaml.readTree(configYml.toFile());
         JsonNode ghNode = root.get("graphhopper");
@@ -75,6 +89,8 @@ public final class LooperRoutingCore implements AutoCloseable {
         // `custom_model_files: [looper_foot.json]` is resolved relative to
         // this folder, the same way entrypoint.sh's working directory does it.
         cfg.putObject("custom_models.directory", configYml.toAbsolutePath().getParent().toString());
+
+        overrides.forEach(cfg::putObject);
 
         GraphHopper hopper = new GraphHopper();
         hopper.init(cfg);

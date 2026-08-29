@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { RequestMetrics, countingRouter, percentiles, quantile } from '../src/loops/metrics.js'
+import { RequestMetrics, classifyRequest, countingRouter, percentiles, quantile } from '../src/loops/metrics.js'
+import { AVOID_PRIORITY, RELAXED_AVOID_PRIORITY, avoidanceCustomModel, shortestPathCustomModel } from '../src/loops/avoidance.js'
 import { measureOffered } from '../src/loops/generate.js'
 import { cleanLoop, twinA, twinB, longOutAndBack } from './fixtures/routes.js'
 import type { GraphHopperLeg } from '../src/graphhopper.js'
@@ -119,5 +120,31 @@ describe('measuring what the walker was offered', () => {
     expect(measured.maxDistanceErrorPercent).toBe(10)
     expect(measured.totalUTurns).toBe(2)
     expect(measured.maxRepeatedPercent).toBe(4)
+  })
+})
+
+describe('classifying a call by the weighting it carried', () => {
+  const areas = [{ type: 'Feature' as const, properties: {}, geometry: { type: 'Polygon' as const, coordinates: [[[0, 0], [0, 1], [1, 1], [0, 0]]] } }]
+
+  it('calls a request with no model plain', () => {
+    expect(classifyRequest(undefined)).toBe('plain')
+    expect(classifyRequest(avoidanceCustomModel([]))).toBe('plain')
+  })
+
+  it('separates the two avoidance strengths, because they search differently', () => {
+    expect(classifyRequest(avoidanceCustomModel(areas, AVOID_PRIORITY))).toBe('avoid-strong')
+    expect(classifyRequest(avoidanceCustomModel(areas, RELAXED_AVOID_PRIORITY))).toBe('avoid-relaxed')
+  })
+
+  it('recognises a strength that is neither, rather than filing it as one of them', () => {
+    expect(classifyRequest(avoidanceCustomModel(areas, 0.5))).toBe('avoid-other')
+  })
+
+  it('calls the shortest-path model a lower bound', () => {
+    expect(classifyRequest(shortestPathCustomModel())).toBe('lower-bound')
+  })
+
+  it('does not let a model that is both pass as either', () => {
+    expect(classifyRequest({ ...avoidanceCustomModel(areas)!, distance_influence: 2000 })).toBe('mixed')
   })
 })

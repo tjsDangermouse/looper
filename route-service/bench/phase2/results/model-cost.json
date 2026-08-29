@@ -1,0 +1,26 @@
+{
+  "corpusCalls" : 1863,
+  "byClass" : {
+    "plain" : {
+      "calls" : 368,
+      "warmMs" : 1.578,
+      "warmMeanMs" : 0.004,
+      "coldMs" : 1.55,
+      "coldMeanMs" : 0.004
+    },
+    "avoid-strong" : {
+      "calls" : 1227,
+      "warmMs" : 274.239,
+      "warmMeanMs" : 0.224,
+      "coldMs" : 803.879,
+      "coldMeanMs" : 0.655
+    },
+    "avoid-relaxed" : {
+      "calls" : 268,
+      "warmMs" : 50.114,
+      "warmMeanMs" : 0.187,
+      "coldMs" : 157.199,
+      "coldMeanMs" : 0.587
+    }
+  }
+}

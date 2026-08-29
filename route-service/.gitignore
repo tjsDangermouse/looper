@@ -3,3 +3,12 @@ node_modules/
 dist/
 data/*.osm.pbf
 .DS_Store
+
+# Phase 2 bench artefacts that are rebuilt rather than reviewed: the imported
+# graphs (52 MB, and `prepare-landmarks.sh` rebuilds them byte-identically) and
+# the captured call corpus (7 MB of JSONL, rebuilt by `capture.mts`). The
+# results and the scripts are kept; the inputs they regenerate are not.
+bench/phase2/graphs/
+bench/phase2/corpus/
+bench/phase2/corpus-lower-bound/
+bench/phase2/corpus-lower-bound-profile/
