@@ -1,0 +1,714 @@
+[
+  {
+    "fixture": "douglas-5km",
+    "prototype": "S1",
+    "stats": {
+      "generated": 2000000,
+      "expanded": 2000000,
+      "prunedDistance": 1479391,
+      "prunedReuse": 3280495,
+      "prunedBeam": 0,
+      "prunedDominated": 0,
+      "peakFrontier": 214,
+      "completed": 0,
+      "wallMs": 223.650209,
+      "storeSize": 2000001,
+      "peakHeapBytes": 0
+    },
+    "found": 0,
+    "passes": 0,
+    "offered": [],
+    "judgeMs": 0.1356249999999477,
+    "buildMs": 16.055834000000004,
+    "exportMs": 7.664583,
+    "rejections": {}
+  },
+  {
+    "fixture": "douglas-5km",
+    "prototype": "S2",
+    "stats": {
+      "generated": 277911,
+      "expanded": 133194,
+      "prunedDistance": 4527,
+      "prunedReuse": 171882,
+      "prunedBeam": 144147,
+      "prunedDominated": 75841,
+      "peakFrontier": 2970,
+      "completed": 188,
+      "wallMs": 367.291292,
+      "storeSize": 277915,
+      "peakHeapBytes": 703525768
+    },
+    "found": 188,
+    "passes": 156,
+    "offered": [
+      {
+        "metres": 5022.2,
+        "quality": {
+          "score": 76.5,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.37
+        },
+        "bearing": 237.8998030612587,
+        "edges": 176,
+        "coordinates": 353
+      },
+      {
+        "metres": 4954.5,
+        "quality": {
+          "score": 73.8,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.285
+        },
+        "bearing": 58.08383139049829,
+        "edges": 177,
+        "coordinates": 325
+      },
+      {
+        "metres": 4980.599999999995,
+        "quality": {
+          "score": 70.2,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 1,
+          "compactness": 0.3
+        },
+        "bearing": 158.60385137592198,
+        "edges": 176,
+        "coordinates": 359
+      }
+    ],
+    "judgeMs": 53.96329100000003,
+    "buildMs": 16.055834000000004,
+    "exportMs": 7.664583,
+    "rejections": {
+      "u-turns": 32
+    }
+  },
+  {
+    "fixture": "douglas-5km",
+    "prototype": "S3",
+    "stats": {
+      "generated": 271483,
+      "expanded": 131236,
+      "prunedDistance": 3195,
+      "prunedReuse": 172830,
+      "prunedBeam": 139007,
+      "prunedDominated": 34366,
+      "peakFrontier": 985,
+      "completed": 140,
+      "wallMs": 274.46629200000007,
+      "storeSize": 271507,
+      "peakHeapBytes": 269174016
+    },
+    "found": 140,
+    "passes": 90,
+    "offered": [
+      {
+        "metres": 4971.699999999999,
+        "quality": {
+          "score": 74.7,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.294
+        },
+        "bearing": 36.01795873258226,
+        "edges": 164,
+        "coordinates": 315
+      },
+      {
+        "metres": 4877.800000000001,
+        "quality": {
+          "score": 64.2,
+          "repeatedMeters": 1,
+          "repeatedPercent": 0,
+          "uTurnCount": 1,
+          "compactness": 0.218
+        },
+        "bearing": 158.2298590249154,
+        "edges": 170,
+        "coordinates": 312
+      },
+      {
+        "metres": 5311.9000000000015,
+        "quality": {
+          "score": 62.5,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.274
+        },
+        "bearing": 273.22204189772526,
+        "edges": 182,
+        "coordinates": 359
+      }
+    ],
+    "judgeMs": 27.06379200000015,
+    "buildMs": 16.055834000000004,
+    "exportMs": 7.664583,
+    "rejections": {
+      "u-turns": 50
+    }
+  },
+  {
+    "fixture": "douglas-5km",
+    "prototype": "S4",
+    "stats": {
+      "generated": 139747,
+      "expanded": 66547,
+      "prunedDistance": 0,
+      "prunedReuse": 84832,
+      "prunedBeam": 69573,
+      "prunedDominated": 20326,
+      "peakFrontier": 3157,
+      "completed": 0,
+      "wallMs": 131.84616700000015,
+      "storeSize": 139751,
+      "peakHeapBytes": 0
+    },
+    "found": 0,
+    "passes": 0,
+    "offered": [],
+    "judgeMs": 0.026000000000067303,
+    "buildMs": 16.055834000000004,
+    "exportMs": 7.664583,
+    "rejections": {}
+  },
+  {
+    "fixture": "douglas-3km",
+    "prototype": "S1",
+    "stats": {
+      "generated": 2000001,
+      "expanded": 2000000,
+      "prunedDistance": 1123233,
+      "prunedReuse": 3746945,
+      "prunedBeam": 0,
+      "prunedDominated": 0,
+      "peakFrontier": 142,
+      "completed": 0,
+      "wallMs": 234.89604199999985,
+      "storeSize": 2000002,
+      "peakHeapBytes": 0
+    },
+    "found": 0,
+    "passes": 0,
+    "offered": [],
+    "judgeMs": 0.014332999999851381,
+    "buildMs": 15.483915999999994,
+    "exportMs": 4.257459,
+    "rejections": {}
+  },
+  {
+    "fixture": "douglas-3km",
+    "prototype": "S2",
+    "stats": {
+      "generated": 150326,
+      "expanded": 71580,
+      "prunedDistance": 1884,
+      "prunedReuse": 90224,
+      "prunedBeam": 78350,
+      "prunedDominated": 41380,
+      "peakFrontier": 2588,
+      "completed": 133,
+      "wallMs": 118.439167,
+      "storeSize": 150330,
+      "peakHeapBytes": 703835272
+    },
+    "found": 133,
+    "passes": 128,
+    "offered": [
+      {
+        "metres": 2993.599999999999,
+        "quality": {
+          "score": 78.2,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.43
+        },
+        "bearing": 157.9549919328024,
+        "edges": 123,
+        "coordinates": 220
+      },
+      {
+        "metres": 2941.7000000000016,
+        "quality": {
+          "score": 74.4,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.42
+        },
+        "bearing": 209.1224897935107,
+        "edges": 119,
+        "coordinates": 211
+      },
+      {
+        "metres": 3004.299999999998,
+        "quality": {
+          "score": 73.6,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 1,
+          "compactness": 0.443
+        },
+        "bearing": 113.75576761167997,
+        "edges": 105,
+        "coordinates": 211
+      }
+    ],
+    "judgeMs": 21.90904099999989,
+    "buildMs": 15.483915999999994,
+    "exportMs": 4.257459,
+    "rejections": {
+      "start-spur": 5
+    }
+  },
+  {
+    "fixture": "douglas-3km",
+    "prototype": "S3",
+    "stats": {
+      "generated": 155813,
+      "expanded": 75549,
+      "prunedDistance": 2684,
+      "prunedReuse": 97533,
+      "prunedBeam": 79005,
+      "prunedDominated": 18141,
+      "peakFrontier": 1020,
+      "completed": 358,
+      "wallMs": 116.4241649999999,
+      "storeSize": 155837,
+      "peakHeapBytes": 726736600
+    },
+    "found": 358,
+    "passes": 317,
+    "offered": [
+      {
+        "metres": 3000.000000000002,
+        "quality": {
+          "score": 76.1,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.305
+        },
+        "bearing": 44.329282041149156,
+        "edges": 122,
+        "coordinates": 205
+      },
+      {
+        "metres": 2968.6000000000004,
+        "quality": {
+          "score": 74.5,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.334
+        },
+        "bearing": 140.2322972875612,
+        "edges": 115,
+        "coordinates": 206
+      },
+      {
+        "metres": 2973.1999999999985,
+        "quality": {
+          "score": 73.7,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.278
+        },
+        "bearing": 262.834020488294,
+        "edges": 120,
+        "coordinates": 224
+      }
+    ],
+    "judgeMs": 45.217625,
+    "buildMs": 15.483915999999994,
+    "exportMs": 4.257459,
+    "rejections": {
+      "u-turns": 30,
+      "start-spur": 11
+    }
+  },
+  {
+    "fixture": "douglas-3km",
+    "prototype": "S4",
+    "stats": {
+      "generated": 75536,
+      "expanded": 35750,
+      "prunedDistance": 0,
+      "prunedReuse": 44874,
+      "prunedBeam": 36017,
+      "prunedDominated": 9420,
+      "peakFrontier": 2422,
+      "completed": 0,
+      "wallMs": 64.95908400000008,
+      "storeSize": 75540,
+      "peakHeapBytes": 0
+    },
+    "found": 0,
+    "passes": 0,
+    "offered": [],
+    "judgeMs": 0.017750000000205546,
+    "buildMs": 15.483915999999994,
+    "exportMs": 4.257459,
+    "rejections": {}
+  },
+  {
+    "fixture": "peel-5km",
+    "prototype": "S1",
+    "stats": {
+      "generated": 2000002,
+      "expanded": 2000000,
+      "prunedDistance": 1155043,
+      "prunedReuse": 2952001,
+      "prunedBeam": 0,
+      "prunedDominated": 0,
+      "peakFrontier": 121,
+      "completed": 0,
+      "wallMs": 344.93100000000027,
+      "storeSize": 2000003,
+      "peakHeapBytes": 0
+    },
+    "found": 0,
+    "passes": 0,
+    "offered": [],
+    "judgeMs": 0.01662499999974898,
+    "buildMs": 2.229916000000003,
+    "exportMs": 1.140167,
+    "rejections": {}
+  },
+  {
+    "fixture": "peel-5km",
+    "prototype": "S2",
+    "stats": {
+      "generated": 99891,
+      "expanded": 55798,
+      "prunedDistance": 1671,
+      "prunedReuse": 72506,
+      "prunedBeam": 43719,
+      "prunedDominated": 33894,
+      "peakFrontier": 1587,
+      "completed": 124,
+      "wallMs": 70.33587500000021,
+      "storeSize": 99897,
+      "peakHeapBytes": 683268248
+    },
+    "found": 124,
+    "passes": 66,
+    "offered": [
+      {
+        "metres": 4999.299999999997,
+        "quality": {
+          "score": 71.5,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 1,
+          "compactness": 0.328
+        },
+        "bearing": 107.55884734617456,
+        "edges": 95,
+        "coordinates": 262
+      },
+      {
+        "metres": 5110.500000000002,
+        "quality": {
+          "score": 70.1,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.234
+        },
+        "bearing": 206.48660886330663,
+        "edges": 90,
+        "coordinates": 284
+      },
+      {
+        "metres": 5323.899999999998,
+        "quality": {
+          "score": 57,
+          "repeatedMeters": 54,
+          "repeatedPercent": 1,
+          "uTurnCount": 1,
+          "compactness": 0.422
+        },
+        "bearing": 279.7083167151462,
+        "edges": 68,
+        "coordinates": 285
+      }
+    ],
+    "judgeMs": 27.054124999999658,
+    "buildMs": 2.229916000000003,
+    "exportMs": 1.140167,
+    "rejections": {
+      "u-turns": 58,
+      "shapeless": 1
+    }
+  },
+  {
+    "fixture": "peel-5km",
+    "prototype": "S3",
+    "stats": {
+      "generated": 104310,
+      "expanded": 58811,
+      "prunedDistance": 2072,
+      "prunedReuse": 77199,
+      "prunedBeam": 44622,
+      "prunedDominated": 15831,
+      "peakFrontier": 820,
+      "completed": 214,
+      "wallMs": 71.9792910000001,
+      "storeSize": 104328,
+      "peakHeapBytes": 695186736
+    },
+    "found": 214,
+    "passes": 116,
+    "offered": [
+      {
+        "metres": 4998.799999999998,
+        "quality": {
+          "score": 70.5,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 1,
+          "compactness": 0.279
+        },
+        "bearing": 158.46773895403578,
+        "edges": 99,
+        "coordinates": 274
+      },
+      {
+        "metres": 5302.400000000001,
+        "quality": {
+          "score": 64.6,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.362
+        },
+        "bearing": 256.4782996562489,
+        "edges": 55,
+        "coordinates": 320
+      }
+    ],
+    "judgeMs": 35.43145800000002,
+    "buildMs": 2.229916000000003,
+    "exportMs": 1.140167,
+    "rejections": {
+      "u-turns": 98,
+      "out-and-back-spur": 4
+    }
+  },
+  {
+    "fixture": "peel-5km",
+    "prototype": "S4",
+    "stats": {
+      "generated": 54399,
+      "expanded": 29778,
+      "prunedDistance": 0,
+      "prunedReuse": 37912,
+      "prunedBeam": 23069,
+      "prunedDominated": 5116,
+      "peakFrontier": 1539,
+      "completed": 0,
+      "wallMs": 48.082000000000335,
+      "storeSize": 54405,
+      "peakHeapBytes": 0
+    },
+    "found": 0,
+    "passes": 0,
+    "offered": [],
+    "judgeMs": 0.009165999999822816,
+    "buildMs": 2.229916000000003,
+    "exportMs": 1.140167,
+    "rejections": {}
+  },
+  {
+    "fixture": "onchan-5km",
+    "prototype": "S1",
+    "stats": {
+      "generated": 2000001,
+      "expanded": 2000000,
+      "prunedDistance": 810828,
+      "prunedReuse": 3434876,
+      "prunedBeam": 0,
+      "prunedDominated": 0,
+      "peakFrontier": 148,
+      "completed": 0,
+      "wallMs": 408.751667,
+      "storeSize": 2000002,
+      "peakHeapBytes": 0
+    },
+    "found": 0,
+    "passes": 0,
+    "offered": [],
+    "judgeMs": 0.014249999999719876,
+    "buildMs": 4.950125000000014,
+    "exportMs": 3.579583,
+    "rejections": {}
+  },
+  {
+    "fixture": "onchan-5km",
+    "prototype": "S2",
+    "stats": {
+      "generated": 115143,
+      "expanded": 62143,
+      "prunedDistance": 2294,
+      "prunedReuse": 76459,
+      "prunedBeam": 52416,
+      "prunedDominated": 28998,
+      "peakFrontier": 1626,
+      "completed": 142,
+      "wallMs": 93.59933300000012,
+      "storeSize": 115147,
+      "peakHeapBytes": 682349624
+    },
+    "found": 142,
+    "passes": 141,
+    "offered": [
+      {
+        "metres": 4987.899999999998,
+        "quality": {
+          "score": 78.9,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.471
+        },
+        "bearing": 68.61549920190839,
+        "edges": 94,
+        "coordinates": 291
+      },
+      {
+        "metres": 4978.700000000001,
+        "quality": {
+          "score": 78.3,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.458
+        },
+        "bearing": 232.24330621255865,
+        "edges": 86,
+        "coordinates": 286
+      },
+      {
+        "metres": 4982.300000000001,
+        "quality": {
+          "score": 76.3,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.35
+        },
+        "bearing": 313.46625571793015,
+        "edges": 86,
+        "coordinates": 273
+      }
+    ],
+    "judgeMs": 28.857750000000124,
+    "buildMs": 4.950125000000014,
+    "exportMs": 3.579583,
+    "rejections": {
+      "u-turns": 1
+    }
+  },
+  {
+    "fixture": "onchan-5km",
+    "prototype": "S3",
+    "stats": {
+      "generated": 118582,
+      "expanded": 65689,
+      "prunedDistance": 2046,
+      "prunedReuse": 83885,
+      "prunedBeam": 52112,
+      "prunedDominated": 13514,
+      "peakFrontier": 570,
+      "completed": 100,
+      "wallMs": 86.99200000000019,
+      "storeSize": 118604,
+      "peakHeapBytes": 720903360
+    },
+    "found": 100,
+    "passes": 68,
+    "offered": [
+      {
+        "metres": 5138.699999999999,
+        "quality": {
+          "score": 72.2,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.397
+        },
+        "bearing": 31.810060923313642,
+        "edges": 99,
+        "coordinates": 290
+      },
+      {
+        "metres": 4593.000000000001,
+        "quality": {
+          "score": 62.5,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.471
+        },
+        "bearing": 72.86250894372012,
+        "edges": 71,
+        "coordinates": 250
+      },
+      {
+        "metres": 4472,
+        "quality": {
+          "score": 55.8,
+          "repeatedMeters": 0,
+          "repeatedPercent": 0,
+          "uTurnCount": 0,
+          "compactness": 0.388
+        },
+        "bearing": 340.89435030133416,
+        "edges": 98,
+        "coordinates": 250
+      }
+    ],
+    "judgeMs": 15.333667000000332,
+    "buildMs": 4.950125000000014,
+    "exportMs": 3.579583,
+    "rejections": {
+      "u-turns": 17,
+      "out-and-back-spur": 15,
+      "shapeless": 1
+    }
+  },
+  {
+    "fixture": "onchan-5km",
+    "prototype": "S4",
+    "stats": {
+      "generated": 68296,
+      "expanded": 37396,
+      "prunedDistance": 5,
+      "prunedReuse": 47664,
+      "prunedBeam": 29010,
+      "prunedDominated": 6597,
+      "peakFrontier": 2154,
+      "completed": 0,
+      "wallMs": 47.23570900000004,
+      "storeSize": 68300,
+      "peakHeapBytes": 0
+    },
+    "found": 0,
+    "passes": 0,
+    "offered": [],
+    "judgeMs": 0.010041999999884865,
+    "buildMs": 4.950125000000014,
+    "exportMs": 3.579583,
+    "rejections": {}
+  }
+]

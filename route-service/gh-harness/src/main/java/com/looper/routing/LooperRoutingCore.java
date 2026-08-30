@@ -269,6 +269,123 @@ public final class LooperRoutingCore implements AutoCloseable {
                 (System.nanoTime() - began) / 1e6, heapAfter - heapBefore, snapped.lat, snapped.lon, start);
     }
 
+    public record SubEdge(int edge, int origin, int from, int to, double metres,
+                         boolean forward, boolean backward, double[] geometry) {}
+    public record Subgraph(List<ReachedNode> nodes, List<SubEdge> edges, long nodesVisited,
+                          double wallMs, long heapDeltaBytes, double snappedLat, double snappedLon,
+                          int startNode, double limitMetres) {}
+
+    /**
+     * The same bounded exploration as {@link #explore}, keeping the edges as
+     * well as the nodes.
+     *
+     * Phase 9 searches for the walk itself rather than for points to route
+     * between, so it needs the adjacency the field was built from: which
+     * oriented edges leave each reached node, what each one costs in metres,
+     * and where it actually runs on the ground. Nothing here routes; every
+     * retained walk is still materialised by GraphHopper.
+     *
+     * An edge is emitted once both of its endpoints have been settled inside
+     * the bound, so the exported subgraph is exactly the induced subgraph on
+     * the reached set and a search over it can never leave the region the
+     * caller paid for. Virtual {@link QueryGraph} edges carry the id of the
+     * real edge they are a piece of, so repeated-ground accounting is done on
+     * physical edges rather than on the snap's artefacts.
+     */
+    public Subgraph exploreSubgraph(double lat, double lon, double limitMetres, boolean withGeometry) {
+        long began = System.nanoTime();
+        Runtime runtime = Runtime.getRuntime();
+        long heapBefore = runtime.totalMemory() - runtime.freeMemory();
+        BaseGraph base = hopper.getBaseGraph();
+        Profile profile = hopper.getProfile(profileName);
+        Weighting weighting = hopper.createWeighting(profile, new PMap());
+        BooleanEncodedValue subnetworkEnc = hopper.getEncodingManager().getBooleanEncodedValue(Subnetwork.key(profileName));
+        EdgeFilter filter = new DefaultSnapFilter(weighting, subnetworkEnc);
+        if (!snapPreventionsDefault.isEmpty())
+            filter = new SnapPreventionEdgeFilter(filter,
+                    hopper.getEncodingManager().getEnumEncodedValue(RoadClass.KEY, RoadClass.class),
+                    hopper.getEncodingManager().getEnumEncodedValue(RoadEnvironment.KEY, RoadEnvironment.class),
+                    snapPreventionsDefault);
+        Snap snap = hopper.getLocationIndex().findClosest(lat, lon, filter);
+        if (!snap.isValid())
+            return new Subgraph(List.of(), List.of(), 0, 0, 0, Double.NaN, Double.NaN, -1, limitMetres);
+        QueryGraph graph = QueryGraph.create(base, snap);
+        GHPoint snapped = snap.getSnappedPoint();
+        int snappedEdge = snap.getClosestEdge().getEdge();
+        int baseEdges = base.getEdges();
+        int start = snap.getClosestNode();
+        NodeAccess access = graph.getNodeAccess();
+        int nodes = graph.getNodes();
+        double[] best = new double[nodes];
+        int[] parent = new int[nodes];
+        int[] parentEdge = new int[nodes];
+        Arrays.fill(best, Double.POSITIVE_INFINITY);
+        Arrays.fill(parent, -1);
+        Arrays.fill(parentEdge, -1);
+        boolean[] settled = new boolean[nodes];
+        record Entry(int node, double metres) {}
+        PriorityQueue<Entry> queue = new PriorityQueue<>(java.util.Comparator.comparingDouble(Entry::metres));
+        best[start] = 0;
+        queue.add(new Entry(start, 0));
+        EdgeExplorer explorer = graph.createEdgeExplorer();
+        List<ReachedNode> reached = new ArrayList<>();
+        while (!queue.isEmpty()) {
+            Entry entry = queue.poll();
+            if (settled[entry.node] || entry.metres > limitMetres) continue;
+            settled[entry.node] = true;
+            EdgeIterator edges = explorer.setBaseNode(entry.node);
+            int degree = 0;
+            while (edges.next()) {
+                if (!Double.isFinite(weighting.calcEdgeWeight(edges, false))) continue;
+                degree++;
+                int next = edges.getAdjNode();
+                double candidate = entry.metres + edges.getDistance();
+                if (candidate <= limitMetres && candidate < best[next]) {
+                    best[next] = candidate;
+                    parent[next] = entry.node;
+                    parentEdge[next] = edges.getEdge();
+                    queue.add(new Entry(next, candidate));
+                }
+            }
+            reached.add(new ReachedNode(entry.node, access.getLat(entry.node), access.getLon(entry.node),
+                    entry.metres, degree, parent[entry.node], parentEdge[entry.node]));
+        }
+        // Second sweep: the induced subgraph on the settled set. Emitted once
+        // per undirected edge, with the two orientations recorded separately
+        // because a one-way footway is a real constraint on a closed walk.
+        List<SubEdge> subEdges = new ArrayList<>();
+        java.util.Set<Long> emitted = new java.util.HashSet<>();
+        EdgeExplorer all = graph.createEdgeExplorer();
+        for (ReachedNode node : reached) {
+            EdgeIterator edges = all.setBaseNode(node.node());
+            while (edges.next()) {
+                int adj = edges.getAdjNode();
+                if (adj >= nodes || !settled[adj]) continue;
+                int id = edges.getEdge();
+                long key = ((long) id << 32) | (Math.min(node.node(), adj) & 0xffffffffL);
+                if (!emitted.add(key)) continue;
+                boolean forward = Double.isFinite(weighting.calcEdgeWeight(edges, false));
+                boolean backward = Double.isFinite(weighting.calcEdgeWeight(edges, true));
+                if (!forward && !backward) continue;
+                double[] geometry = null;
+                if (withGeometry) {
+                    var points = edges.fetchWayGeometry(com.graphhopper.util.FetchMode.ALL);
+                    geometry = new double[points.size() * 2];
+                    for (int i = 0; i < points.size(); i++) {
+                        geometry[i * 2] = Math.round(points.getLon(i) * 1e6) / 1e6;
+                        geometry[i * 2 + 1] = Math.round(points.getLat(i) * 1e6) / 1e6;
+                    }
+                }
+                subEdges.add(new SubEdge(id, id >= baseEdges ? snappedEdge : id, node.node(), adj,
+                        edges.getDistance(), forward, backward, geometry));
+            }
+        }
+        long heapAfter = runtime.totalMemory() - runtime.freeMemory();
+        return new Subgraph(reached, subEdges, reached.size(),
+                (System.nanoTime() - began) / 1e6, heapAfter - heapBefore,
+                snapped.lat, snapped.lon, start, limitMetres);
+    }
+
     /** The narrow route call: ordered via points in, one path out. */
     public GHResponse route(List<GHPoint> points, RoutingOptions options) {
         return hopper.route(toRequest(points, options));

@@ -18,7 +18,7 @@ import { findRepeatedCorridors, MIN_SHARED_RUN_METRES } from './quality.js'
 import { normaliseBearing } from './geo.js'
 import { biasAttemptsToNetwork, summariseNetwork, type NetworkSummary, type ReachedPoint } from './network.js'
 import { allocateSlack, DEFAULT_ALLOCATION, fitsInPlan, planSegmentOptions, type SegmentOption } from './waypoints.js'
-import { traceDecision, withCallContext, withLegScope } from './trace.js'
+import { traceDecision, tracingCalls, withCallContext, withLegScope } from './trace.js'
 import { pickForRefinement, screenSkeleton, type ScreenVerdict } from './screening.js'
 import { destination as pointAtBearing } from './geo.js'
 import { targetMetresFor, targetSecondsFor, type LoopMode } from './units.js'
@@ -890,6 +890,10 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
         uTurns: report.quality.uTurnCount,
         distanceErrorFraction: Math.round(report.distanceErrorFraction * 1000) / 1000,
         legs: candidate.legDistances.length,
+        // Passive, tracing-only: which physical edges the walk actually ran
+        // on, and for how long. Phase 9 reads the topology of the walks this
+        // generator already produces; nothing in production consults it.
+        ...(tracingCalls && traversals ? { edgePasses: traversals.map(pass => [pass.id, Math.round(pass.metres)]) } : {}),
       })
       return {
         candidate,
