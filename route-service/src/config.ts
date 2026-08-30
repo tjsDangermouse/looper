@@ -69,6 +69,21 @@ export const config = {
   logLevel: process.env.LOG_LEVEL ?? 'info',
   /** See loops/flags.ts. Each algorithm change has its own switch. */
   flags,
+  /**
+   * How Looper talks to the engine, as opposed to what it asks for.
+   *
+   * Separate from `flags` on purpose: nothing here can change a route, so
+   * nothing here belongs beside the switches that can. Both ship off, because
+   * the model registry needs a facade that keeps corridors and the shipped
+   * GraphHopper container does not — pointed at one that does not, the
+   * capability check turns it off again by itself.
+   */
+  boundary: {
+    /** Name a corridor set once and refer to it, instead of restating it per call. */
+    modelRegistry: flag(process.env.LOOPER_MODEL_REGISTRY, false),
+    /** Answer an identical request from the one already asked, within a generation. */
+    routeMemo: flag(process.env.LOOPER_ROUTE_MEMO, false),
+  },
   cacheMaxEntries: number(process.env.ROUTE_CACHE_MAX_ENTRIES, 500),
   cacheTtlMs: number(process.env.ROUTE_CACHE_TTL_MS, 10 * 60 * 1000),
   cacheEmptyTtlMs: number(process.env.ROUTE_CACHE_EMPTY_TTL_MS, 60 * 1000),

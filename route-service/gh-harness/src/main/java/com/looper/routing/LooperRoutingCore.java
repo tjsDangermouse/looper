@@ -47,6 +47,7 @@ import java.util.List;
 public final class LooperRoutingCore implements AutoCloseable {
 
     private final GraphHopper hopper;
+    private final ModelRegistry registry = new ModelRegistry();
     private final String profileName;
     private final List<String> snapPreventionsDefault;
 
@@ -92,7 +93,16 @@ public final class LooperRoutingCore implements AutoCloseable {
 
         overrides.forEach(cfg::putObject);
 
-        GraphHopper hopper = new GraphHopper();
+        // GraphHopper's own factory, wrapped so that a request naming a
+        // registered model gets the weighting already built for it. Without a
+        // handle in the hints the wrapper is the delegate, so every other
+        // caller — the import, the landmark preparation, `snap` — is unchanged.
+        GraphHopper hopper = new GraphHopper() {
+            @Override
+            protected com.graphhopper.routing.WeightingFactory createWeightingFactory() {
+                return new LooperWeightingFactory(super.createWeightingFactory());
+            }
+        };
         hopper.init(cfg);
         hopper.setAllowWrites(false);
         if (!hopper.load())
@@ -106,6 +116,14 @@ public final class LooperRoutingCore implements AutoCloseable {
 
     public GraphHopper raw() {
         return hopper;
+    }
+
+    /**
+     * Where a caller may leave a corridor set rather than restating it on every
+     * request. Empty, and costing nothing, unless a caller uses it.
+     */
+    public ModelRegistry registry() {
+        return registry;
     }
 
     /** What Looper asks for on a leg. Anything GraphHopper offers and Looper does not use is deliberately absent. */
@@ -197,6 +215,21 @@ public final class LooperRoutingCore implements AutoCloseable {
     public GHResponse routeJsonBody(GHRequest request) {
         if (!request.hasSnapPreventions()) request.setSnapPreventions(snapPreventionsDefault);
         return hopper.route(request);
+    }
+
+    /**
+     * The same, for a request whose custom model arrived as a handle.
+     *
+     * The model is put on the request exactly as if the body had carried it —
+     * so the LM constraint check, the profile merge and the search all see what
+     * they saw before — and the handle rides alongside in the hints, where
+     * {@link LooperWeightingFactory} can use it to skip rebuilding a weighting
+     * that has not changed.
+     */
+    public GHResponse routeRegistered(GHRequest request, ModelRegistry.Registered registered) {
+        request.setCustomModel(registered.model());
+        request.getHints().putObject(LooperWeightingFactory.HANDLE, registered);
+        return routeJsonBody(request);
     }
 
     public ResponsePath best(GHResponse response) {

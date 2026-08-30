@@ -52,6 +52,38 @@ export const ROUTE_PURPOSES: readonly RoutePurpose[] = [
   'waypoint-direct', 'waypoint-leg', 'repair', 'network-summary', 'screen', 'other',
 ] as const
 
+/**
+ * What one call cost at the boundary, filled in by the router as it goes.
+ *
+ * Passed down rather than returned because the trace is written where the
+ * *purpose* is known and the boundary is where the *cost* is known, and the
+ * two are three layers apart. Everything in it is optional: a router that
+ * ignores the parameter behaves exactly as before, which is what the unit
+ * tests do.
+ *
+ * It exists for the phase after this one. Phase 2 established that 1,863 calls
+ * is the number to attack and that a third of them are fix-ups of legs already
+ * routed once; deciding which of those are avoidable needs to know, per call,
+ * which corridor set it carried, whether that set was already in the engine,
+ * and whether the answer was one Looper had already been given.
+ */
+export type BoundaryTrace = {
+  /** Names the corridor set and strength this call carried. Absent for a plain leg. */
+  modelId?: string
+  /** Whether an identical request had already been answered, or was in flight. */
+  memo?: 'hit' | 'join' | 'miss'
+  /** The engine had lost the handle and the model was described again. */
+  rediscovered?: boolean
+  /** Waiting for a slot on the shared limiter, before any byte was written. */
+  queueMs?: number
+  /** Request written to response read, engine time included. */
+  transportMs?: number
+  /** What the engine says `hopper.route` took, when it says. */
+  engineRouteMs?: number
+  requestBytes?: number
+  responseBytes?: number
+}
+
 /** Why the generator stopped dispatching work. */
 export type EarlyStopReason =
   | 'none'
@@ -392,7 +424,7 @@ const COUNTED_BY = Symbol('looper.countedBy')
 type Counted = { [COUNTED_BY]?: RequestMetrics }
 
 export function countingRouter(
-  route: (points: LngLat[], customModel: CustomModel | undefined, purpose?: RoutePurpose) => Promise<GraphHopperLeg>,
+  route: (points: LngLat[], customModel: CustomModel | undefined, purpose?: RoutePurpose, boundary?: BoundaryTrace) => Promise<GraphHopperLeg>,
   metrics: RequestMetrics | undefined,
   now: () => number = () => Date.now(),
 ) {
@@ -403,10 +435,11 @@ export function countingRouter(
   if ((route as Counted)[COUNTED_BY] === metrics) return route
   const counted = async (points: LngLat[], customModel: CustomModel | undefined, purpose: RoutePurpose = 'other') => {
     const began = now()
+    const boundary: BoundaryTrace = {}
     let visitedNodes: number | undefined
     let pavement: { hops: number; measuredMetres: number } | undefined
     try {
-      const leg = await route(points, customModel, purpose)
+      const leg = await route(points, customModel, purpose, boundary)
       visitedNodes = leg.visitedNodes
       pavement = pavementReport(leg.coordinates, leg.roadClasses)
       return leg
@@ -423,6 +456,7 @@ export function countingRouter(
         areaVertices: customModel?.areas?.features?.reduce((sum, f) => sum + (f.geometry.coordinates[0]?.length ?? 0), 0) ?? 0,
         ms: elapsed,
         visitedNodes,
+        ...boundary,
         ...(TRACE_BODIES ? { points, model: customModel ?? null } : {}),
       })
     }

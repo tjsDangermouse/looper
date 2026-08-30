@@ -57,18 +57,44 @@ export type GraphHopperLeg = {
 }
 
 export class GraphHopperError extends Error {
-  constructor(message: string, readonly status?: number, readonly kind: 'unreachable' | 'timeout' | 'transport' | 'server' = 'server') {
+  constructor(message: string, readonly status?: number, readonly kind: 'unreachable' | 'timeout' | 'transport' | 'server' | 'handle' = 'server') {
     super(message)
     this.name = 'GraphHopperError'
   }
 }
 
+/**
+ * A corridor set the engine has already been given, named rather than
+ * restated. `register` and `define` appear only the first time this process
+ * uses a handle; after that the id alone is the whole model.
+ */
+export type ModelHandle = {
+  generation: string
+  id: string
+  register?: Record<string, unknown>
+  define?: { areas: string[]; multiply_by?: string; distance_influence?: number }
+}
+
 export type RouteRequestOptions = {
   profile: string
   customModel?: CustomModel
+  /** Sent instead of `customModel`, against a facade that understands handles. */
+  modelHandle?: ModelHandle
   locale?: string
   timeoutMs?: number
   signal?: AbortSignal
+}
+
+/** What a leg cost at the boundary, alongside the leg itself. */
+export type RouteResult = {
+  payload: unknown
+  requestBytes: number
+  responseBytes: number
+  /** Request written to response read, so it includes the engine's own time. */
+  transportMs: number
+  parseMs: number
+  /** What the engine says it spent, when it says. Zero from a build that does not. */
+  timing: { dispatchMs: number; routeMs: number; serializeMs: number }
 }
 
 /**
@@ -76,7 +102,7 @@ export type RouteRequestOptions = {
  * without a server. `ch.disable` is required for a per-request custom model,
  * and the graph is built without Contraction Hierarchies in any case.
  */
-export function buildRouteBody(points: LngLat[], options: Pick<RouteRequestOptions, 'profile' | 'customModel' | 'locale'>): Record<string, unknown> {
+export function buildRouteBody(points: LngLat[], options: Pick<RouteRequestOptions, 'profile' | 'customModel' | 'locale' | 'modelHandle'>): Record<string, unknown> {
   const body: Record<string, unknown> = {
     points: points.map(([lng, lat]) => [lng, lat]),
     profile: options.profile,
@@ -95,6 +121,10 @@ export function buildRouteBody(points: LngLat[], options: Pick<RouteRequestOptio
     snap_preventions: ['ferry'],
   }
   if (options.customModel) body.custom_model = options.customModel
+  // A handle and a model are the same statement made two ways, so a body
+  // carries one or the other and never both: two sources of truth for what is
+  // being avoided is exactly the shape of bug this protocol must not have.
+  if (options.modelHandle) body.looper_model = options.modelHandle
   return body
 }
 
@@ -127,10 +157,37 @@ export class GraphHopperClient {
     private readonly defaultTimeoutMs = 8000,
   ) {}
 
-  async route(points: LngLat[], options: Omit<RouteRequestOptions, 'profile'> = {}): Promise<GraphHopperLeg> {
-    const body = buildRouteBody(points, { profile: this.profile, customModel: options.customModel, locale: options.locale })
-    const payload = await this.post('/route', body, options.timeoutMs ?? this.defaultTimeoutMs, options.signal)
-    return parseLeg(payload)
+  async route(points: LngLat[], options: Omit<RouteRequestOptions, 'profile'> = {}): Promise<RouteResult> {
+    const body = buildRouteBody(points, {
+      profile: this.profile,
+      customModel: options.customModel,
+      modelHandle: options.modelHandle,
+      locale: options.locale,
+    })
+    return this.post('/route', body, options.timeoutMs ?? this.defaultTimeoutMs, options.signal)
+  }
+
+  /**
+   * Open a scope for one generation's corridors, if this engine keeps them.
+   *
+   * Undefined means "this engine does not know about handles", which the
+   * shipped GraphHopper container does not — so it is an ordinary answer and
+   * not a failure. Anything else is a real fault and is thrown.
+   */
+  async beginGeneration(signal?: AbortSignal, timeoutMs = 3000): Promise<string | undefined> {
+    let response: Response
+    try {
+      response = await this.request('/generation', { method: 'POST' }, timeoutMs, signal)
+    } catch (error) {
+      if (error instanceof GraphHopperError && error.status !== undefined && error.status < 500) return undefined
+      throw error
+    }
+    const data = (await response.json()) as { generation?: string }
+    return data?.generation
+  }
+
+  async endGeneration(generation: string, timeoutMs = 3000): Promise<void> {
+    await this.request(`/generation/${encodeURIComponent(generation)}`, { method: 'DELETE' }, timeoutMs)
   }
 
   /**
@@ -172,13 +229,29 @@ export class GraphHopperClient {
     return { version: data?.version, profiles: (data?.profiles ?? []).map((p: any) => p?.name).filter(Boolean), bbox: data?.bbox }
   }
 
-  private async post(path: string, body: unknown, timeoutMs: number, signal?: AbortSignal) {
+  private async post(path: string, body: unknown, timeoutMs: number, signal?: AbortSignal): Promise<RouteResult> {
+    const serialised = JSON.stringify(body)
+    const began = performance.now()
     const response = await this.request(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: serialised,
     }, timeoutMs, signal)
-    return (await response.json()) as any
+    // Read as text and parsed here rather than through `response.json()`, so
+    // that what the engine cost and what parsing its answer costs are two
+    // numbers instead of one. Phase 2 needed them apart; so does this phase.
+    const text = await response.text()
+    const transportMs = performance.now() - began
+    const parseBegan = performance.now()
+    const payload = JSON.parse(text)
+    return {
+      payload,
+      requestBytes: serialised.length,
+      responseBytes: text.length,
+      transportMs,
+      parseMs: performance.now() - parseBegan,
+      timing: parseTiming(response.headers.get('x-looper-timing')),
+    }
   }
 
   private async request(path: string, init: RequestInit, timeoutMs: number, signal?: AbortSignal): Promise<Response> {
@@ -189,10 +262,10 @@ export class GraphHopperClient {
     try {
       const response = await fetch(new URL(path, this.baseUrl), { ...init, signal: controller.signal })
       if (!response.ok) {
-        const detail = await readMessage(response)
+        const { message, kind } = await readMessage(response)
         // GraphHopper answers 400 for "there is no path between these points",
         // which for us is an ordinary outcome, not a fault.
-        throw new GraphHopperError(detail, response.status, response.status === 400 ? 'unreachable' : 'server')
+        throw new GraphHopperError(message, response.status, kind)
       }
       return response
     } catch (error) {
@@ -231,13 +304,32 @@ export function parseShortestPathTree(body: string): Array<{ point: LngLat; netw
   return reached.length ? reached : undefined
 }
 
-async function readMessage(response: Response): Promise<string> {
+async function readMessage(response: Response): Promise<{ message: string; kind: GraphHopperError['kind'] }> {
+  const fallback = response.status === 400 ? 'unreachable' : 'server'
   try {
     const data = (await response.json()) as any
-    return String(data?.message ?? `HTTP ${response.status}`)
+    // A handle the engine no longer holds is its own kind of failure: it means
+    // "say the model again", and it must never be read as "there is no path".
+    const kind = data?.looper_error === 'unknown_handle' ? 'handle' : fallback
+    return { message: String(data?.message ?? `HTTP ${response.status}`), kind }
   } catch {
-    return `HTTP ${response.status}`
+    return { message: `HTTP ${response.status}`, kind: fallback }
   }
+}
+
+/** `dispatch=203,route=1773,serialize=1532`, in microseconds. Absent is zero. */
+function parseTiming(header: string | null): RouteResult['timing'] {
+  const timing = { dispatchMs: 0, routeMs: 0, serializeMs: 0 }
+  if (!header) return timing
+  for (const part of header.split(',')) {
+    const [name, value] = part.split('=')
+    const ms = Number(value) / 1000
+    if (!Number.isFinite(ms)) continue
+    if (name === 'dispatch') timing.dispatchMs = ms
+    else if (name === 'route') timing.routeMs = ms
+    else if (name === 'serialize') timing.serializeMs = ms
+  }
+  return timing
 }
 
 export function parseLeg(payload: any): GraphHopperLeg {

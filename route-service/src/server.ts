@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { config } from './config.js'
 import { ConcurrencyLimiter, LimiterBusyError } from './concurrencyLimiter.js'
 import { GraphHopperClient, GraphHopperError } from './graphhopper.js'
+import { GenerationScope, createBoundary } from './boundary.js'
 import { coarseLocation, log } from './log.js'
 import { createRateLimiter } from './http/rateLimit.js'
 import { ValidationError, parseLoopRequest } from './http/validate.js'
@@ -144,6 +145,28 @@ async function handle(
   // reaches it, so it is safe to log in production as it stands.
   const metrics = new RequestMetrics()
 
+  // One scope per walker's request, opened before any leg is routed and
+  // released in the `finally` below whatever happens to the request. Undefined
+  // against an engine that does not keep corridors, which is every deployment
+  // until one is pointed at a facade that does.
+  const scope = config.boundary.modelRegistry
+    ? await GenerationScope.begin(regionalGraph.graphhopper, controller.signal)
+    : undefined
+  const boundary = createBoundary({
+    client: regionalGraph.graphhopper,
+    scope,
+    memo: config.boundary.routeMemo,
+    timeoutMs: config.legTimeoutMs,
+    signal: controller.signal,
+    run: call => {
+      if (!engineLimiter) return call()
+      return engineLimiter.run(call, controller.signal).catch(error => {
+        if (error instanceof LimiterBusyError) throw new GraphHopperError('Routing engine busy.', undefined, 'timeout')
+        throw error
+      })
+    },
+  })
+
   try {
     let diagnostics: Diagnostics | undefined
     const result = await generateLoops(parsed, {
@@ -161,14 +184,7 @@ async function handle(
           signal: controller.signal,
           timeoutMs: config.networkProbeTimeoutMs,
         }),
-      route: (points, customModel) => {
-        const call = () => regionalGraph.graphhopper.route(points as LngLat[], { customModel, signal: controller.signal, timeoutMs: config.legTimeoutMs })
-        if (!engineLimiter) return call()
-        return engineLimiter.run(call, controller.signal).catch(error => {
-          if (error instanceof LimiterBusyError) throw new GraphHopperError('Routing engine busy.', undefined, 'timeout')
-          throw error
-        })
-      },
+      route: (points, customModel, _purpose, trace) => boundary.route(points as LngLat[], customModel, trace),
     })
     log('info', 'loops', {
       mode: parsed.mode,
@@ -182,12 +198,16 @@ async function handle(
       // Set after the spread: waypoint mode reports no `diagnostics` at all,
       // and the cost of a waypoint request is exactly what we want to see.
       cost: metrics.snapshot(),
+      boundary: boundary.stats(),
       cache: cacheKey ? 'miss' : 'off',
     })
     // Stored only here, on the way to the walker: everything that failed,
     // timed out, or was abandoned took one of the paths below instead.
     if (cacheKey && !controller.signal.aborted) cache.set(cacheKey, result)
-    return send(response, 200, result)
+    // What the boundary cost, beside the answer rather than inside it: it is a
+    // property of this call to the engine, not of the walk, and a cache hit
+    // that did no boundary work should not report someone else's.
+    return send(response, 200, result, { 'X-Looper-Boundary': JSON.stringify(boundary.stats()) })
   } catch (error) {
     if (controller.signal.aborted && request.destroyed) return
     if (error instanceof GraphHopperError) {
@@ -202,6 +222,10 @@ async function handle(
     return send(response, 500, { error: GENERIC_ERROR })
   } finally {
     clearTimeout(deadline)
+    // Every corridor this request drew, dropped in one call — including on the
+    // paths that failed, timed out or were abandoned, which are exactly the
+    // ones a scope would otherwise be left behind by.
+    void boundary.end()
   }
 }
 
@@ -272,8 +296,8 @@ function readBody(request: IncomingMessage): Promise<string> {
   })
 }
 
-function send(response: ServerResponse, status: number, payload: unknown) {
+function send(response: ServerResponse, status: number, payload: unknown, headers: Record<string, string> = {}) {
   const body = JSON.stringify(payload)
-  response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(body), 'Cache-Control': 'no-store' })
+  response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(body), 'Cache-Control': 'no-store', ...headers })
   response.end(body)
 }

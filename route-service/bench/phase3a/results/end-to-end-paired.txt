@@ -1,0 +1,125 @@
+warming http://localhost:8991… done
+
+———————————————————————— round 1 of 4
+
+=== P0 baseline — model in every body (http://localhost:8991) ===
+douglas-5km    median   380ms  routes=3  calls 291–291  routed=291 memo=0+0  req=891KB  gh=620ms
+douglas-3km    median   223ms  routes=3  calls 215–221  routed=215 memo=0+0  req=533KB  gh=326ms
+peel-5km       median   663ms  routes=3  calls 743–779  routed=752 memo=0+0  req=2225KB  gh=597ms
+onchan-5km     median   168ms  routes=3  calls 181–181  routed=181 memo=0+0  req=552KB  gh=176ms
+wp-one         median   124ms  routes=1  calls 34–34  routed=34 memo=0+0  req=45KB  gh=54ms
+wp-two         median   742ms  routes=1  calls 379–379  routed=379 memo=0+0  req=1446KB  gh=844ms
+
+=== P3 + exact route memo (http://localhost:8991) ===
+douglas-5km    median   344ms  routes=3  calls 291–291  routed=275 memo=11+5  req=301KB  gh=594ms
+douglas-3km    median   212ms  routes=3  calls 221–221  routed=208 memo=6+7  req=212KB  gh=318ms
+peel-5km       median   622ms  routes=3  calls 743–763  routed=688 memo=25+22  req=721KB  gh=535ms
+onchan-5km     median   168ms  routes=3  calls 181–181  routed=173 memo=3+5  req=209KB  gh=171ms
+wp-one         median   120ms  routes=1  calls 34–34  routed=34 memo=0+0  req=46KB  gh=52ms
+wp-two         median   706ms  routes=1  calls 379–379  routed=344 memo=30+5  req=571KB  gh=801ms
+
+=== memo alone, no registry (http://localhost:8991) ===
+douglas-5km    median   349ms  routes=3  calls 291–291  routed=275 memo=10+6  req=886KB  gh=609ms
+douglas-3km    median   214ms  routes=3  calls 215–221  routed=208 memo=6+7  req=548KB  gh=326ms
+peel-5km       median   630ms  routes=3  calls 743–779  routed=688 memo=25+22  req=2158KB  gh=577ms
+onchan-5km     median   169ms  routes=3  calls 181–181  routed=173 memo=4+4  req=550KB  gh=174ms
+wp-one         median   123ms  routes=1  calls 34–34  routed=34 memo=0+0  req=45KB  gh=53ms
+wp-two         median   714ms  routes=1  calls 379–379  routed=344 memo=30+5  req=1430KB  gh=809ms
+
+———————————————————————— round 2 of 4
+
+=== P0 baseline — model in every body (http://localhost:8991) ===
+douglas-5km    median   359ms  routes=3  calls 291–291  routed=291 memo=0+0  req=891KB  gh=619ms
+douglas-3km    median   217ms  routes=3  calls 215–221  routed=221 memo=0+0  req=552KB  gh=325ms
+peel-5km       median   646ms  routes=3  calls 743–779  routed=752 memo=0+0  req=2225KB  gh=589ms
+onchan-5km     median   166ms  routes=3  calls 181–181  routed=181 memo=0+0  req=552KB  gh=173ms
+wp-one         median   117ms  routes=1  calls 34–34  routed=34 memo=0+0  req=45KB  gh=52ms
+wp-two         median   736ms  routes=1  calls 379–379  routed=379 memo=0+0  req=1446KB  gh=858ms
+
+=== P3 + exact route memo (http://localhost:8991) ===
+douglas-5km    median   343ms  routes=3  calls 291–291  routed=275 memo=10+6  req=301KB  gh=590ms
+douglas-3km    median   214ms  routes=3  calls 215–221  routed=202 memo=6+7  req=205KB  gh=319ms
+peel-5km       median   624ms  routes=3  calls 743–763  routed=688 memo=25+21  req=720KB  gh=532ms
+onchan-5km     median   164ms  routes=3  calls 181–181  routed=173 memo=4+4  req=209KB  gh=164ms
+wp-one         median   119ms  routes=1  calls 34–34  routed=34 memo=0+0  req=46KB  gh=52ms
+wp-two         median   722ms  routes=1  calls 379–379  routed=344 memo=30+5  req=572KB  gh=794ms
+
+=== memo alone, no registry (http://localhost:8991) ===
+douglas-5km    median   350ms  routes=3  calls 291–291  routed=275 memo=10+6  req=886KB  gh=612ms
+douglas-3km    median   214ms  routes=3  calls 215–221  routed=208 memo=7+6  req=548KB  gh=320ms
+peel-5km       median   627ms  routes=3  calls 743–763  routed=688 memo=25+21  req=2158KB  gh=567ms
+onchan-5km     median   165ms  routes=3  calls 181–181  routed=173 memo=3+5  req=550KB  gh=167ms
+wp-one         median   124ms  routes=1  calls 34–34  routed=34 memo=0+0  req=45KB  gh=53ms
+wp-two         median   723ms  routes=1  calls 379–379  routed=344 memo=30+5  req=1430KB  gh=822ms
+
+———————————————————————— round 3 of 4
+
+=== P0 baseline — model in every body (http://localhost:8991) ===
+douglas-5km    median   421ms  routes=3  calls 291–291  routed=291 memo=0+0  req=891KB  gh=691ms
+douglas-3km    median   226ms  routes=3  calls 215–221  routed=221 memo=0+0  req=552KB  gh=339ms
+peel-5km       median   635ms  routes=3  calls 763–779  routed=752 memo=0+0  req=2225KB  gh=580ms
+onchan-5km     median   169ms  routes=3  calls 181–181  routed=181 memo=0+0  req=552KB  gh=169ms
+wp-one         median   118ms  routes=1  calls 34–34  routed=34 memo=0+0  req=45KB  gh=52ms
+wp-two         median   739ms  routes=1  calls 379–379  routed=379 memo=0+0  req=1446KB  gh=868ms
+
+=== P3 + exact route memo (http://localhost:8991) ===
+douglas-5km    median   347ms  routes=3  calls 291–291  routed=275 memo=10+6  req=301KB  gh=591ms
+douglas-3km    median   213ms  routes=3  calls 215–221  routed=208 memo=7+6  req=211KB  gh=314ms
+peel-5km       median   614ms  routes=3  calls 743–763  routed=688 memo=24+22  req=721KB  gh=529ms
+onchan-5km     median   166ms  routes=3  calls 181–181  routed=173 memo=3+5  req=209KB  gh=161ms
+wp-one         median   116ms  routes=1  calls 34–34  routed=34 memo=0+0  req=46KB  gh=51ms
+wp-two         median   715ms  routes=1  calls 379–379  routed=344 memo=30+5  req=569KB  gh=795ms
+
+=== memo alone, no registry (http://localhost:8991) ===
+douglas-5km    median   371ms  routes=3  calls 291–291  routed=275 memo=10+6  req=886KB  gh=599ms
+douglas-3km    median   212ms  routes=3  calls 215–221  routed=208 memo=7+6  req=548KB  gh=315ms
+peel-5km       median   629ms  routes=3  calls 743–763  routed=707 memo=26+20  req=2207KB  gh=560ms
+onchan-5km     median   169ms  routes=3  calls 181–181  routed=173 memo=3+5  req=550KB  gh=169ms
+wp-one         median   121ms  routes=1  calls 34–34  routed=34 memo=0+0  req=45KB  gh=52ms
+wp-two         median   722ms  routes=1  calls 379–379  routed=344 memo=30+5  req=1430KB  gh=813ms
+
+———————————————————————— round 4 of 4
+
+=== P0 baseline — model in every body (http://localhost:8991) ===
+douglas-5km    median   359ms  routes=3  calls 291–291  routed=291 memo=0+0  req=891KB  gh=621ms
+douglas-3km    median   217ms  routes=3  calls 215–221  routed=221 memo=0+0  req=552KB  gh=327ms
+peel-5km       median   633ms  routes=3  calls 743–763  routed=752 memo=0+0  req=2225KB  gh=573ms
+onchan-5km     median   165ms  routes=3  calls 181–181  routed=181 memo=0+0  req=552KB  gh=167ms
+wp-one         median   117ms  routes=1  calls 34–34  routed=34 memo=0+0  req=45KB  gh=51ms
+wp-two         median   724ms  routes=1  calls 379–379  routed=379 memo=0+0  req=1446KB  gh=818ms
+
+=== P3 + exact route memo (http://localhost:8991) ===
+douglas-5km    median   355ms  routes=3  calls 291–291  routed=275 memo=10+6  req=301KB  gh=594ms
+douglas-3km    median   214ms  routes=3  calls 215–221  routed=208 memo=7+6  req=211KB  gh=310ms
+peel-5km       median   635ms  routes=3  calls 743–763  routed=688 memo=25+21  req=722KB  gh=540ms
+onchan-5km     median   191ms  routes=3  calls 181–181  routed=173 memo=3+5  req=209KB  gh=182ms
+wp-one         median   136ms  routes=1  calls 34–34  routed=34 memo=0+0  req=46KB  gh=57ms
+wp-two         median   703ms  routes=1  calls 379–379  routed=344 memo=30+5  req=571KB  gh=783ms
+
+=== memo alone, no registry (http://localhost:8991) ===
+douglas-5km    median   354ms  routes=3  calls 291–291  routed=275 memo=10+6  req=886KB  gh=600ms
+douglas-3km    median   211ms  routes=3  calls 221–221  routed=208 memo=6+7  req=548KB  gh=315ms
+peel-5km       median   629ms  routes=3  calls 743–763  routed=688 memo=25+22  req=2158KB  gh=544ms
+onchan-5km     median   170ms  routes=3  calls 181–181  routed=173 memo=4+4  req=550KB  gh=166ms
+wp-one         median   118ms  routes=1  calls 34–34  routed=34 memo=0+0  req=45KB  gh=51ms
+wp-two         median   705ms  routes=1  calls 379–379  routed=344 memo=29+6  req=1430KB  gh=794ms
+
+| fixture | P0 | P3 | memo |
+|---|---:|---:|---:|
+| douglas-5km | 359 | 344 | 350 |
+| douglas-3km | 217 | 213 | 212 |
+| peel-5km | 635 | 622 | 629 |
+| onchan-5km | 166 | 166 | 169 |
+| wp-one | 117 | 119 | 121 |
+| wp-two | 736 | 706 | 714 |
+| **total** | **2230** | **2170** | **2195** |
+| change | 0.0% | -2.7% | -1.6% |
+
+per round, so the spread of one configuration against itself is visible:
+  P0 baseline — model in every body          2300 / 2241 / 2308 / 2215   spread 4.2%
+  P3 + exact route memo                      2172 / 2186 / 2171 / 2234   spread 2.9%
+  memo alone, no registry                    2199 / 2203 / 2224 / 2187   spread 1.7%
+
+route identity against P0:
+  P3 + exact route memo: identical on all six
+  memo alone, no registry: identical on all six

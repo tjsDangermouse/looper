@@ -14,8 +14,13 @@ travel with it.
 **Licence.** GraphHopper is Apache License 2.0. Every file listed below carries
 the standard GraphHopper GmbH contributor-licence header.
 
-**Current status: nothing has been copied or modified.** As of this phase all
-GraphHopper code is consumed as an unmodified Maven dependency. The
+**Current status: nothing has been copied or modified.** As of Phase 3A all
+GraphHopper code is still consumed as an unmodified Maven dependency. Phase 3A
+adds one extension point and no copied line: `LooperWeightingFactory` implements
+GraphHopper's public `WeightingFactory` interface and is installed by overriding
+`GraphHopper.createWeightingFactory()`, which is `protected` because subclassing
+is how GraphHopper intends a host to supply one. It delegates every build to
+`DefaultWeightingFactory`; what it adds is remembering the answer. The
 `Copied?` column exists for the phase that may change that; it currently reads
 `no` on every row, and that is the finding, not an omission. Because no source
 is redistributed, the obligation today is limited to preserving the
@@ -52,7 +57,8 @@ All paths relative to the repository root of `graphhopper/graphhopper` at
 | `core/.../routing/weighting/custom/FindMinMax.java` | `FindMinMax` | `checkLMConstraints`: why LM stays legal under avoidance | dependency | no |
 | `core/.../routing/weighting/BeelineWeightApproximator.java` | `BeelineWeightApproximator` | the other half of `max(lm, beeline)`; the half that adapts to the request weighting | dependency | no |
 | `core/.../routing/Dijkstra.java` | `Dijkstra` | not on the request path — the exact answer the Phase 2 heuristic measurement is checked against | dependency | no |
-| `core/.../routing/DefaultWeightingFactory.java` | `DefaultWeightingFactory` | merges profile + request custom models | dependency | no |
+| `core/.../routing/DefaultWeightingFactory.java` | `DefaultWeightingFactory` | merges profile + request custom models; wrapped, never replaced, by `LooperWeightingFactory` | dependency | no |
+| `core/.../routing/WeightingFactory.java` | `WeightingFactory` | the interface Phase 3A's weighting cache implements; installed through `GraphHopper.createWeightingFactory()`, which is `protected` for exactly this | dependency | no |
 | `web-api/.../util/CustomModel.java` | `CustomModel` | `merge`; the avoidance model's Java shape | dependency | no |
 | `core/.../routing/querygraph/QueryGraph.java` | `QueryGraph` | **virtual nodes and edges**; mid-edge starts | dependency | no |
 | `core/.../storage/index/LocationIndexTree.java` | `LocationIndexTree` | **snapping** | dependency | no |
@@ -86,3 +92,5 @@ copied.
 | `gh-harness/src/main/java/com/looper/routing/Lab.java` | Phase 2: replays the captured workload under named GraphHopper configurations |
 | `gh-harness/src/main/java/com/looper/routing/Heuristic.java` | Phase 2: measures the landmark and beeline bounds against an exact Dijkstra |
 | `gh-harness/src/main/java/com/looper/routing/ModelCost.java` | Phase 2: times `createWeighting` alone, on a compiled-class cache hit and miss |
+| `gh-harness/src/main/java/com/looper/routing/ModelRegistry.java` | Phase 3A: request-scoped corridor and model handles, and the weighting built from each |
+| `gh-harness/src/main/java/com/looper/routing/LooperWeightingFactory.java` | Phase 3A: GraphHopper's own factory, wrapped so a named model's weighting is built once |

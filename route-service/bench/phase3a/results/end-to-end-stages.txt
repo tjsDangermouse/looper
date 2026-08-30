@@ -1,0 +1,59 @@
+warming http://localhost:8991… done
+warming http://localhost:8992… done
+
+=== P0 baseline — model in every body (http://localhost:8991) ===
+douglas-5km    median   373ms  routes=3  calls 291–291  routed=291 memo=0+0  req=891KB  gh=676ms
+douglas-3km    median   226ms  routes=3  calls 215–221  routed=215 memo=0+0  req=533KB  gh=339ms
+peel-5km       median   668ms  routes=3  calls 743–779  routed=765 memo=0+0  req=2251KB  gh=619ms
+onchan-5km     median   178ms  routes=3  calls 181–181  routed=181 memo=0+0  req=552KB  gh=187ms
+wp-one         median   120ms  routes=1  calls 34–34  routed=34 memo=0+0  req=45KB  gh=52ms
+wp-two         median   745ms  routes=1  calls 379–379  routed=379 memo=0+0  req=1446KB  gh=871ms
+
+=== P1 + model registry (weighting rebuilt) (http://localhost:8992) ===
+douglas-5km    median   371ms  routes=3  calls 291–291  routed=291 memo=0+0  req=306KB  gh=639ms
+douglas-3km    median   218ms  routes=3  calls 215–221  routed=221 memo=0+0  req=211KB  gh=332ms
+peel-5km       median   648ms  routes=3  calls 743–763  routed=752 memo=0+0  req=743KB  gh=598ms
+onchan-5km     median   174ms  routes=3  calls 181–181  routed=181 memo=0+0  req=208KB  gh=178ms
+wp-one         median   122ms  routes=1  calls 34–34  routed=34 memo=0+0  req=46KB  gh=52ms
+wp-two         median   732ms  routes=1  calls 379–379  routed=379 memo=0+0  req=578KB  gh=832ms
+
+=== P2 + weighting reuse (http://localhost:8991) ===
+douglas-5km    median   392ms  routes=3  calls 291–291  routed=291 memo=0+0  req=304KB  gh=628ms
+douglas-3km    median   256ms  routes=3  calls 215–221  routed=215 memo=0+0  req=207KB  gh=360ms
+peel-5km       median   688ms  routes=3  calls 743–779  routed=752 memo=0+0  req=744KB  gh=607ms
+onchan-5km     median   177ms  routes=3  calls 181–181  routed=181 memo=0+0  req=208KB  gh=178ms
+wp-one         median   116ms  routes=1  calls 34–34  routed=34 memo=0+0  req=46KB  gh=51ms
+wp-two         median   705ms  routes=1  calls 379–379  routed=379 memo=0+0  req=578KB  gh=809ms
+
+=== P3 + exact route memo (http://localhost:8991) ===
+douglas-5km    median   336ms  routes=3  calls 291–291  routed=275 memo=10+6  req=301KB  gh=581ms
+douglas-3km    median   206ms  routes=3  calls 215–221  routed=208 memo=6+7  req=211KB  gh=307ms
+peel-5km       median   621ms  routes=3  calls 743–763  routed=688 memo=25+21  req=719KB  gh=533ms
+onchan-5km     median   178ms  routes=3  calls 181–181  routed=173 memo=3+5  req=209KB  gh=175ms
+wp-one         median   128ms  routes=1  calls 34–34  routed=34 memo=0+0  req=46KB  gh=53ms
+wp-two         median   809ms  routes=1  calls 379–379  routed=344 memo=30+5  req=571KB  gh=884ms
+
+=== memo alone, no registry (http://localhost:8991) ===
+douglas-5km    median   346ms  routes=3  calls 291–291  routed=275 memo=10+6  req=886KB  gh=614ms
+douglas-3km    median   209ms  routes=3  calls 215–221  routed=208 memo=6+7  req=548KB  gh=316ms
+peel-5km       median   662ms  routes=3  calls 743–779  routed=688 memo=25+21  req=2158KB  gh=620ms
+onchan-5km     median   171ms  routes=3  calls 181–181  routed=173 memo=4+4  req=550KB  gh=182ms
+wp-one         median   116ms  routes=1  calls 34–34  routed=34 memo=0+0  req=45KB  gh=52ms
+wp-two         median   698ms  routes=1  calls 379–379  routed=344 memo=30+5  req=1430KB  gh=790ms
+
+| fixture | P0 | P1 | P2 | P3 | memo |
+|---|---:|---:|---:|---:|---:|
+| douglas-5km | 373 | 371 | 392 | 336 | 346 |
+| douglas-3km | 226 | 218 | 256 | 206 | 209 |
+| peel-5km | 668 | 648 | 688 | 621 | 662 |
+| onchan-5km | 178 | 174 | 177 | 178 | 171 |
+| wp-one | 120 | 122 | 116 | 128 | 116 |
+| wp-two | 745 | 732 | 705 | 809 | 698 |
+| **total** | **2310** | **2265** | **2334** | **2278** | **2202** |
+| change | 0.0% | -1.9% | 1.0% | -1.4% | -4.7% |
+
+route identity against P0:
+  P1 + model registry (weighting rebuilt): identical on all six
+  P2 + weighting reuse: identical on all six
+  P3 + exact route memo: identical on all six
+  memo alone, no registry: identical on all six

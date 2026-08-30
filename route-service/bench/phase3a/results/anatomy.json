@@ -1,0 +1,135 @@
+{
+ "duplication": {
+  "rows": [
+   {
+    "fixture": "douglas-3km",
+    "calls": 215,
+    "duplicates": 13,
+    "avoidance": 181,
+    "models": 86,
+    "corridorSets": 75,
+    "bothStrengths": 11
+   },
+   {
+    "fixture": "douglas-5km",
+    "calls": 291,
+    "duplicates": 16,
+    "avoidance": 244,
+    "models": 112,
+    "corridorSets": 90,
+    "bothStrengths": 22
+   },
+   {
+    "fixture": "onchan-5km",
+    "calls": 181,
+    "duplicates": 8,
+    "avoidance": 151,
+    "models": 78,
+    "corridorSets": 65,
+    "bothStrengths": 13
+   },
+   {
+    "fixture": "peel-5km",
+    "calls": 763,
+    "duplicates": 47,
+    "avoidance": 614,
+    "models": 282,
+    "corridorSets": 243,
+    "bothStrengths": 39
+   },
+   {
+    "fixture": "wp-one",
+    "calls": 34,
+    "duplicates": 0,
+    "avoidance": 16,
+    "models": 16,
+    "corridorSets": 16,
+    "bothStrengths": 0
+   },
+   {
+    "fixture": "wp-two",
+    "calls": 379,
+    "duplicates": 35,
+    "avoidance": 289,
+    "models": 164,
+    "corridorSets": 147,
+    "bothStrengths": 17
+   }
+  ],
+  "totals": {
+   "calls": 1863,
+   "exact": 119,
+   "avoidance": 1495,
+   "models": 738,
+   "corridorSets": 636,
+   "bothStrengths": 102
+  }
+ },
+ "polygons": {
+  "references": 2784,
+  "distinct": 658,
+  "bytes": 4889945,
+  "distinctBytes": 1274505
+ },
+ "payload": [
+  {
+   "fixture": "douglas-3km",
+   "calls": 215,
+   "before": 546094,
+   "afterFine": 191252,
+   "afterCoarse": 338573
+  },
+  {
+   "fixture": "douglas-5km",
+   "calls": 291,
+   "before": 911961,
+   "afterFine": 293450,
+   "afterCoarse": 546993
+  },
+  {
+   "fixture": "onchan-5km",
+   "calls": 181,
+   "before": 565644,
+   "afterFine": 199960,
+   "afterCoarse": 371895
+  },
+  {
+   "fixture": "peel-5km",
+   "calls": 763,
+   "before": 2287488,
+   "afterFine": 718055,
+   "afterCoarse": 1378077
+  },
+  {
+   "fixture": "wp-one",
+   "calls": 34,
+   "before": 46467,
+   "afterFine": 46515,
+   "afterCoarse": 46467
+  },
+  {
+   "fixture": "wp-two",
+   "calls": 379,
+   "before": 1480213,
+   "afterFine": 565018,
+   "afterCoarse": 1049351
+  }
+ ],
+ "classes": {
+  "plain": {
+   "calls": 368,
+   "before": 101091,
+   "after": 101091
+  },
+  "avoid-strong": {
+   "calls": 1227,
+   "before": 4944815,
+   "after": 1758744
+  },
+  "avoid-relaxed": {
+   "calls": 268,
+   "before": 791961,
+   "after": 154415
+  }
+ }
+}

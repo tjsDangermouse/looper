@@ -21,7 +21,7 @@ const portInUse = (port: number) => new Promise<boolean>(resolve => {
   socket.on('error', () => resolve(false))
 })
 
-export type Service = { port: number; stop: () => Promise<void>; generate: (body: unknown) => Promise<{ wallMs: number; payload: any }> }
+export type Service = { port: number; stop: () => Promise<void>; generate: (body: unknown) => Promise<{ wallMs: number; payload: any; headers: Headers }> }
 
 export async function startService(port: number, env: Record<string, string>): Promise<Service> {
   if (await portInUse(port)) throw new Error(`port ${port} is already in use — a previous run is still alive`)
@@ -54,7 +54,7 @@ export async function startService(port: number, env: Record<string, string>): P
             const response = await fetch(`http://localhost:${port}/v1/loops`, {
               method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
             })
-            return { wallMs: Date.now() - began, payload: (await response.json()) as any }
+            return { wallMs: Date.now() - began, payload: (await response.json()) as any, headers: response.headers }
           },
         }
       }

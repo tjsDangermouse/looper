@@ -95,6 +95,8 @@ services:
       LOOPER_WAYPOINT_BACKBONE: ${LOOPER_WAYPOINT_BACKBONE:-}
       LOOPER_KEEP_PINNED_SPURS: ${LOOPER_KEEP_PINNED_SPURS:-}
       LOOPER_REQUEST_CACHE: ${LOOPER_REQUEST_CACHE:-}
+      LOOPER_MODEL_REGISTRY: ${LOOPER_MODEL_REGISTRY:-}
+      LOOPER_ROUTE_MEMO: ${LOOPER_ROUTE_MEMO:-}
     ports:
       # Nginx is the public HTTPS entry point; keep the service local to this host.
       - "127.0.0.1:${ROUTE_SERVICE_PORT:-8988}:8080"

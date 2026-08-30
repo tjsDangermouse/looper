@@ -1,0 +1,8 @@
+douglas-5km       442ms  routes=3  calls=291
+douglas-3km       318ms  routes=3  calls=215
+peel-5km          806ms  routes=3  calls=763
+onchan-5km        267ms  routes=3  calls=181
+wp-one            153ms  routes=1  calls=34
+wp-two            828ms  routes=1  calls=379
+
+corpus written to /Users/simonwoollams/GitHub/Walkabout/route-service/bench/phase3a/corpus/

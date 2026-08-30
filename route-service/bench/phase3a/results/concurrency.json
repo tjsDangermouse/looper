@@ -1,0 +1,755 @@
+{
+ "repeats": 7,
+ "results": {
+  "1": [
+   {
+    "name": "douglas-5km",
+    "medianMs": 1152,
+    "routes": [
+     {
+      "distanceMeters": 5064,
+      "quality": 82.6,
+      "geometryHash": "2a4ead1341bfccc3"
+     },
+     {
+      "distanceMeters": 4930,
+      "quality": 82.5,
+      "geometryHash": "4a6a2e9c4760baf9"
+     },
+     {
+      "distanceMeters": 4446,
+      "quality": 58.7,
+      "geometryHash": "9e014a947d2da438"
+     }
+    ],
+    "callRange": [
+     258,
+     258
+    ],
+    "queueMs": 1,
+    "routed": 243,
+    "engineMs": 909
+   },
+   {
+    "name": "douglas-3km",
+    "medianMs": 600,
+    "routes": [
+     {
+      "distanceMeters": 3011,
+      "quality": 81.9,
+      "geometryHash": "dcbd5e05f54d1427"
+     },
+     {
+      "distanceMeters": 2768,
+      "quality": 62.1,
+      "geometryHash": "1c3c9204fae8c946"
+     },
+     {
+      "distanceMeters": 2702,
+      "quality": 57.9,
+      "geometryHash": "cd00e8887d555ffc"
+     }
+    ],
+    "callRange": [
+     150,
+     150
+    ],
+    "queueMs": 1,
+    "routed": 141,
+    "engineMs": 448
+   },
+   {
+    "name": "peel-5km",
+    "medianMs": 1713,
+    "routes": [
+     {
+      "distanceMeters": 4877,
+      "quality": 72.7,
+      "geometryHash": "e554af26e0fb0824"
+     },
+     {
+      "distanceMeters": 4727,
+      "quality": 63.6,
+      "geometryHash": "5f1e085c4c50adcc"
+     },
+     {
+      "distanceMeters": 4885,
+      "quality": 63.3,
+      "geometryHash": "7ca874104df094ec"
+     }
+    ],
+    "callRange": [
+     602,
+     602
+    ],
+    "queueMs": 2,
+    "routed": 559,
+    "engineMs": 1267
+   },
+   {
+    "name": "onchan-5km",
+    "medianMs": 348,
+    "routes": [
+     {
+      "distanceMeters": 4850,
+      "quality": 76.3,
+      "geometryHash": "1804cc97201b4b14"
+     },
+     {
+      "distanceMeters": 5034,
+      "quality": 69.8,
+      "geometryHash": "01a7bda9010a9735"
+     },
+     {
+      "distanceMeters": 5295,
+      "quality": 57.4,
+      "geometryHash": "03f3de9df2fcc027"
+     }
+    ],
+    "callRange": [
+     119,
+     119
+    ],
+    "queueMs": 0,
+    "routed": 113,
+    "engineMs": 260
+   },
+   {
+    "name": "wp-one",
+    "medianMs": 124,
+    "routes": [
+     {
+      "distanceMeters": 6911,
+      "quality": 57.2,
+      "geometryHash": "ddc541ee0a0f8982"
+     }
+    ],
+    "callRange": [
+     34,
+     34
+    ],
+    "queueMs": 0,
+    "routed": 34,
+    "engineMs": 86
+   },
+   {
+    "name": "wp-two",
+    "medianMs": 1576,
+    "routes": [
+     {
+      "distanceMeters": 9410,
+      "quality": 51.3,
+      "geometryHash": "b2b830e6b22f6479"
+     }
+    ],
+    "callRange": [
+     343,
+     343
+    ],
+    "queueMs": 1,
+    "routed": 310,
+    "engineMs": 1187
+   }
+  ],
+  "2": [
+   {
+    "name": "douglas-5km",
+    "medianMs": 569,
+    "routes": [
+     {
+      "distanceMeters": 5064,
+      "quality": 82.6,
+      "geometryHash": "2a4ead1341bfccc3"
+     },
+     {
+      "distanceMeters": 4930,
+      "quality": 82.5,
+      "geometryHash": "4a6a2e9c4760baf9"
+     },
+     {
+      "distanceMeters": 4446,
+      "quality": 58.7,
+      "geometryHash": "9e014a947d2da438"
+     }
+    ],
+    "callRange": [
+     275,
+     275
+    ],
+    "queueMs": 1,
+    "routed": 260,
+    "engineMs": 894
+   },
+   {
+    "name": "douglas-3km",
+    "medianMs": 254,
+    "routes": [
+     {
+      "distanceMeters": 3011,
+      "quality": 81.9,
+      "geometryHash": "dcbd5e05f54d1427"
+     },
+     {
+      "distanceMeters": 2768,
+      "quality": 62.1,
+      "geometryHash": "1c3c9204fae8c946"
+     },
+     {
+      "distanceMeters": 2702,
+      "quality": 57.9,
+      "geometryHash": "cd00e8887d555ffc"
+     }
+    ],
+    "callRange": [
+     157,
+     172
+    ],
+    "queueMs": 1,
+    "routed": 148,
+    "engineMs": 403
+   },
+   {
+    "name": "peel-5km",
+    "medianMs": 777,
+    "routes": [
+     {
+      "distanceMeters": 4877,
+      "quality": 72.7,
+      "geometryHash": "e554af26e0fb0824"
+     },
+     {
+      "distanceMeters": 4727,
+      "quality": 63.6,
+      "geometryHash": "5f1e085c4c50adcc"
+     },
+     {
+      "distanceMeters": 4885,
+      "quality": 63.3,
+      "geometryHash": "7ca874104df094ec"
+     }
+    ],
+    "callRange": [
+     626,
+     626
+    ],
+    "queueMs": 4,
+    "routed": 581,
+    "engineMs": 1154
+   },
+   {
+    "name": "onchan-5km",
+    "medianMs": 186,
+    "routes": [
+     {
+      "distanceMeters": 4850,
+      "quality": 76.3,
+      "geometryHash": "1804cc97201b4b14"
+     },
+     {
+      "distanceMeters": 5034,
+      "quality": 69.8,
+      "geometryHash": "01a7bda9010a9735"
+     },
+     {
+      "distanceMeters": 5295,
+      "quality": 57.4,
+      "geometryHash": "03f3de9df2fcc027"
+     }
+    ],
+    "callRange": [
+     131,
+     131
+    ],
+    "queueMs": 0,
+    "routed": 125,
+    "engineMs": 262
+   },
+   {
+    "name": "wp-one",
+    "medianMs": 119,
+    "routes": [
+     {
+      "distanceMeters": 6911,
+      "quality": 57.2,
+      "geometryHash": "ddc541ee0a0f8982"
+     }
+    ],
+    "callRange": [
+     34,
+     34
+    ],
+    "queueMs": 0,
+    "routed": 34,
+    "engineMs": 82
+   },
+   {
+    "name": "wp-two",
+    "medianMs": 934,
+    "routes": [
+     {
+      "distanceMeters": 9410,
+      "quality": 51.3,
+      "geometryHash": "b2b830e6b22f6479"
+     }
+    ],
+    "callRange": [
+     356,
+     356
+    ],
+    "queueMs": 2,
+    "routed": 322,
+    "engineMs": 1238
+   }
+  ],
+  "4": [
+   {
+    "name": "douglas-5km",
+    "medianMs": 398,
+    "routes": [
+     {
+      "distanceMeters": 5064,
+      "quality": 82.6,
+      "geometryHash": "2a4ead1341bfccc3"
+     },
+     {
+      "distanceMeters": 4930,
+      "quality": 82.5,
+      "geometryHash": "4a6a2e9c4760baf9"
+     },
+     {
+      "distanceMeters": 4446,
+      "quality": 58.7,
+      "geometryHash": "9e014a947d2da438"
+     }
+    ],
+    "callRange": [
+     291,
+     291
+    ],
+    "queueMs": 3,
+    "routed": 275,
+    "engineMs": 1237
+   },
+   {
+    "name": "douglas-3km",
+    "medianMs": 218,
+    "routes": [
+     {
+      "distanceMeters": 3011,
+      "quality": 81.9,
+      "geometryHash": "dcbd5e05f54d1427"
+     },
+     {
+      "distanceMeters": 2768,
+      "quality": 62.1,
+      "geometryHash": "1c3c9204fae8c946"
+     },
+     {
+      "distanceMeters": 2702,
+      "quality": 57.9,
+      "geometryHash": "cd00e8887d555ffc"
+     }
+    ],
+    "callRange": [
+     197,
+     197
+    ],
+    "queueMs": 2,
+    "routed": 185,
+    "engineMs": 651
+   },
+   {
+    "name": "peel-5km",
+    "medianMs": 597,
+    "routes": [
+     {
+      "distanceMeters": 4877,
+      "quality": 72.7,
+      "geometryHash": "e554af26e0fb0824"
+     },
+     {
+      "distanceMeters": 4727,
+      "quality": 63.6,
+      "geometryHash": "5f1e085c4c50adcc"
+     },
+     {
+      "distanceMeters": 4885,
+      "quality": 63.3,
+      "geometryHash": "7ca874104df094ec"
+     }
+    ],
+    "callRange": [
+     672,
+     694
+    ],
+    "queueMs": 7,
+    "routed": 624,
+    "engineMs": 1872
+   },
+   {
+    "name": "onchan-5km",
+    "medianMs": 164,
+    "routes": [
+     {
+      "distanceMeters": 4850,
+      "quality": 76.3,
+      "geometryHash": "1804cc97201b4b14"
+     },
+     {
+      "distanceMeters": 5034,
+      "quality": 69.8,
+      "geometryHash": "01a7bda9010a9735"
+     },
+     {
+      "distanceMeters": 5295,
+      "quality": 57.4,
+      "geometryHash": "03f3de9df2fcc027"
+     }
+    ],
+    "callRange": [
+     163,
+     163
+    ],
+    "queueMs": 1,
+    "routed": 156,
+    "engineMs": 482
+   },
+   {
+    "name": "wp-one",
+    "medianMs": 123,
+    "routes": [
+     {
+      "distanceMeters": 6911,
+      "quality": 57.2,
+      "geometryHash": "ddc541ee0a0f8982"
+     }
+    ],
+    "callRange": [
+     34,
+     34
+    ],
+    "queueMs": 0,
+    "routed": 34,
+    "engineMs": 87
+   },
+   {
+    "name": "wp-two",
+    "medianMs": 751,
+    "routes": [
+     {
+      "distanceMeters": 9410,
+      "quality": 51.3,
+      "geometryHash": "b2b830e6b22f6479"
+     }
+    ],
+    "callRange": [
+     379,
+     379
+    ],
+    "queueMs": 3,
+    "routed": 344,
+    "engineMs": 1706
+   }
+  ],
+  "6": [
+   {
+    "name": "douglas-5km",
+    "medianMs": 349,
+    "routes": [
+     {
+      "distanceMeters": 5064,
+      "quality": 82.6,
+      "geometryHash": "2a4ead1341bfccc3"
+     },
+     {
+      "distanceMeters": 4930,
+      "quality": 82.5,
+      "geometryHash": "4a6a2e9c4760baf9"
+     },
+     {
+      "distanceMeters": 4446,
+      "quality": 58.7,
+      "geometryHash": "9e014a947d2da438"
+     }
+    ],
+    "callRange": [
+     291,
+     291
+    ],
+    "queueMs": 4,
+    "routed": 275,
+    "engineMs": 1627
+   },
+   {
+    "name": "douglas-3km",
+    "medianMs": 216,
+    "routes": [
+     {
+      "distanceMeters": 3011,
+      "quality": 81.9,
+      "geometryHash": "dcbd5e05f54d1427"
+     },
+     {
+      "distanceMeters": 2768,
+      "quality": 62.1,
+      "geometryHash": "1c3c9204fae8c946"
+     },
+     {
+      "distanceMeters": 2702,
+      "quality": 57.9,
+      "geometryHash": "cd00e8887d555ffc"
+     }
+    ],
+    "callRange": [
+     215,
+     221
+    ],
+    "queueMs": 3,
+    "routed": 208,
+    "engineMs": 1068
+   },
+   {
+    "name": "peel-5km",
+    "medianMs": 648,
+    "routes": [
+     {
+      "distanceMeters": 4877,
+      "quality": 72.7,
+      "geometryHash": "e554af26e0fb0824"
+     },
+     {
+      "distanceMeters": 4727,
+      "quality": 63.6,
+      "geometryHash": "5f1e085c4c50adcc"
+     },
+     {
+      "distanceMeters": 4885,
+      "quality": 63.3,
+      "geometryHash": "7ca874104df094ec"
+     }
+    ],
+    "callRange": [
+     743,
+     763
+    ],
+    "queueMs": 7,
+    "routed": 688,
+    "engineMs": 3170
+   },
+   {
+    "name": "onchan-5km",
+    "medianMs": 174,
+    "routes": [
+     {
+      "distanceMeters": 4850,
+      "quality": 76.3,
+      "geometryHash": "1804cc97201b4b14"
+     },
+     {
+      "distanceMeters": 5034,
+      "quality": 69.8,
+      "geometryHash": "01a7bda9010a9735"
+     },
+     {
+      "distanceMeters": 5295,
+      "quality": 57.4,
+      "geometryHash": "03f3de9df2fcc027"
+     }
+    ],
+    "callRange": [
+     181,
+     181
+    ],
+    "queueMs": 2,
+    "routed": 173,
+    "engineMs": 822
+   },
+   {
+    "name": "wp-one",
+    "medianMs": 120,
+    "routes": [
+     {
+      "distanceMeters": 6911,
+      "quality": 57.2,
+      "geometryHash": "ddc541ee0a0f8982"
+     }
+    ],
+    "callRange": [
+     34,
+     34
+    ],
+    "queueMs": 0,
+    "routed": 34,
+    "engineMs": 84
+   },
+   {
+    "name": "wp-two",
+    "medianMs": 721,
+    "routes": [
+     {
+      "distanceMeters": 9410,
+      "quality": 51.3,
+      "geometryHash": "b2b830e6b22f6479"
+     }
+    ],
+    "callRange": [
+     379,
+     379
+    ],
+    "queueMs": 5,
+    "routed": 344,
+    "engineMs": 2222
+   }
+  ],
+  "8": [
+   {
+    "name": "douglas-5km",
+    "medianMs": 339,
+    "routes": [
+     {
+      "distanceMeters": 5064,
+      "quality": 82.6,
+      "geometryHash": "2a4ead1341bfccc3"
+     },
+     {
+      "distanceMeters": 4930,
+      "quality": 82.5,
+      "geometryHash": "4a6a2e9c4760baf9"
+     },
+     {
+      "distanceMeters": 4446,
+      "quality": 58.7,
+      "geometryHash": "9e014a947d2da438"
+     }
+    ],
+    "callRange": [
+     291,
+     291
+    ],
+    "queueMs": 5,
+    "routed": 275,
+    "engineMs": 2136
+   },
+   {
+    "name": "douglas-3km",
+    "medianMs": 276,
+    "routes": [
+     {
+      "distanceMeters": 3011,
+      "quality": 81.9,
+      "geometryHash": "dcbd5e05f54d1427"
+     },
+     {
+      "distanceMeters": 2768,
+      "quality": 62.1,
+      "geometryHash": "1c3c9204fae8c946"
+     },
+     {
+      "distanceMeters": 2702,
+      "quality": 57.9,
+      "geometryHash": "cd00e8887d555ffc"
+     }
+    ],
+    "callRange": [
+     254,
+     254
+    ],
+    "queueMs": 5,
+    "routed": 238,
+    "engineMs": 1656
+   },
+   {
+    "name": "peel-5km",
+    "medianMs": 865,
+    "routes": [
+     {
+      "distanceMeters": 4877,
+      "quality": 72.7,
+      "geometryHash": "e554af26e0fb0824"
+     },
+     {
+      "distanceMeters": 4727,
+      "quality": 63.6,
+      "geometryHash": "5f1e085c4c50adcc"
+     },
+     {
+      "distanceMeters": 4885,
+      "quality": 63.3,
+      "geometryHash": "7ca874104df094ec"
+     }
+    ],
+    "callRange": [
+     825,
+     873
+    ],
+    "queueMs": 12,
+    "routed": 804,
+    "engineMs": 5640
+   },
+   {
+    "name": "onchan-5km",
+    "medianMs": 214,
+    "routes": [
+     {
+      "distanceMeters": 4850,
+      "quality": 76.3,
+      "geometryHash": "1804cc97201b4b14"
+     },
+     {
+      "distanceMeters": 5034,
+      "quality": 69.8,
+      "geometryHash": "01a7bda9010a9735"
+     },
+     {
+      "distanceMeters": 5295,
+      "quality": 57.4,
+      "geometryHash": "03f3de9df2fcc027"
+     }
+    ],
+    "callRange": [
+     209,
+     209
+    ],
+    "queueMs": 3,
+    "routed": 200,
+    "engineMs": 1371
+   },
+   {
+    "name": "wp-one",
+    "medianMs": 128,
+    "routes": [
+     {
+      "distanceMeters": 6911,
+      "quality": 57.2,
+      "geometryHash": "ddc541ee0a0f8982"
+     }
+    ],
+    "callRange": [
+     34,
+     34
+    ],
+    "queueMs": 0,
+    "routed": 34,
+    "engineMs": 94
+   },
+   {
+    "name": "wp-two",
+    "medianMs": 720,
+    "routes": [
+     {
+      "distanceMeters": 9410,
+      "quality": 51.3,
+      "geometryHash": "b2b830e6b22f6479"
+     }
+    ],
+    "callRange": [
+     379,
+     379
+    ],
+    "queueMs": 7,
+    "routed": 344,
+    "engineMs": 2877
+   }
+  ]
+ }
+}

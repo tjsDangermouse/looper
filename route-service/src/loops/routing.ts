@@ -4,7 +4,7 @@ import type { LoopDirection } from './candidates.js'
 import { bearingBetween, destination, distanceBetween, haversine, normaliseBearing, pathLength, resample, type LngLat } from './geo.js'
 import { MIN_BACKTRACK_METRES, sharedCorridorMetres } from './quality.js'
 import { GraphHopperError, type GraphHopperLeg, type GraphHopperStep } from '../graphhopper.js'
-import type { FixupKind, RoutePurpose } from './metrics.js'
+import type { BoundaryTrace, FixupKind, RoutePurpose } from './metrics.js'
 import type { EdgeSpan } from './edges.js'
 
 /**
@@ -112,6 +112,8 @@ export type LegRouter = (
   points: LngLat[],
   customModel: ReturnType<typeof avoidanceCustomModel>,
   purpose?: RoutePurpose,
+  /** Filled in by the router with what the call cost at the boundary; see metrics.ts. */
+  boundary?: BoundaryTrace,
 ) => Promise<GraphHopperLeg>
 
 export type RoutedLeg = GraphHopperLeg & {
