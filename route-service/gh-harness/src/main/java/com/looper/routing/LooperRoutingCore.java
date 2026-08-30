@@ -20,6 +20,10 @@ import com.graphhopper.routing.util.EdgeFilter;
 import com.graphhopper.routing.util.SnapPreventionEdgeFilter;
 import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.index.Snap;
+import com.graphhopper.storage.BaseGraph;
+import com.graphhopper.storage.NodeAccess;
+import com.graphhopper.util.EdgeExplorer;
+import com.graphhopper.util.EdgeIterator;
 import com.graphhopper.util.CustomModel;
 import com.graphhopper.util.PMap;
 import com.graphhopper.util.shapes.GHPoint;
@@ -29,6 +33,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.PriorityQueue;
 
 /**
  * The narrow seam between Looper and GraphHopper.
@@ -177,6 +182,91 @@ public final class LooperRoutingCore implements AutoCloseable {
         QueryGraph.create(hopper.getBaseGraph(), snap);
         GHPoint p = snap.getSnappedPoint();
         return new SnapResult(true, p.lat, p.lon, snap.getClosestEdge().getEdge(), snap.getQueryDistance());
+    }
+
+    public record ReachedNode(int node, double lat, double lon, double networkMetres, int degree,
+                             int parent, int parentEdge) {}
+    public record NetworkField(List<ReachedNode> nodes, long nodesVisited, long edgesVisited,
+                               double wallMs, long heapDeltaBytes, double snappedLat, double snappedLon,
+                               int startNode) {}
+
+    /**
+     * Analysis-only bounded distance field over GraphHopper's loaded foot graph.
+     * This is not a route implementation: it emits reachable graph locations
+     * for candidate construction, while every candidate leg is still routed by
+     * GraphHopper. The profile weighting is used solely as its access filter;
+     * accumulated scale is the edge's own network distance in metres.
+     *
+     * The exploration runs on the same {@link QueryGraph} a route would run
+     * on, seeded at the virtual node the router actually starts from, so both
+     * endpoints of the snapped edge are entered at their true partial-edge
+     * distance rather than one tower node being entered at zero.
+     *
+     * Each settled node keeps the predecessor and the edge it was reached by,
+     * so the result is a rooted shortest-path tree and not only a distance
+     * field. Settle order is a topological order of that tree.
+     */
+    public NetworkField explore(double lat, double lon, double limitMetres) {
+        long began = System.nanoTime();
+        Runtime runtime = Runtime.getRuntime();
+        long heapBefore = runtime.totalMemory() - runtime.freeMemory();
+        BaseGraph base = hopper.getBaseGraph();
+        Profile profile = hopper.getProfile(profileName);
+        Weighting weighting = hopper.createWeighting(profile, new PMap());
+        BooleanEncodedValue subnetworkEnc = hopper.getEncodingManager().getBooleanEncodedValue(Subnetwork.key(profileName));
+        EdgeFilter filter = new DefaultSnapFilter(weighting, subnetworkEnc);
+        if (!snapPreventionsDefault.isEmpty())
+            filter = new SnapPreventionEdgeFilter(filter,
+                    hopper.getEncodingManager().getEnumEncodedValue(RoadClass.KEY, RoadClass.class),
+                    hopper.getEncodingManager().getEnumEncodedValue(RoadEnvironment.KEY, RoadEnvironment.class),
+                    snapPreventionsDefault);
+        Snap snap = hopper.getLocationIndex().findClosest(lat, lon, filter);
+        if (!snap.isValid())
+            return new NetworkField(List.of(), 0, 0, 0, 0, Double.NaN, Double.NaN, -1);
+        QueryGraph graph = QueryGraph.create(base, snap);
+        GHPoint snapped = snap.getSnappedPoint();
+        int start = snap.getClosestNode();
+        NodeAccess access = graph.getNodeAccess();
+        int nodes = graph.getNodes();
+        double[] best = new double[nodes];
+        int[] parent = new int[nodes];
+        int[] parentEdge = new int[nodes];
+        Arrays.fill(best, Double.POSITIVE_INFINITY);
+        Arrays.fill(parent, -1);
+        Arrays.fill(parentEdge, -1);
+        boolean[] settled = new boolean[nodes];
+        record Entry(int node, double metres) {}
+        PriorityQueue<Entry> queue = new PriorityQueue<>(java.util.Comparator.comparingDouble(Entry::metres));
+        best[start] = 0;
+        queue.add(new Entry(start, 0));
+        EdgeExplorer explorer = graph.createEdgeExplorer();
+        List<ReachedNode> reached = new ArrayList<>();
+        long edgesVisited = 0;
+        while (!queue.isEmpty()) {
+            Entry entry = queue.poll();
+            if (settled[entry.node] || entry.metres > limitMetres) continue;
+            settled[entry.node] = true;
+            EdgeIterator edges = explorer.setBaseNode(entry.node);
+            int degree = 0;
+            while (edges.next()) {
+                edgesVisited++;
+                if (!Double.isFinite(weighting.calcEdgeWeight(edges, false))) continue;
+                degree++;
+                int next = edges.getAdjNode();
+                double candidate = entry.metres + edges.getDistance();
+                if (candidate <= limitMetres && candidate < best[next]) {
+                    best[next] = candidate;
+                    parent[next] = entry.node;
+                    parentEdge[next] = edges.getEdge();
+                    queue.add(new Entry(next, candidate));
+                }
+            }
+            reached.add(new ReachedNode(entry.node, access.getLat(entry.node), access.getLon(entry.node),
+                    entry.metres, degree, parent[entry.node], parentEdge[entry.node]));
+        }
+        long heapAfter = runtime.totalMemory() - runtime.freeMemory();
+        return new NetworkField(reached, reached.size(), edgesVisited,
+                (System.nanoTime() - began) / 1e6, heapAfter - heapBefore, snapped.lat, snapped.lon, start);
     }
 
     /** The narrow route call: ordered via points in, one path out. */
