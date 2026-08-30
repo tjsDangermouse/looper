@@ -6,8 +6,9 @@ import { MIN_BACKTRACK_METRES, sharedCorridorMetres } from './quality.js'
 import { GraphHopperError, type GraphHopperLeg, type GraphHopperStep } from '../graphhopper.js'
 import type { BoundaryTrace, FixupKind, RoutePurpose } from './metrics.js'
 import type { EdgeSpan } from './edges.js'
-import { noteCall, traceDecision, withAttemptScope, withImpliedAttemptScope, withLegScope } from './trace.js'
+import { noteCall, traceDecision, tracingCalls, withAttemptScope, withImpliedAttemptScope, withLegScope } from './trace.js'
 import { estimateClosure } from './closure.js'
+import { constructRemainingShape, estimateFullShape } from './fullShape.js'
 
 /**
  * Building a loop, a leg at a time.
@@ -554,6 +555,10 @@ export async function buildLoopIncrementally(
       // closure error; it does not alter this budget or the generated guide.
       const plannedLength = remainingBeforeLeg / legsLeft
       const closeBefore = estimateClosure(start, from, legs)
+      const remainingShape = tracingCalls
+        ? constructRemainingShape(start, from, cornerCount - step, plannedLength, heading, direction, cornerCount)
+        : undefined
+      const fullShape = remainingShape ? estimateFullShape(running, remainingShape, legs) : undefined
 
       traceDecision('leg-plan', {
         targetDistance: Math.round(targetMetres),
@@ -565,6 +570,18 @@ export async function buildLoopIncrementally(
         closureEstimate: Math.round(closeBefore.metres),
         closureStretch: Math.round(closeBefore.stretch * 1000) / 1000,
         closureEstimator: closeBefore.source,
+        currentLng: from[0],
+        currentLat: from[1],
+        intendedHeading: Math.round(heading * 1000) / 1000,
+        intendedRemainingSegmentCrowMetres: remainingShape?.segmentMetres.map(metres => Math.round(metres)),
+        intendedRemainingShapeCrowMetres: remainingShape ? Math.round(remainingShape.crowMetres) : undefined,
+        predictedFinalF0: fullShape ? Math.round(fullShape.f0) : undefined,
+        predictedFinalF1: fullShape ? Math.round(fullShape.f1) : undefined,
+        predictedFinalF2: fullShape ? Math.round(fullShape.f2) : undefined,
+        predictedFinalF3: fullShape ? Math.round(fullShape.f3) : undefined,
+        fullShapeLocalStretch: fullShape ? Math.round(fullShape.localStretch * 1000) / 1000 : undefined,
+        fullShapeBlendedStretch: fullShape ? Math.round(fullShape.blendedStretch * 1000) / 1000 : undefined,
+        fullShapeCompletedLegs: fullShape?.completedLegs,
       })
 
       const attempted = await attemptLeg({
