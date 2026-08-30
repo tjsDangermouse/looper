@@ -52,6 +52,8 @@ export type CallContext = {
   candidateIndex?: number
   bearing?: number
   direction?: string
+  targetScale?: number
+  bearingShift?: number
   /** Facts the fix-up sites publish about why they are calling. */
   facts?: Record<string, unknown>
 }

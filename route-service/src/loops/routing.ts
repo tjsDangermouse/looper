@@ -105,6 +105,14 @@ const BUDGET_DETOUR_RATIO = 2
 const LEG_RETRY_BEARING_STEP_DEGREES = 20
 /** Fraction the planned length is shortened by on each local retry. */
 const LEG_RETRY_LENGTH_STEP = 0.2
+/** Phase 6 safety rails: generic fractions of the candidate and current leg. */
+export const MAX_RETENTION_DEFICIT_SHARE = 0.3
+export const MAX_RETENTION_PAYMENT_SHARE = 0.25
+
+export function boundedRetentionPayment(deficit: number, remainingOutwardLegs: number, baseReach: number): number {
+  if (deficit <= 0 || remainingOutwardLegs <= 0 || baseReach <= 0) return 0
+  return Math.min(deficit / remainingOutwardLegs, baseReach * MAX_RETENTION_PAYMENT_SHARE)
+}
 
 /**
  * `purpose` is metrics only: it says which fixup is paying for this call, so a
@@ -171,6 +179,8 @@ export type SequentialRoutingOptions = {
   keepBestLegAttempt?: boolean
   /** See AlgorithmFlags.budgetOncePerLeg. */
   budgetOncePerLeg?: boolean
+  /** See AlgorithmFlags.perimeterRetention. */
+  perimeterRetention?: boolean
   /**
    * Shared across the attempts at one leg, so a later attempt can see what the
    * first one's cheaper reroute came to. Set by `attemptLeg`, which is the only
@@ -281,7 +291,14 @@ async function routeLegAttemptInScope(
       const cheaper = await route(pair, avoidanceCustomModel(areas, options.relaxedPriority ?? RELAXED_AVOID_PRIORITY), 'leg-budget')
       const better = cheaper.distanceMeters < leg.distanceMeters
       if (options.budgetLatch) options.budgetLatch.relaxedHelped = better
-      traceDecision('leg-budget', { kept: better, before: Math.round(leg.distanceMeters), after: Math.round(cheaper.distanceMeters) })
+      const beforeEndpoint = leg.coordinates.at(-1) ?? toPoint
+      const afterEndpoint = cheaper.coordinates.at(-1) ?? toPoint
+      traceDecision('leg-budget', {
+        kept: better, before: Math.round(leg.distanceMeters), after: Math.round(cheaper.distanceMeters),
+        delta: better ? Math.round(cheaper.distanceMeters - leg.distanceMeters) : 0,
+        endpointBefore: beforeEndpoint, endpointAfter: afterEndpoint,
+        geometryBefore: leg.coordinates, geometryAfter: cheaper.coordinates,
+      })
       options.onFixup?.('leg-budget', better)
       if (better) {
         leg = cheaper
@@ -303,7 +320,14 @@ async function routeLegAttemptInScope(
       const rerouted = await route(pair, avoidanceCustomModel(spikeAreas, relaxed ? (options.relaxedPriority ?? RELAXED_AVOID_PRIORITY) : (options.strongPriority ?? AVOID_PRIORITY)), 'spike')
       const stillSpiked = findLegSpike(rerouted.coordinates)
       const better = !stillSpiked && rerouted.distanceMeters < leg.distanceMeters * 1.5
-      traceDecision('spike', { kept: better, before: Math.round(leg.distanceMeters), after: Math.round(rerouted.distanceMeters), stillSpiked: Boolean(stillSpiked) })
+      traceDecision('spike', {
+        kept: better, before: Math.round(leg.distanceMeters), after: Math.round(rerouted.distanceMeters),
+        delta: better ? Math.round(rerouted.distanceMeters - leg.distanceMeters) : 0,
+        endpointBefore: leg.coordinates.at(-1) ?? toPoint,
+        endpointAfter: rerouted.coordinates.at(-1) ?? toPoint,
+        geometryBefore: leg.coordinates, geometryAfter: rerouted.coordinates,
+        stillSpiked: Boolean(stillSpiked),
+      })
       options.onFixup?.('spike', better)
       if (better) {
         leg = rerouted
@@ -419,6 +443,15 @@ export async function applyJoinPullback(
       spikeCleared: Boolean(boundarySpike && !redoneSpike),
       before: Math.round(previous.distanceMeters + leg.distanceMeters),
       after: Math.round(redonePrevious.distanceMeters + redoneCurrent.distanceMeters),
+      delta: better ? Math.round(redonePrevious.distanceMeters + redoneCurrent.distanceMeters - previous.distanceMeters - leg.distanceMeters) : 0,
+      endpointBefore: original,
+      endpointAfter: pulledIn,
+      currentEndpointBefore: leg.coordinates.at(-1) ?? currentTarget,
+      currentEndpointAfter: redoneCurrent.coordinates.at(-1) ?? currentTarget,
+      previousGeometryBefore: previous.coordinates,
+      previousGeometryAfter: redonePrevious.coordinates,
+      currentGeometryBefore: leg.coordinates,
+      currentGeometryAfter: redoneCurrent.coordinates,
     })
     options.onFixup?.('join-pullback', better)
     if (better) {
@@ -543,6 +576,27 @@ export async function buildLoopIncrementally(
   const walked: LngLat[][] = [...(options.preAvoidGeometries ?? [])]
   let running = 0
   let heading = initialBearing
+  let cumulativeScaleDeficit = 0
+  let priorPlannedFuture: LngLat[] | undefined
+
+  if (tracingCalls) {
+    const initialShare = targetMetres / (cornerCount + 1)
+    const initialShape = constructRemainingShape(
+      start, start, cornerCount, initialShare, heading, direction, cornerCount,
+    )
+    traceDecision('candidate-start', {
+      targetDistance: Math.round(targetMetres),
+      cornerCount,
+      initialBearing: Math.round(initialBearing * 1000) / 1000,
+      direction,
+      initialPlannedLegShares: Array.from({ length: cornerCount + 1 }, () => Math.round(initialShare)),
+      initialGuideCoordinates: initialShape.points.slice(1, -1),
+      initialSegmentCrowMetres: initialShape.segmentMetres.map(metres => Math.round(metres)),
+      initialGeometricClosureMetres: Math.round(initialShape.segmentMetres.at(-1) ?? 0),
+      initialIntendedPerimeter: Math.round(initialShape.crowMetres),
+      perimeterSemantics: 'crow-distance geometric skeleton',
+    })
+  }
 
   for (let step = 0; step <= cornerCount; step++) {
     const stepOutcome = await withLegScope({ legIndex: step, cornerCount }, async () => {
@@ -550,21 +604,43 @@ export async function buildLoopIncrementally(
       const closing = step === cornerCount
       const legsLeft = cornerCount - step + 1
       const from = points[points.length - 1]
+      const distanceUsedAtPlan = running
       const remainingBeforeLeg = Math.max(0, targetMetres - running)
-      // This remains the Phase 3B equal-share planner. Phase 4 observes its
-      // closure error; it does not alter this budget or the generated guide.
-      const plannedLength = remainingBeforeLeg / legsLeft
+      // Phase 3B's equal-share value remains the base. The default-off Phase 6
+      // prototype may add only a bounded repayment of measured local loss.
+      const basePlannedLength = remainingBeforeLeg / legsLeft
+      const baseShape = (tracingCalls || options.perimeterRetention) && !closing
+        ? constructRemainingShape(start, from, cornerCount - step, basePlannedLength, heading, direction, cornerCount)
+        : undefined
+      let replanLoss = 0
+      if (options.perimeterRetention && !closing && priorPlannedFuture) {
+        replanLoss = Math.max(0, pathLength([from, ...priorPlannedFuture]) - (baseShape?.crowMetres ?? 0))
+        if (step < cornerCount) cumulativeScaleDeficit = Math.min(
+          targetMetres * MAX_RETENTION_DEFICIT_SHARE,
+          cumulativeScaleDeficit + replanLoss,
+        )
+      }
+      const remainingOutwardLegs = Math.max(0, cornerCount - step)
+      const retentionPayment = options.perimeterRetention && !closing
+        ? boundedRetentionPayment(cumulativeScaleDeficit, remainingOutwardLegs, basePlannedLength)
+        : 0
+      const plannedLength = basePlannedLength + retentionPayment
+      cumulativeScaleDeficit = Math.max(0, cumulativeScaleDeficit - retentionPayment)
       const closeBefore = estimateClosure(start, from, legs)
-      const remainingShape = tracingCalls
+      const remainingShape = (tracingCalls || options.perimeterRetention)
         ? constructRemainingShape(start, from, cornerCount - step, plannedLength, heading, direction, cornerCount)
         : undefined
-      const fullShape = remainingShape ? estimateFullShape(running, remainingShape, legs) : undefined
+      const fullShape = tracingCalls && remainingShape ? estimateFullShape(running, remainingShape, legs) : undefined
 
       traceDecision('leg-plan', {
         targetDistance: Math.round(targetMetres),
         distanceUsedBeforeLeg: Math.round(running),
         distanceRemainingBeforeLeg: Math.round(remainingBeforeLeg),
         plannedLegBudget: closing ? undefined : Math.round(plannedLength),
+        basePlannedLegBudget: closing ? undefined : Math.round(basePlannedLength),
+        perimeterRetentionPayment: retentionPayment ? Math.round(retentionPayment) : undefined,
+        cumulativeScaleDeficitAfterPayment: options.perimeterRetention ? Math.round(cumulativeScaleDeficit) : undefined,
+        measuredReplanLoss: options.perimeterRetention && replanLoss ? Math.round(replanLoss) : undefined,
         guidePointCrowDistance: closing ? 0 : Math.round(plannedLength),
         straightLineDistanceHome: Math.round(closeBefore.crowMetres),
         closureEstimate: Math.round(closeBefore.metres),
@@ -573,6 +649,7 @@ export async function buildLoopIncrementally(
         currentLng: from[0],
         currentLat: from[1],
         intendedHeading: Math.round(heading * 1000) / 1000,
+        intendedGuideCoordinates: remainingShape?.points.slice(1, -1),
         intendedRemainingSegmentCrowMetres: remainingShape?.segmentMetres.map(metres => Math.round(metres)),
         intendedRemainingShapeCrowMetres: remainingShape ? Math.round(remainingShape.crowMetres) : undefined,
         predictedFinalF0: fullShape ? Math.round(fullShape.f0) : undefined,
@@ -642,6 +719,23 @@ export async function buildLoopIncrementally(
       legs.push({ ...finalLeg, relaxed: finalRelaxed, avoidanceAreaCount: walked.length })
       walked.push(finalLeg.coordinates)
       const endpoint = finalLeg.coordinates.at(-1) ?? attempted.target
+      let measuredScaleLoss = 0
+      if (options.perimeterRetention && !closing && remainingShape) {
+        const scaleBefore = planScale(distanceUsedAtPlan, remainingShape)
+        const projectedAfter = running + pathLength([endpoint, ...remainingShape.points.slice(2)])
+        measuredScaleLoss = Math.max(0, scaleBefore - projectedAfter)
+        // A loss after the last outward leg is visible too late to control.
+        if (step < cornerCount - 1) cumulativeScaleDeficit = Math.min(
+          targetMetres * MAX_RETENTION_DEFICIT_SHARE,
+          cumulativeScaleDeficit + measuredScaleLoss,
+        )
+        priorPlannedFuture = remainingShape.points.slice(2)
+        traceDecision('perimeter-retention', {
+          measuredScaleLoss: Math.round(measuredScaleLoss),
+          cumulativeScaleDeficit: Math.round(cumulativeScaleDeficit),
+          controllable: step < cornerCount - 1,
+        })
+      }
       const closeAfter = estimateClosure(start, endpoint, legs)
       traceDecision('leg-result', {
         targetDistance: Math.round(targetMetres),
@@ -653,6 +747,12 @@ export async function buildLoopIncrementally(
         closureStretch: Math.round(closeAfter.stretch * 1000) / 1000,
         endpointLng: endpoint[0],
         endpointLat: endpoint[1],
+        intendedTargetLng: attempted.target[0],
+        intendedTargetLat: attempted.target[1],
+        plannedGuideReach: closing ? 0 : Math.round(haversine(from, attempted.target)),
+        achievedCrowReach: Math.round(haversine(from, endpoint)),
+        guideMissDistance: Math.round(haversine(endpoint, attempted.target)),
+        selectedAttempt: attempted.attempt,
       })
       if (closing) {
         const remainingBeforeClose = Math.max(0, targetMetres - (running - finalLeg.distanceMeters))
@@ -675,7 +775,15 @@ export async function buildLoopIncrementally(
     if (stepOutcome === undefined) return undefined
   }
 
+  const beforeTrim = tracingCalls ? joinLegGeometries(legs) : undefined
   const joined = joinAndTrimLegs(legs)
+  traceDecision('candidate-finalize', {
+    routedLegsDistanceBeforeTrim: Math.round(legs.reduce((sum, leg) => sum + leg.distanceMeters, 0)),
+    finalDistanceAfterTrim: Math.round(joined.distanceMeters),
+    trimDelta: Math.round(joined.distanceMeters - legs.reduce((sum, leg) => sum + leg.distanceMeters, 0)),
+    geometryBeforeTrim: beforeTrim?.coordinates,
+    geometryAfterTrim: joined.coordinates,
+  })
   return {
     attemptId: `${direction === 'clockwise' ? 'cw' : 'ccw'}-${Math.round(initialBearing)}`,
     legs,
@@ -683,6 +791,8 @@ export async function buildLoopIncrementally(
     legDistances: legs.map(leg => leg.distanceMeters),
   }
 }
+
+const planScale = (distanceUsed: number, shape: { crowMetres: number }): number => distanceUsed + shape.crowMetres
 
 /**
  * Stitch legs into one walk and cut the noise out of it — the two steps that
@@ -927,8 +1037,8 @@ async function attemptLeg(params: {
   maxAttempts: number
   overshootTolerance: number
   options: SequentialRoutingOptions
-}): Promise<{ target: LngLat; leg: GraphHopperLeg; relaxed: boolean } | undefined> {
-  let best: { target: LngLat; leg: GraphHopperLeg; relaxed: boolean } | undefined
+}): Promise<{ target: LngLat; leg: GraphHopperLeg; relaxed: boolean; attempt: number } | undefined> {
+  let best: { target: LngLat; leg: GraphHopperLeg; relaxed: boolean; attempt: number } | undefined
   let bestMiss = Infinity
   const attempts = params.plannedLength === undefined ? 0 : params.maxAttempts
   // One latch for the whole leg, so its attempts can tell each other what the
@@ -943,12 +1053,25 @@ async function attemptLeg(params: {
       () => routeLegAttempt(params.route, params.start, params.walked, params.from, target, options),
     )
     if (!outcome) continue
+    const endpoint = outcome.leg.coordinates.at(-1) ?? target
+    traceDecision('leg-attempt-result', {
+      attempt,
+      fromLng: params.from[0], fromLat: params.from[1],
+      targetLng: target[0], targetLat: target[1],
+      routedEndpointLng: endpoint[0], routedEndpointLat: endpoint[1],
+      intendedReach: Math.round(haversine(params.from, target)),
+      achievedCrowReach: Math.round(haversine(params.from, endpoint)),
+      guideMissDistance: Math.round(haversine(endpoint, target)),
+      routedDistance: Math.round(outcome.leg.distanceMeters),
+      routedGeometry: outcome.leg.coordinates,
+      relaxed: outcome.relaxed,
+    })
     // Which answer to keep once the retries run out. Overwriting on every
     // attempt keeps the last one, which is the shortest and most swung guess
     // the leg made rather than its closest fit.
     const miss = params.plannedLength === undefined ? 0 : Math.abs(outcome.leg.distanceMeters - params.plannedLength)
     if (!params.options.keepBestLegAttempt || best === undefined || miss < bestMiss) {
-      best = { target, leg: outcome.leg, relaxed: outcome.relaxed }
+      best = { target, leg: outcome.leg, relaxed: outcome.relaxed, attempt }
       bestMiss = miss
     }
     if (params.plannedLength === undefined) return best

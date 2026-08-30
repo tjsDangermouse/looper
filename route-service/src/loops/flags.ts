@@ -132,6 +132,12 @@ export type AlgorithmFlags = {
    * that.
    */
   budgetOncePerLeg: boolean
+  /**
+   * Carry forward measured early loss of the current geometric skeleton and
+   * repay it gradually through the remaining outward guide reaches. Phase 6
+   * prototype; never changes the closing leg and ships off pending its gate.
+   */
+  perimeterRetention: boolean
 }
 
 /**
@@ -201,6 +207,7 @@ export const DEFAULT_FLAGS: AlgorithmFlags = {
   backtrackNeedsBudgetToo: false,
   keepBestLegAttempt: false,
   budgetOncePerLeg: false,
+  perimeterRetention: false,
 }
 
 export const withFlags = (flags?: Partial<AlgorithmFlags>): AlgorithmFlags => ({ ...DEFAULT_FLAGS, ...flags })

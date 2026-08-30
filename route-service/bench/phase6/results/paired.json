@@ -1,0 +1,2314 @@
+[
+  {
+    "round": 0,
+    "arm": "phase3b",
+    "fixture": "douglas-5km",
+    "wallMs": 369,
+    "calls": 238,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 10,
+        "leg-too-long": 9,
+        "leg-too-short": 4,
+        "out-and-back-spur": 8,
+        "shapeless": 9,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 8,
+      "maxDistanceErrorPercent": 11.3,
+      "medianRepeatedPercent": 0.1,
+      "maxRepeatedPercent": 0.7,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 37.8,
+      "maxPairSharedEdgePercent": 38.5
+    },
+    "worstPairwiseGeometricOverlap": 0.3777786443403304,
+    "routes": [
+      {
+        "distance": 4930,
+        "quality": 82.5,
+        "repeated": 0.1,
+        "uTurns": 0,
+        "geometryHash": "4a6a2e9c4760baf9"
+      },
+      {
+        "distance": 4433,
+        "quality": 55.9,
+        "repeated": 0.7,
+        "uTurns": 0,
+        "geometryHash": "80d448345c02dabc"
+      },
+      {
+        "distance": 5398,
+        "quality": 69.4,
+        "repeated": 0,
+        "uTurns": 0,
+        "geometryHash": "fe6c84fd666b47dc"
+      }
+    ]
+  },
+  {
+    "round": 0,
+    "arm": "phase3b",
+    "fixture": "douglas-3km",
+    "wallMs": 120,
+    "calls": 96,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 3,
+        "leg-too-long": 1,
+        "leg-too-short": 2,
+        "out-and-back-spur": 1,
+        "shapeless": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 6.5,
+      "maxDistanceErrorPercent": 7.7,
+      "medianRepeatedPercent": 1.1,
+      "maxRepeatedPercent": 2.3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 25.8,
+      "maxPairSharedEdgePercent": 4.5
+    },
+    "worstPairwiseGeometricOverlap": 0.25761177576237565,
+    "routes": [
+      {
+        "distance": 2806,
+        "quality": 70.9,
+        "repeated": 0.5,
+        "uTurns": 0,
+        "geometryHash": "115659efcf49f729"
+      },
+      {
+        "distance": 3192,
+        "quality": 67.5,
+        "repeated": 1.1,
+        "uTurns": 0,
+        "geometryHash": "fb97464ce17cd1b5"
+      },
+      {
+        "distance": 2768,
+        "quality": 62.1,
+        "repeated": 2.3,
+        "uTurns": 0,
+        "geometryHash": "1c3c9204fae8c946"
+      }
+    ]
+  },
+  {
+    "round": 0,
+    "arm": "phase3b",
+    "fixture": "peel-5km",
+    "wallMs": 499,
+    "calls": 530,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 12,
+        "leg-too-long": 9,
+        "leg-too-short": 1,
+        "out-and-back-spur": 14,
+        "repeated-corridor": 3,
+        "shapeless": 14,
+        "start-spur": 1,
+        "u-turns": 4
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 2.3,
+      "maxDistanceErrorPercent": 2.5,
+      "medianRepeatedPercent": 1.8,
+      "maxRepeatedPercent": 2.3,
+      "totalUTurns": 1,
+      "maxPairSharedPercent": 28,
+      "maxPairSharedEdgePercent": 27
+    },
+    "worstPairwiseGeometricOverlap": 0.27982486155489544,
+    "routes": [
+      {
+        "distance": 4930,
+        "quality": 74.1,
+        "repeated": 2.3,
+        "uTurns": 0,
+        "geometryHash": "89554d7744c9d8e0"
+      },
+      {
+        "distance": 4885,
+        "quality": 63.3,
+        "repeated": 1.8,
+        "uTurns": 1,
+        "geometryHash": "7ca874104df094ec"
+      },
+      {
+        "distance": 4877,
+        "quality": 72.7,
+        "repeated": 1.8,
+        "uTurns": 0,
+        "geometryHash": "e554af26e0fb0824"
+      }
+    ]
+  },
+  {
+    "round": 0,
+    "arm": "phase3b",
+    "fixture": "onchan-5km",
+    "wallMs": 126,
+    "calls": 114,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 4,
+        "leg-too-long": 1,
+        "leg-too-short": 1,
+        "repeated-corridor": 1,
+        "shapeless": 1,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 3.6,
+      "maxDistanceErrorPercent": 5.9,
+      "medianRepeatedPercent": 3.9,
+      "maxRepeatedPercent": 6.9,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 17.4,
+      "maxPairSharedEdgePercent": 15.5
+    },
+    "worstPairwiseGeometricOverlap": 0.17353313925477454,
+    "routes": [
+      {
+        "distance": 4850,
+        "quality": 76.3,
+        "repeated": 1.1,
+        "uTurns": 0,
+        "geometryHash": "1804cc97201b4b14"
+      },
+      {
+        "distance": 5180,
+        "quality": 59.6,
+        "repeated": 3.9,
+        "uTurns": 0,
+        "geometryHash": "913701830024ba31"
+      },
+      {
+        "distance": 5295,
+        "quality": 57.4,
+        "repeated": 6.9,
+        "uTurns": 0,
+        "geometryHash": "03f3de9df2fcc027"
+      }
+    ]
+  },
+  {
+    "round": 0,
+    "arm": "phase3b",
+    "fixture": "wp-one",
+    "wallMs": 125,
+    "calls": 34,
+    "candidates": {
+      "built": 0,
+      "passed": 0,
+      "rejections": {
+        "distance": 5,
+        "out-and-back-spur": 17,
+        "shapeless": 15,
+        "u-turns": 7
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 15.2,
+      "maxDistanceErrorPercent": 15.2,
+      "medianRepeatedPercent": 0.4,
+      "maxRepeatedPercent": 0.4,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 6911,
+        "quality": 57.2,
+        "repeated": 0.4,
+        "uTurns": 0,
+        "geometryHash": "ddc541ee0a0f8982"
+      }
+    ]
+  },
+  {
+    "round": 0,
+    "arm": "phase3b",
+    "fixture": "wp-two",
+    "wallMs": 629,
+    "calls": 285,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 23,
+        "leg-too-long": 5,
+        "leg-too-short": 5,
+        "out-and-back-spur": 30,
+        "repeated-corridor": 8,
+        "shapeless": 35,
+        "start-spur": 3,
+        "u-turns": 20
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 17.6,
+      "maxDistanceErrorPercent": 17.6,
+      "medianRepeatedPercent": 0.3,
+      "maxRepeatedPercent": 0.3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 9410,
+        "quality": 51.3,
+        "repeated": 0.3,
+        "uTurns": 0,
+        "geometryHash": "b2b830e6b22f6479"
+      }
+    ]
+  },
+  {
+    "round": 0,
+    "arm": "phase6",
+    "fixture": "douglas-5km",
+    "wallMs": 266,
+    "calls": 171,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 7,
+        "leg-too-long": 4,
+        "leg-too-short": 3,
+        "out-and-back-spur": 3,
+        "shapeless": 3,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 4.1,
+      "maxDistanceErrorPercent": 5,
+      "medianRepeatedPercent": 0.1,
+      "maxRepeatedPercent": 0.5,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 13.7,
+      "maxPairSharedEdgePercent": 1.8
+    },
+    "worstPairwiseGeometricOverlap": 0.1365488589038248,
+    "routes": [
+      {
+        "distance": 5052,
+        "quality": 76.8,
+        "repeated": 0.5,
+        "uTurns": 0,
+        "geometryHash": "914e485d291ad7ac"
+      },
+      {
+        "distance": 4749,
+        "quality": 74.8,
+        "repeated": 0.1,
+        "uTurns": 0,
+        "geometryHash": "16f4375f8a27d698"
+      },
+      {
+        "distance": 4793,
+        "quality": 70.7,
+        "repeated": 0,
+        "uTurns": 0,
+        "geometryHash": "8f3de0c96f1a3d59"
+      }
+    ]
+  },
+  {
+    "round": 0,
+    "arm": "phase6",
+    "fixture": "douglas-3km",
+    "wallMs": 183,
+    "calls": 165,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 9,
+        "leg-too-long": 3,
+        "leg-too-short": 2,
+        "out-and-back-spur": 2,
+        "shapeless": 2
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 4.3,
+      "maxDistanceErrorPercent": 8.1,
+      "medianRepeatedPercent": 0.9,
+      "maxRepeatedPercent": 2,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 40.9,
+      "maxPairSharedEdgePercent": 27.5
+    },
+    "worstPairwiseGeometricOverlap": 0.4093910854478083,
+    "routes": [
+      {
+        "distance": 2985,
+        "quality": 78.9,
+        "repeated": 2,
+        "uTurns": 0,
+        "geometryHash": "0c82563a287974c6"
+      },
+      {
+        "distance": 2871,
+        "quality": 76.9,
+        "repeated": 0,
+        "uTurns": 0,
+        "geometryHash": "35a77354d78e44f2"
+      },
+      {
+        "distance": 2756,
+        "quality": 61.4,
+        "repeated": 0.9,
+        "uTurns": 0,
+        "geometryHash": "4510300d2e8227cf"
+      }
+    ]
+  },
+  {
+    "round": 0,
+    "arm": "phase6",
+    "fixture": "peel-5km",
+    "wallMs": 706,
+    "calls": 720,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 10,
+        "leg-too-long": 5,
+        "leg-too-short": 3,
+        "out-and-back-spur": 10,
+        "repeated-corridor": 2,
+        "shapeless": 9,
+        "u-turns": 6
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 3.3,
+      "maxDistanceErrorPercent": 8.1,
+      "medianRepeatedPercent": 1.6,
+      "maxRepeatedPercent": 2,
+      "totalUTurns": 2,
+      "maxPairSharedPercent": 43.4,
+      "maxPairSharedEdgePercent": 42.7
+    },
+    "worstPairwiseGeometricOverlap": 0.4342974673868645,
+    "routes": [
+      {
+        "distance": 4877,
+        "quality": 73.2,
+        "repeated": 1.6,
+        "uTurns": 0,
+        "geometryHash": "e554af26e0fb0824"
+      },
+      {
+        "distance": 4833,
+        "quality": 63.4,
+        "repeated": 2,
+        "uTurns": 1,
+        "geometryHash": "792c8043c8d18802"
+      },
+      {
+        "distance": 5405,
+        "quality": 62.5,
+        "repeated": 0.1,
+        "uTurns": 1,
+        "geometryHash": "879fdcdc0271fab7"
+      }
+    ]
+  },
+  {
+    "round": 0,
+    "arm": "phase6",
+    "fixture": "onchan-5km",
+    "wallMs": 116,
+    "calls": 108,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 4,
+        "leg-too-long": 1,
+        "leg-too-short": 1,
+        "out-and-back-spur": 1,
+        "repeated-corridor": 1,
+        "shapeless": 1,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 5.6,
+      "maxDistanceErrorPercent": 8.9,
+      "medianRepeatedPercent": 2.6,
+      "maxRepeatedPercent": 3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 39.6,
+      "maxPairSharedEdgePercent": 32.2
+    },
+    "worstPairwiseGeometricOverlap": 0.3957750065487309,
+    "routes": [
+      {
+        "distance": 5138,
+        "quality": 74.8,
+        "repeated": 1.4,
+        "uTurns": 0,
+        "geometryHash": "130880d0bd1901a6"
+      },
+      {
+        "distance": 4721,
+        "quality": 65.4,
+        "repeated": 2.6,
+        "uTurns": 0,
+        "geometryHash": "5d6be00beaa93434"
+      },
+      {
+        "distance": 5444,
+        "quality": 50.9,
+        "repeated": 3,
+        "uTurns": 0,
+        "geometryHash": "4686d8cd6ba36508"
+      }
+    ]
+  },
+  {
+    "round": 0,
+    "arm": "phase6",
+    "fixture": "wp-one",
+    "wallMs": 127,
+    "calls": 34,
+    "candidates": {
+      "built": 0,
+      "passed": 0,
+      "rejections": {
+        "distance": 5,
+        "out-and-back-spur": 17,
+        "shapeless": 15,
+        "u-turns": 7
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 15.2,
+      "maxDistanceErrorPercent": 15.2,
+      "medianRepeatedPercent": 0.4,
+      "maxRepeatedPercent": 0.4,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 6911,
+        "quality": 57.2,
+        "repeated": 0.4,
+        "uTurns": 0,
+        "geometryHash": "ddc541ee0a0f8982"
+      }
+    ]
+  },
+  {
+    "round": 0,
+    "arm": "phase6",
+    "fixture": "wp-two",
+    "wallMs": 624,
+    "calls": 274,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 24,
+        "leg-too-long": 4,
+        "leg-too-short": 5,
+        "out-and-back-spur": 30,
+        "repeated-corridor": 8,
+        "shapeless": 35,
+        "start-spur": 3,
+        "u-turns": 21
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 17.6,
+      "maxDistanceErrorPercent": 17.6,
+      "medianRepeatedPercent": 0.3,
+      "maxRepeatedPercent": 0.3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 9410,
+        "quality": 51.3,
+        "repeated": 0.3,
+        "uTurns": 0,
+        "geometryHash": "b2b830e6b22f6479"
+      }
+    ]
+  },
+  {
+    "round": 1,
+    "arm": "phase6",
+    "fixture": "douglas-5km",
+    "wallMs": 259,
+    "calls": 171,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 7,
+        "leg-too-long": 4,
+        "leg-too-short": 3,
+        "out-and-back-spur": 3,
+        "shapeless": 3,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 4.1,
+      "maxDistanceErrorPercent": 5,
+      "medianRepeatedPercent": 0.1,
+      "maxRepeatedPercent": 0.5,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 13.7,
+      "maxPairSharedEdgePercent": 1.8
+    },
+    "worstPairwiseGeometricOverlap": 0.1365488589038248,
+    "routes": [
+      {
+        "distance": 5052,
+        "quality": 76.8,
+        "repeated": 0.5,
+        "uTurns": 0,
+        "geometryHash": "914e485d291ad7ac"
+      },
+      {
+        "distance": 4749,
+        "quality": 74.8,
+        "repeated": 0.1,
+        "uTurns": 0,
+        "geometryHash": "16f4375f8a27d698"
+      },
+      {
+        "distance": 4793,
+        "quality": 70.7,
+        "repeated": 0,
+        "uTurns": 0,
+        "geometryHash": "8f3de0c96f1a3d59"
+      }
+    ]
+  },
+  {
+    "round": 1,
+    "arm": "phase6",
+    "fixture": "douglas-3km",
+    "wallMs": 177,
+    "calls": 165,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 9,
+        "leg-too-long": 3,
+        "leg-too-short": 2,
+        "out-and-back-spur": 2,
+        "shapeless": 2
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 4.3,
+      "maxDistanceErrorPercent": 8.1,
+      "medianRepeatedPercent": 0.9,
+      "maxRepeatedPercent": 2,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 40.9,
+      "maxPairSharedEdgePercent": 27.5
+    },
+    "worstPairwiseGeometricOverlap": 0.4093910854478083,
+    "routes": [
+      {
+        "distance": 2985,
+        "quality": 78.9,
+        "repeated": 2,
+        "uTurns": 0,
+        "geometryHash": "0c82563a287974c6"
+      },
+      {
+        "distance": 2871,
+        "quality": 76.9,
+        "repeated": 0,
+        "uTurns": 0,
+        "geometryHash": "35a77354d78e44f2"
+      },
+      {
+        "distance": 2756,
+        "quality": 61.4,
+        "repeated": 0.9,
+        "uTurns": 0,
+        "geometryHash": "4510300d2e8227cf"
+      }
+    ]
+  },
+  {
+    "round": 1,
+    "arm": "phase6",
+    "fixture": "peel-5km",
+    "wallMs": 708,
+    "calls": 720,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 10,
+        "leg-too-long": 5,
+        "leg-too-short": 3,
+        "out-and-back-spur": 10,
+        "repeated-corridor": 2,
+        "shapeless": 9,
+        "u-turns": 6
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 3.3,
+      "maxDistanceErrorPercent": 8.1,
+      "medianRepeatedPercent": 1.6,
+      "maxRepeatedPercent": 2,
+      "totalUTurns": 2,
+      "maxPairSharedPercent": 43.4,
+      "maxPairSharedEdgePercent": 42.7
+    },
+    "worstPairwiseGeometricOverlap": 0.4342974673868645,
+    "routes": [
+      {
+        "distance": 4877,
+        "quality": 73.2,
+        "repeated": 1.6,
+        "uTurns": 0,
+        "geometryHash": "e554af26e0fb0824"
+      },
+      {
+        "distance": 4833,
+        "quality": 63.4,
+        "repeated": 2,
+        "uTurns": 1,
+        "geometryHash": "792c8043c8d18802"
+      },
+      {
+        "distance": 5405,
+        "quality": 62.5,
+        "repeated": 0.1,
+        "uTurns": 1,
+        "geometryHash": "879fdcdc0271fab7"
+      }
+    ]
+  },
+  {
+    "round": 1,
+    "arm": "phase6",
+    "fixture": "onchan-5km",
+    "wallMs": 117,
+    "calls": 108,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 4,
+        "leg-too-long": 1,
+        "leg-too-short": 1,
+        "out-and-back-spur": 1,
+        "repeated-corridor": 1,
+        "shapeless": 1,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 5.6,
+      "maxDistanceErrorPercent": 8.9,
+      "medianRepeatedPercent": 2.6,
+      "maxRepeatedPercent": 3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 39.6,
+      "maxPairSharedEdgePercent": 32.2
+    },
+    "worstPairwiseGeometricOverlap": 0.3957750065487309,
+    "routes": [
+      {
+        "distance": 5138,
+        "quality": 74.8,
+        "repeated": 1.4,
+        "uTurns": 0,
+        "geometryHash": "130880d0bd1901a6"
+      },
+      {
+        "distance": 4721,
+        "quality": 65.4,
+        "repeated": 2.6,
+        "uTurns": 0,
+        "geometryHash": "5d6be00beaa93434"
+      },
+      {
+        "distance": 5444,
+        "quality": 50.9,
+        "repeated": 3,
+        "uTurns": 0,
+        "geometryHash": "4686d8cd6ba36508"
+      }
+    ]
+  },
+  {
+    "round": 1,
+    "arm": "phase6",
+    "fixture": "wp-one",
+    "wallMs": 123,
+    "calls": 34,
+    "candidates": {
+      "built": 0,
+      "passed": 0,
+      "rejections": {
+        "distance": 5,
+        "out-and-back-spur": 17,
+        "shapeless": 15,
+        "u-turns": 7
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 15.2,
+      "maxDistanceErrorPercent": 15.2,
+      "medianRepeatedPercent": 0.4,
+      "maxRepeatedPercent": 0.4,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 6911,
+        "quality": 57.2,
+        "repeated": 0.4,
+        "uTurns": 0,
+        "geometryHash": "ddc541ee0a0f8982"
+      }
+    ]
+  },
+  {
+    "round": 1,
+    "arm": "phase6",
+    "fixture": "wp-two",
+    "wallMs": 619,
+    "calls": 274,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 24,
+        "leg-too-long": 4,
+        "leg-too-short": 5,
+        "out-and-back-spur": 30,
+        "repeated-corridor": 8,
+        "shapeless": 35,
+        "start-spur": 3,
+        "u-turns": 21
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 17.6,
+      "maxDistanceErrorPercent": 17.6,
+      "medianRepeatedPercent": 0.3,
+      "maxRepeatedPercent": 0.3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 9410,
+        "quality": 51.3,
+        "repeated": 0.3,
+        "uTurns": 0,
+        "geometryHash": "b2b830e6b22f6479"
+      }
+    ]
+  },
+  {
+    "round": 1,
+    "arm": "phase3b",
+    "fixture": "douglas-5km",
+    "wallMs": 347,
+    "calls": 238,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 10,
+        "leg-too-long": 9,
+        "leg-too-short": 4,
+        "out-and-back-spur": 8,
+        "shapeless": 9,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 8,
+      "maxDistanceErrorPercent": 11.3,
+      "medianRepeatedPercent": 0.1,
+      "maxRepeatedPercent": 0.7,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 37.8,
+      "maxPairSharedEdgePercent": 38.5
+    },
+    "worstPairwiseGeometricOverlap": 0.3777786443403304,
+    "routes": [
+      {
+        "distance": 4930,
+        "quality": 82.5,
+        "repeated": 0.1,
+        "uTurns": 0,
+        "geometryHash": "4a6a2e9c4760baf9"
+      },
+      {
+        "distance": 4433,
+        "quality": 55.9,
+        "repeated": 0.7,
+        "uTurns": 0,
+        "geometryHash": "80d448345c02dabc"
+      },
+      {
+        "distance": 5398,
+        "quality": 69.4,
+        "repeated": 0,
+        "uTurns": 0,
+        "geometryHash": "fe6c84fd666b47dc"
+      }
+    ]
+  },
+  {
+    "round": 1,
+    "arm": "phase3b",
+    "fixture": "douglas-3km",
+    "wallMs": 110,
+    "calls": 96,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 3,
+        "leg-too-long": 1,
+        "leg-too-short": 2,
+        "out-and-back-spur": 1,
+        "shapeless": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 6.5,
+      "maxDistanceErrorPercent": 7.7,
+      "medianRepeatedPercent": 1.1,
+      "maxRepeatedPercent": 2.3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 25.8,
+      "maxPairSharedEdgePercent": 4.5
+    },
+    "worstPairwiseGeometricOverlap": 0.25761177576237565,
+    "routes": [
+      {
+        "distance": 2806,
+        "quality": 70.9,
+        "repeated": 0.5,
+        "uTurns": 0,
+        "geometryHash": "115659efcf49f729"
+      },
+      {
+        "distance": 3192,
+        "quality": 67.5,
+        "repeated": 1.1,
+        "uTurns": 0,
+        "geometryHash": "fb97464ce17cd1b5"
+      },
+      {
+        "distance": 2768,
+        "quality": 62.1,
+        "repeated": 2.3,
+        "uTurns": 0,
+        "geometryHash": "1c3c9204fae8c946"
+      }
+    ]
+  },
+  {
+    "round": 1,
+    "arm": "phase3b",
+    "fixture": "peel-5km",
+    "wallMs": 496,
+    "calls": 530,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 12,
+        "leg-too-long": 9,
+        "leg-too-short": 1,
+        "out-and-back-spur": 14,
+        "repeated-corridor": 3,
+        "shapeless": 14,
+        "start-spur": 1,
+        "u-turns": 4
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 2.3,
+      "maxDistanceErrorPercent": 2.5,
+      "medianRepeatedPercent": 1.8,
+      "maxRepeatedPercent": 2.3,
+      "totalUTurns": 1,
+      "maxPairSharedPercent": 28,
+      "maxPairSharedEdgePercent": 27
+    },
+    "worstPairwiseGeometricOverlap": 0.27982486155489544,
+    "routes": [
+      {
+        "distance": 4930,
+        "quality": 74.1,
+        "repeated": 2.3,
+        "uTurns": 0,
+        "geometryHash": "89554d7744c9d8e0"
+      },
+      {
+        "distance": 4885,
+        "quality": 63.3,
+        "repeated": 1.8,
+        "uTurns": 1,
+        "geometryHash": "7ca874104df094ec"
+      },
+      {
+        "distance": 4877,
+        "quality": 72.7,
+        "repeated": 1.8,
+        "uTurns": 0,
+        "geometryHash": "e554af26e0fb0824"
+      }
+    ]
+  },
+  {
+    "round": 1,
+    "arm": "phase3b",
+    "fixture": "onchan-5km",
+    "wallMs": 141,
+    "calls": 127,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 4,
+        "leg-too-long": 1,
+        "leg-too-short": 1,
+        "repeated-corridor": 1,
+        "shapeless": 1,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 3.6,
+      "maxDistanceErrorPercent": 5.9,
+      "medianRepeatedPercent": 3.9,
+      "maxRepeatedPercent": 6.9,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 17.4,
+      "maxPairSharedEdgePercent": 15.5
+    },
+    "worstPairwiseGeometricOverlap": 0.17353313925477454,
+    "routes": [
+      {
+        "distance": 4850,
+        "quality": 76.3,
+        "repeated": 1.1,
+        "uTurns": 0,
+        "geometryHash": "1804cc97201b4b14"
+      },
+      {
+        "distance": 5180,
+        "quality": 59.6,
+        "repeated": 3.9,
+        "uTurns": 0,
+        "geometryHash": "913701830024ba31"
+      },
+      {
+        "distance": 5295,
+        "quality": 57.4,
+        "repeated": 6.9,
+        "uTurns": 0,
+        "geometryHash": "03f3de9df2fcc027"
+      }
+    ]
+  },
+  {
+    "round": 1,
+    "arm": "phase3b",
+    "fixture": "wp-one",
+    "wallMs": 123,
+    "calls": 34,
+    "candidates": {
+      "built": 0,
+      "passed": 0,
+      "rejections": {
+        "distance": 5,
+        "out-and-back-spur": 17,
+        "shapeless": 15,
+        "u-turns": 7
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 15.2,
+      "maxDistanceErrorPercent": 15.2,
+      "medianRepeatedPercent": 0.4,
+      "maxRepeatedPercent": 0.4,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 6911,
+        "quality": 57.2,
+        "repeated": 0.4,
+        "uTurns": 0,
+        "geometryHash": "ddc541ee0a0f8982"
+      }
+    ]
+  },
+  {
+    "round": 1,
+    "arm": "phase3b",
+    "fixture": "wp-two",
+    "wallMs": 620,
+    "calls": 285,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 23,
+        "leg-too-long": 5,
+        "leg-too-short": 5,
+        "out-and-back-spur": 30,
+        "repeated-corridor": 8,
+        "shapeless": 35,
+        "start-spur": 3,
+        "u-turns": 20
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 17.6,
+      "maxDistanceErrorPercent": 17.6,
+      "medianRepeatedPercent": 0.3,
+      "maxRepeatedPercent": 0.3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 9410,
+        "quality": 51.3,
+        "repeated": 0.3,
+        "uTurns": 0,
+        "geometryHash": "b2b830e6b22f6479"
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "arm": "phase3b",
+    "fixture": "douglas-5km",
+    "wallMs": 339,
+    "calls": 238,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 10,
+        "leg-too-long": 9,
+        "leg-too-short": 4,
+        "out-and-back-spur": 8,
+        "shapeless": 9,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 8,
+      "maxDistanceErrorPercent": 11.3,
+      "medianRepeatedPercent": 0.1,
+      "maxRepeatedPercent": 0.7,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 37.8,
+      "maxPairSharedEdgePercent": 38.5
+    },
+    "worstPairwiseGeometricOverlap": 0.3777786443403304,
+    "routes": [
+      {
+        "distance": 4930,
+        "quality": 82.5,
+        "repeated": 0.1,
+        "uTurns": 0,
+        "geometryHash": "4a6a2e9c4760baf9"
+      },
+      {
+        "distance": 4433,
+        "quality": 55.9,
+        "repeated": 0.7,
+        "uTurns": 0,
+        "geometryHash": "80d448345c02dabc"
+      },
+      {
+        "distance": 5398,
+        "quality": 69.4,
+        "repeated": 0,
+        "uTurns": 0,
+        "geometryHash": "fe6c84fd666b47dc"
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "arm": "phase3b",
+    "fixture": "douglas-3km",
+    "wallMs": 112,
+    "calls": 96,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 3,
+        "leg-too-long": 1,
+        "leg-too-short": 2,
+        "out-and-back-spur": 1,
+        "shapeless": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 6.5,
+      "maxDistanceErrorPercent": 7.7,
+      "medianRepeatedPercent": 1.1,
+      "maxRepeatedPercent": 2.3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 25.8,
+      "maxPairSharedEdgePercent": 4.5
+    },
+    "worstPairwiseGeometricOverlap": 0.25761177576237565,
+    "routes": [
+      {
+        "distance": 2806,
+        "quality": 70.9,
+        "repeated": 0.5,
+        "uTurns": 0,
+        "geometryHash": "115659efcf49f729"
+      },
+      {
+        "distance": 3192,
+        "quality": 67.5,
+        "repeated": 1.1,
+        "uTurns": 0,
+        "geometryHash": "fb97464ce17cd1b5"
+      },
+      {
+        "distance": 2768,
+        "quality": 62.1,
+        "repeated": 2.3,
+        "uTurns": 0,
+        "geometryHash": "1c3c9204fae8c946"
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "arm": "phase3b",
+    "fixture": "peel-5km",
+    "wallMs": 508,
+    "calls": 530,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 12,
+        "leg-too-long": 9,
+        "leg-too-short": 1,
+        "out-and-back-spur": 14,
+        "repeated-corridor": 3,
+        "shapeless": 14,
+        "start-spur": 1,
+        "u-turns": 4
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 2.3,
+      "maxDistanceErrorPercent": 2.5,
+      "medianRepeatedPercent": 1.8,
+      "maxRepeatedPercent": 2.3,
+      "totalUTurns": 1,
+      "maxPairSharedPercent": 28,
+      "maxPairSharedEdgePercent": 27
+    },
+    "worstPairwiseGeometricOverlap": 0.27982486155489544,
+    "routes": [
+      {
+        "distance": 4930,
+        "quality": 74.1,
+        "repeated": 2.3,
+        "uTurns": 0,
+        "geometryHash": "89554d7744c9d8e0"
+      },
+      {
+        "distance": 4885,
+        "quality": 63.3,
+        "repeated": 1.8,
+        "uTurns": 1,
+        "geometryHash": "7ca874104df094ec"
+      },
+      {
+        "distance": 4877,
+        "quality": 72.7,
+        "repeated": 1.8,
+        "uTurns": 0,
+        "geometryHash": "e554af26e0fb0824"
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "arm": "phase3b",
+    "fixture": "onchan-5km",
+    "wallMs": 133,
+    "calls": 114,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 4,
+        "leg-too-long": 1,
+        "leg-too-short": 1,
+        "repeated-corridor": 1,
+        "shapeless": 1,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 3.6,
+      "maxDistanceErrorPercent": 5.9,
+      "medianRepeatedPercent": 3.9,
+      "maxRepeatedPercent": 6.9,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 17.4,
+      "maxPairSharedEdgePercent": 15.5
+    },
+    "worstPairwiseGeometricOverlap": 0.17353313925477454,
+    "routes": [
+      {
+        "distance": 4850,
+        "quality": 76.3,
+        "repeated": 1.1,
+        "uTurns": 0,
+        "geometryHash": "1804cc97201b4b14"
+      },
+      {
+        "distance": 5180,
+        "quality": 59.6,
+        "repeated": 3.9,
+        "uTurns": 0,
+        "geometryHash": "913701830024ba31"
+      },
+      {
+        "distance": 5295,
+        "quality": 57.4,
+        "repeated": 6.9,
+        "uTurns": 0,
+        "geometryHash": "03f3de9df2fcc027"
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "arm": "phase3b",
+    "fixture": "wp-one",
+    "wallMs": 123,
+    "calls": 34,
+    "candidates": {
+      "built": 0,
+      "passed": 0,
+      "rejections": {
+        "distance": 5,
+        "out-and-back-spur": 17,
+        "shapeless": 15,
+        "u-turns": 7
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 15.2,
+      "maxDistanceErrorPercent": 15.2,
+      "medianRepeatedPercent": 0.4,
+      "maxRepeatedPercent": 0.4,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 6911,
+        "quality": 57.2,
+        "repeated": 0.4,
+        "uTurns": 0,
+        "geometryHash": "ddc541ee0a0f8982"
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "arm": "phase3b",
+    "fixture": "wp-two",
+    "wallMs": 624,
+    "calls": 285,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 23,
+        "leg-too-long": 5,
+        "leg-too-short": 5,
+        "out-and-back-spur": 30,
+        "repeated-corridor": 8,
+        "shapeless": 35,
+        "start-spur": 3,
+        "u-turns": 20
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 17.6,
+      "maxDistanceErrorPercent": 17.6,
+      "medianRepeatedPercent": 0.3,
+      "maxRepeatedPercent": 0.3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 9410,
+        "quality": 51.3,
+        "repeated": 0.3,
+        "uTurns": 0,
+        "geometryHash": "b2b830e6b22f6479"
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "arm": "phase6",
+    "fixture": "douglas-5km",
+    "wallMs": 270,
+    "calls": 171,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 7,
+        "leg-too-long": 4,
+        "leg-too-short": 3,
+        "out-and-back-spur": 3,
+        "shapeless": 3,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 4.1,
+      "maxDistanceErrorPercent": 5,
+      "medianRepeatedPercent": 0.1,
+      "maxRepeatedPercent": 0.5,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 13.7,
+      "maxPairSharedEdgePercent": 1.8
+    },
+    "worstPairwiseGeometricOverlap": 0.1365488589038248,
+    "routes": [
+      {
+        "distance": 5052,
+        "quality": 76.8,
+        "repeated": 0.5,
+        "uTurns": 0,
+        "geometryHash": "914e485d291ad7ac"
+      },
+      {
+        "distance": 4749,
+        "quality": 74.8,
+        "repeated": 0.1,
+        "uTurns": 0,
+        "geometryHash": "16f4375f8a27d698"
+      },
+      {
+        "distance": 4793,
+        "quality": 70.7,
+        "repeated": 0,
+        "uTurns": 0,
+        "geometryHash": "8f3de0c96f1a3d59"
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "arm": "phase6",
+    "fixture": "douglas-3km",
+    "wallMs": 186,
+    "calls": 165,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 9,
+        "leg-too-long": 3,
+        "leg-too-short": 2,
+        "out-and-back-spur": 2,
+        "shapeless": 2
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 4.3,
+      "maxDistanceErrorPercent": 8.1,
+      "medianRepeatedPercent": 0.9,
+      "maxRepeatedPercent": 2,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 40.9,
+      "maxPairSharedEdgePercent": 27.5
+    },
+    "worstPairwiseGeometricOverlap": 0.4093910854478083,
+    "routes": [
+      {
+        "distance": 2985,
+        "quality": 78.9,
+        "repeated": 2,
+        "uTurns": 0,
+        "geometryHash": "0c82563a287974c6"
+      },
+      {
+        "distance": 2871,
+        "quality": 76.9,
+        "repeated": 0,
+        "uTurns": 0,
+        "geometryHash": "35a77354d78e44f2"
+      },
+      {
+        "distance": 2756,
+        "quality": 61.4,
+        "repeated": 0.9,
+        "uTurns": 0,
+        "geometryHash": "4510300d2e8227cf"
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "arm": "phase6",
+    "fixture": "peel-5km",
+    "wallMs": 701,
+    "calls": 720,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 10,
+        "leg-too-long": 5,
+        "leg-too-short": 3,
+        "out-and-back-spur": 10,
+        "repeated-corridor": 2,
+        "shapeless": 9,
+        "u-turns": 6
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 3.3,
+      "maxDistanceErrorPercent": 8.1,
+      "medianRepeatedPercent": 1.6,
+      "maxRepeatedPercent": 2,
+      "totalUTurns": 2,
+      "maxPairSharedPercent": 43.4,
+      "maxPairSharedEdgePercent": 42.7
+    },
+    "worstPairwiseGeometricOverlap": 0.4342974673868645,
+    "routes": [
+      {
+        "distance": 4877,
+        "quality": 73.2,
+        "repeated": 1.6,
+        "uTurns": 0,
+        "geometryHash": "e554af26e0fb0824"
+      },
+      {
+        "distance": 4833,
+        "quality": 63.4,
+        "repeated": 2,
+        "uTurns": 1,
+        "geometryHash": "792c8043c8d18802"
+      },
+      {
+        "distance": 5405,
+        "quality": 62.5,
+        "repeated": 0.1,
+        "uTurns": 1,
+        "geometryHash": "879fdcdc0271fab7"
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "arm": "phase6",
+    "fixture": "onchan-5km",
+    "wallMs": 111,
+    "calls": 108,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 4,
+        "leg-too-long": 1,
+        "leg-too-short": 1,
+        "out-and-back-spur": 1,
+        "repeated-corridor": 1,
+        "shapeless": 1,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 5.6,
+      "maxDistanceErrorPercent": 8.9,
+      "medianRepeatedPercent": 2.6,
+      "maxRepeatedPercent": 3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 39.6,
+      "maxPairSharedEdgePercent": 32.2
+    },
+    "worstPairwiseGeometricOverlap": 0.3957750065487309,
+    "routes": [
+      {
+        "distance": 5138,
+        "quality": 74.8,
+        "repeated": 1.4,
+        "uTurns": 0,
+        "geometryHash": "130880d0bd1901a6"
+      },
+      {
+        "distance": 4721,
+        "quality": 65.4,
+        "repeated": 2.6,
+        "uTurns": 0,
+        "geometryHash": "5d6be00beaa93434"
+      },
+      {
+        "distance": 5444,
+        "quality": 50.9,
+        "repeated": 3,
+        "uTurns": 0,
+        "geometryHash": "4686d8cd6ba36508"
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "arm": "phase6",
+    "fixture": "wp-one",
+    "wallMs": 126,
+    "calls": 34,
+    "candidates": {
+      "built": 0,
+      "passed": 0,
+      "rejections": {
+        "distance": 5,
+        "out-and-back-spur": 17,
+        "shapeless": 15,
+        "u-turns": 7
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 15.2,
+      "maxDistanceErrorPercent": 15.2,
+      "medianRepeatedPercent": 0.4,
+      "maxRepeatedPercent": 0.4,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 6911,
+        "quality": 57.2,
+        "repeated": 0.4,
+        "uTurns": 0,
+        "geometryHash": "ddc541ee0a0f8982"
+      }
+    ]
+  },
+  {
+    "round": 2,
+    "arm": "phase6",
+    "fixture": "wp-two",
+    "wallMs": 623,
+    "calls": 274,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 24,
+        "leg-too-long": 4,
+        "leg-too-short": 5,
+        "out-and-back-spur": 30,
+        "repeated-corridor": 8,
+        "shapeless": 35,
+        "start-spur": 3,
+        "u-turns": 21
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 17.6,
+      "maxDistanceErrorPercent": 17.6,
+      "medianRepeatedPercent": 0.3,
+      "maxRepeatedPercent": 0.3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 9410,
+        "quality": 51.3,
+        "repeated": 0.3,
+        "uTurns": 0,
+        "geometryHash": "b2b830e6b22f6479"
+      }
+    ]
+  },
+  {
+    "round": 3,
+    "arm": "phase6",
+    "fixture": "douglas-5km",
+    "wallMs": 263,
+    "calls": 171,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 7,
+        "leg-too-long": 4,
+        "leg-too-short": 3,
+        "out-and-back-spur": 3,
+        "shapeless": 3,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 4.1,
+      "maxDistanceErrorPercent": 5,
+      "medianRepeatedPercent": 0.1,
+      "maxRepeatedPercent": 0.5,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 13.7,
+      "maxPairSharedEdgePercent": 1.8
+    },
+    "worstPairwiseGeometricOverlap": 0.1365488589038248,
+    "routes": [
+      {
+        "distance": 5052,
+        "quality": 76.8,
+        "repeated": 0.5,
+        "uTurns": 0,
+        "geometryHash": "914e485d291ad7ac"
+      },
+      {
+        "distance": 4749,
+        "quality": 74.8,
+        "repeated": 0.1,
+        "uTurns": 0,
+        "geometryHash": "16f4375f8a27d698"
+      },
+      {
+        "distance": 4793,
+        "quality": 70.7,
+        "repeated": 0,
+        "uTurns": 0,
+        "geometryHash": "8f3de0c96f1a3d59"
+      }
+    ]
+  },
+  {
+    "round": 3,
+    "arm": "phase6",
+    "fixture": "douglas-3km",
+    "wallMs": 178,
+    "calls": 165,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 9,
+        "leg-too-long": 3,
+        "leg-too-short": 2,
+        "out-and-back-spur": 2,
+        "shapeless": 2
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 4.3,
+      "maxDistanceErrorPercent": 8.1,
+      "medianRepeatedPercent": 0.9,
+      "maxRepeatedPercent": 2,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 40.9,
+      "maxPairSharedEdgePercent": 27.5
+    },
+    "worstPairwiseGeometricOverlap": 0.4093910854478083,
+    "routes": [
+      {
+        "distance": 2985,
+        "quality": 78.9,
+        "repeated": 2,
+        "uTurns": 0,
+        "geometryHash": "0c82563a287974c6"
+      },
+      {
+        "distance": 2871,
+        "quality": 76.9,
+        "repeated": 0,
+        "uTurns": 0,
+        "geometryHash": "35a77354d78e44f2"
+      },
+      {
+        "distance": 2756,
+        "quality": 61.4,
+        "repeated": 0.9,
+        "uTurns": 0,
+        "geometryHash": "4510300d2e8227cf"
+      }
+    ]
+  },
+  {
+    "round": 3,
+    "arm": "phase6",
+    "fixture": "peel-5km",
+    "wallMs": 704,
+    "calls": 720,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 10,
+        "leg-too-long": 5,
+        "leg-too-short": 3,
+        "out-and-back-spur": 10,
+        "repeated-corridor": 2,
+        "shapeless": 9,
+        "u-turns": 6
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 3.3,
+      "maxDistanceErrorPercent": 8.1,
+      "medianRepeatedPercent": 1.6,
+      "maxRepeatedPercent": 2,
+      "totalUTurns": 2,
+      "maxPairSharedPercent": 43.4,
+      "maxPairSharedEdgePercent": 42.7
+    },
+    "worstPairwiseGeometricOverlap": 0.4342974673868645,
+    "routes": [
+      {
+        "distance": 4877,
+        "quality": 73.2,
+        "repeated": 1.6,
+        "uTurns": 0,
+        "geometryHash": "e554af26e0fb0824"
+      },
+      {
+        "distance": 4833,
+        "quality": 63.4,
+        "repeated": 2,
+        "uTurns": 1,
+        "geometryHash": "792c8043c8d18802"
+      },
+      {
+        "distance": 5405,
+        "quality": 62.5,
+        "repeated": 0.1,
+        "uTurns": 1,
+        "geometryHash": "879fdcdc0271fab7"
+      }
+    ]
+  },
+  {
+    "round": 3,
+    "arm": "phase6",
+    "fixture": "onchan-5km",
+    "wallMs": 114,
+    "calls": 108,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 4,
+        "leg-too-long": 1,
+        "leg-too-short": 1,
+        "out-and-back-spur": 1,
+        "repeated-corridor": 1,
+        "shapeless": 1,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 5.6,
+      "maxDistanceErrorPercent": 8.9,
+      "medianRepeatedPercent": 2.6,
+      "maxRepeatedPercent": 3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 39.6,
+      "maxPairSharedEdgePercent": 32.2
+    },
+    "worstPairwiseGeometricOverlap": 0.3957750065487309,
+    "routes": [
+      {
+        "distance": 5138,
+        "quality": 74.8,
+        "repeated": 1.4,
+        "uTurns": 0,
+        "geometryHash": "130880d0bd1901a6"
+      },
+      {
+        "distance": 4721,
+        "quality": 65.4,
+        "repeated": 2.6,
+        "uTurns": 0,
+        "geometryHash": "5d6be00beaa93434"
+      },
+      {
+        "distance": 5444,
+        "quality": 50.9,
+        "repeated": 3,
+        "uTurns": 0,
+        "geometryHash": "4686d8cd6ba36508"
+      }
+    ]
+  },
+  {
+    "round": 3,
+    "arm": "phase6",
+    "fixture": "wp-one",
+    "wallMs": 123,
+    "calls": 34,
+    "candidates": {
+      "built": 0,
+      "passed": 0,
+      "rejections": {
+        "distance": 5,
+        "out-and-back-spur": 17,
+        "shapeless": 15,
+        "u-turns": 7
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 15.2,
+      "maxDistanceErrorPercent": 15.2,
+      "medianRepeatedPercent": 0.4,
+      "maxRepeatedPercent": 0.4,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 6911,
+        "quality": 57.2,
+        "repeated": 0.4,
+        "uTurns": 0,
+        "geometryHash": "ddc541ee0a0f8982"
+      }
+    ]
+  },
+  {
+    "round": 3,
+    "arm": "phase6",
+    "fixture": "wp-two",
+    "wallMs": 626,
+    "calls": 274,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 24,
+        "leg-too-long": 4,
+        "leg-too-short": 5,
+        "out-and-back-spur": 30,
+        "repeated-corridor": 8,
+        "shapeless": 35,
+        "start-spur": 3,
+        "u-turns": 21
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 17.6,
+      "maxDistanceErrorPercent": 17.6,
+      "medianRepeatedPercent": 0.3,
+      "maxRepeatedPercent": 0.3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 9410,
+        "quality": 51.3,
+        "repeated": 0.3,
+        "uTurns": 0,
+        "geometryHash": "b2b830e6b22f6479"
+      }
+    ]
+  },
+  {
+    "round": 3,
+    "arm": "phase3b",
+    "fixture": "douglas-5km",
+    "wallMs": 343,
+    "calls": 238,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 10,
+        "leg-too-long": 9,
+        "leg-too-short": 4,
+        "out-and-back-spur": 8,
+        "shapeless": 9,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 8,
+      "maxDistanceErrorPercent": 11.3,
+      "medianRepeatedPercent": 0.1,
+      "maxRepeatedPercent": 0.7,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 37.8,
+      "maxPairSharedEdgePercent": 38.5
+    },
+    "worstPairwiseGeometricOverlap": 0.3777786443403304,
+    "routes": [
+      {
+        "distance": 4930,
+        "quality": 82.5,
+        "repeated": 0.1,
+        "uTurns": 0,
+        "geometryHash": "4a6a2e9c4760baf9"
+      },
+      {
+        "distance": 4433,
+        "quality": 55.9,
+        "repeated": 0.7,
+        "uTurns": 0,
+        "geometryHash": "80d448345c02dabc"
+      },
+      {
+        "distance": 5398,
+        "quality": 69.4,
+        "repeated": 0,
+        "uTurns": 0,
+        "geometryHash": "fe6c84fd666b47dc"
+      }
+    ]
+  },
+  {
+    "round": 3,
+    "arm": "phase3b",
+    "fixture": "douglas-3km",
+    "wallMs": 113,
+    "calls": 96,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 3,
+        "leg-too-long": 1,
+        "leg-too-short": 2,
+        "out-and-back-spur": 1,
+        "shapeless": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 6.5,
+      "maxDistanceErrorPercent": 7.7,
+      "medianRepeatedPercent": 1.1,
+      "maxRepeatedPercent": 2.3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 25.8,
+      "maxPairSharedEdgePercent": 4.5
+    },
+    "worstPairwiseGeometricOverlap": 0.25761177576237565,
+    "routes": [
+      {
+        "distance": 2806,
+        "quality": 70.9,
+        "repeated": 0.5,
+        "uTurns": 0,
+        "geometryHash": "115659efcf49f729"
+      },
+      {
+        "distance": 3192,
+        "quality": 67.5,
+        "repeated": 1.1,
+        "uTurns": 0,
+        "geometryHash": "fb97464ce17cd1b5"
+      },
+      {
+        "distance": 2768,
+        "quality": 62.1,
+        "repeated": 2.3,
+        "uTurns": 0,
+        "geometryHash": "1c3c9204fae8c946"
+      }
+    ]
+  },
+  {
+    "round": 3,
+    "arm": "phase3b",
+    "fixture": "peel-5km",
+    "wallMs": 515,
+    "calls": 530,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 12,
+        "leg-too-long": 9,
+        "leg-too-short": 1,
+        "out-and-back-spur": 14,
+        "repeated-corridor": 3,
+        "shapeless": 14,
+        "start-spur": 1,
+        "u-turns": 4
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 2.3,
+      "maxDistanceErrorPercent": 2.5,
+      "medianRepeatedPercent": 1.8,
+      "maxRepeatedPercent": 2.3,
+      "totalUTurns": 1,
+      "maxPairSharedPercent": 28,
+      "maxPairSharedEdgePercent": 27
+    },
+    "worstPairwiseGeometricOverlap": 0.27982486155489544,
+    "routes": [
+      {
+        "distance": 4930,
+        "quality": 74.1,
+        "repeated": 2.3,
+        "uTurns": 0,
+        "geometryHash": "89554d7744c9d8e0"
+      },
+      {
+        "distance": 4885,
+        "quality": 63.3,
+        "repeated": 1.8,
+        "uTurns": 1,
+        "geometryHash": "7ca874104df094ec"
+      },
+      {
+        "distance": 4877,
+        "quality": 72.7,
+        "repeated": 1.8,
+        "uTurns": 0,
+        "geometryHash": "e554af26e0fb0824"
+      }
+    ]
+  },
+  {
+    "round": 3,
+    "arm": "phase3b",
+    "fixture": "onchan-5km",
+    "wallMs": 127,
+    "calls": 114,
+    "candidates": {
+      "built": 24,
+      "passed": 4,
+      "rejections": {
+        "distance": 4,
+        "leg-too-long": 1,
+        "leg-too-short": 1,
+        "repeated-corridor": 1,
+        "shapeless": 1,
+        "u-turns": 1
+      }
+    },
+    "offered": {
+      "count": 3,
+      "medianDistanceErrorPercent": 3.6,
+      "maxDistanceErrorPercent": 5.9,
+      "medianRepeatedPercent": 3.9,
+      "maxRepeatedPercent": 6.9,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 17.4,
+      "maxPairSharedEdgePercent": 15.5
+    },
+    "worstPairwiseGeometricOverlap": 0.17353313925477454,
+    "routes": [
+      {
+        "distance": 4850,
+        "quality": 76.3,
+        "repeated": 1.1,
+        "uTurns": 0,
+        "geometryHash": "1804cc97201b4b14"
+      },
+      {
+        "distance": 5180,
+        "quality": 59.6,
+        "repeated": 3.9,
+        "uTurns": 0,
+        "geometryHash": "913701830024ba31"
+      },
+      {
+        "distance": 5295,
+        "quality": 57.4,
+        "repeated": 6.9,
+        "uTurns": 0,
+        "geometryHash": "03f3de9df2fcc027"
+      }
+    ]
+  },
+  {
+    "round": 3,
+    "arm": "phase3b",
+    "fixture": "wp-one",
+    "wallMs": 123,
+    "calls": 34,
+    "candidates": {
+      "built": 0,
+      "passed": 0,
+      "rejections": {
+        "distance": 5,
+        "out-and-back-spur": 17,
+        "shapeless": 15,
+        "u-turns": 7
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 15.2,
+      "maxDistanceErrorPercent": 15.2,
+      "medianRepeatedPercent": 0.4,
+      "maxRepeatedPercent": 0.4,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 6911,
+        "quality": 57.2,
+        "repeated": 0.4,
+        "uTurns": 0,
+        "geometryHash": "ddc541ee0a0f8982"
+      }
+    ]
+  },
+  {
+    "round": 3,
+    "arm": "phase3b",
+    "fixture": "wp-two",
+    "wallMs": 626,
+    "calls": 285,
+    "candidates": {
+      "built": 24,
+      "passed": 5,
+      "rejections": {
+        "distance": 23,
+        "leg-too-long": 5,
+        "leg-too-short": 5,
+        "out-and-back-spur": 30,
+        "repeated-corridor": 8,
+        "shapeless": 35,
+        "start-spur": 3,
+        "u-turns": 20
+      }
+    },
+    "offered": {
+      "count": 1,
+      "medianDistanceErrorPercent": 17.6,
+      "maxDistanceErrorPercent": 17.6,
+      "medianRepeatedPercent": 0.3,
+      "maxRepeatedPercent": 0.3,
+      "totalUTurns": 0,
+      "maxPairSharedPercent": 0
+    },
+    "worstPairwiseGeometricOverlap": 0,
+    "routes": [
+      {
+        "distance": 9410,
+        "quality": 51.3,
+        "repeated": 0.3,
+        "uTurns": 0,
+        "geometryHash": "b2b830e6b22f6479"
+      }
+    ]
+  }
+]

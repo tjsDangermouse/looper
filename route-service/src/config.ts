@@ -40,6 +40,7 @@ const flags: AlgorithmFlags = {
   backtrackNeedsBudgetToo: flag(process.env.LOOPER_BACKTRACK_NEEDS_BUDGET, DEFAULT_FLAGS.backtrackNeedsBudgetToo),
   keepBestLegAttempt: flag(process.env.LOOPER_KEEP_BEST_LEG_ATTEMPT, DEFAULT_FLAGS.keepBestLegAttempt),
   budgetOncePerLeg: flag(process.env.LOOPER_BUDGET_ONCE_PER_LEG, DEFAULT_FLAGS.budgetOncePerLeg),
+  perimeterRetention: flag(process.env.LOOPER_PERIMETER_RETENTION, DEFAULT_FLAGS.perimeterRetention),
 }
 
 export const config = {

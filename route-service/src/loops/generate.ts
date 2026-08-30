@@ -823,6 +823,8 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
         bearing: Math.round(loopAttempt.initialBearing),
         direction: loopAttempt.direction,
         cornerCount: shape.cornerCount,
+        targetScale: shape.targetScale,
+        bearingShift: shape.bearingShift,
       }, () => buildAndAnalyseInScope(loopAttempt, shape, route))
     }
 
@@ -854,6 +856,7 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
           backtrackNeedsBudgetToo: flags.backtrackNeedsBudgetToo,
           keepBestLegAttempt: flags.keepBestLegAttempt,
           budgetOncePerLeg: flags.budgetOncePerLeg,
+          perimeterRetention: flags.perimeterRetention,
           cornerCount: shape.cornerCount,
           preAvoidGeometries: shape.preAvoid,
           signal: options.signal,

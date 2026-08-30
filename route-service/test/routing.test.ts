@@ -3,7 +3,7 @@ import booleanPointInPolygon from '@turf/boolean-point-in-polygon'
 import { AVOID_PRIORITY, RELAXED_AVOID_PRIORITY } from '../src/loops/avoidance.js'
 import { buildRouteBody, GraphHopperError, parseLeg, maneuverName, isUTurnSign, type GraphHopperLeg } from '../src/graphhopper.js'
 import { pavementReport } from '../src/loops/edges.js'
-import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinAndTrimLegs, joinLegGeometries, routeLegAttempt } from '../src/loops/routing.js'
+import { LEG_BUDGET_SHARE, boundedRetentionPayment, buildLoopIncrementally, joinAndTrimLegs, joinLegGeometries, routeLegAttempt } from '../src/loops/routing.js'
 import type { LngLat } from '../src/loops/geo.js'
 import { FIXTURE_ORIGIN, at, polyline } from './fixtures/routes.js'
 
@@ -40,6 +40,21 @@ function densify(a: LngLat, b: LngLat): LngLat[] {
 }
 
 const same = (a: LngLat, b: LngLat) => Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9
+
+describe('perimeter-retention safety rails', () => {
+  it('spreads a deficit over the remaining outward legs', () => {
+    expect(boundedRetentionPayment(600, 3, 1000)).toBe(200)
+  })
+
+  it('caps one payment at a quarter of the ordinary reach', () => {
+    expect(boundedRetentionPayment(3000, 2, 1000)).toBe(250)
+  })
+
+  it('never pays into closure or from a non-positive deficit', () => {
+    expect(boundedRetentionPayment(500, 0, 1000)).toBe(0)
+    expect(boundedRetentionPayment(0, 2, 1000)).toBe(0)
+  })
+})
 
 describe('the request sent to the routing engine', () => {
   it('asks for one ordinary leg, not a round trip', () => {
