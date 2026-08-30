@@ -7,6 +7,7 @@ import { GraphHopperError, type GraphHopperLeg, type GraphHopperStep } from '../
 import type { BoundaryTrace, FixupKind, RoutePurpose } from './metrics.js'
 import type { EdgeSpan } from './edges.js'
 import { noteCall, traceDecision, withAttemptScope, withImpliedAttemptScope, withLegScope } from './trace.js'
+import { estimateClosure } from './closure.js'
 
 /**
  * Building a loop, a leg at a time.
@@ -547,8 +548,24 @@ export async function buildLoopIncrementally(
       options.signal?.throwIfAborted()
       const closing = step === cornerCount
       const legsLeft = cornerCount - step + 1
-      const plannedLength = Math.max(0, targetMetres - running) / legsLeft
       const from = points[points.length - 1]
+      const remainingBeforeLeg = Math.max(0, targetMetres - running)
+      // This remains the Phase 3B equal-share planner. Phase 4 observes its
+      // closure error; it does not alter this budget or the generated guide.
+      const plannedLength = remainingBeforeLeg / legsLeft
+      const closeBefore = estimateClosure(start, from, legs)
+
+      traceDecision('leg-plan', {
+        targetDistance: Math.round(targetMetres),
+        distanceUsedBeforeLeg: Math.round(running),
+        distanceRemainingBeforeLeg: Math.round(remainingBeforeLeg),
+        plannedLegBudget: closing ? undefined : Math.round(plannedLength),
+        guidePointCrowDistance: closing ? 0 : Math.round(plannedLength),
+        straightLineDistanceHome: Math.round(closeBefore.crowMetres),
+        closureEstimate: Math.round(closeBefore.metres),
+        closureStretch: Math.round(closeBefore.stretch * 1000) / 1000,
+        closureEstimator: closeBefore.source,
+      })
 
       const attempted = await attemptLeg({
         route,
@@ -607,6 +624,33 @@ export async function buildLoopIncrementally(
       if (options.abandonAboveMetres && running > options.abandonAboveMetres) return undefined
       legs.push({ ...finalLeg, relaxed: finalRelaxed, avoidanceAreaCount: walked.length })
       walked.push(finalLeg.coordinates)
+      const endpoint = finalLeg.coordinates.at(-1) ?? attempted.target
+      const closeAfter = estimateClosure(start, endpoint, legs)
+      traceDecision('leg-result', {
+        targetDistance: Math.round(targetMetres),
+        routedLegDistance: Math.round(finalLeg.distanceMeters),
+        distanceUsedAfterLeg: Math.round(running),
+        distanceRemainingAfterLeg: Math.round(targetMetres - running),
+        straightLineDistanceHome: Math.round(closeAfter.crowMetres),
+        closureEstimate: Math.round(closeAfter.metres),
+        closureStretch: Math.round(closeAfter.stretch * 1000) / 1000,
+        endpointLng: endpoint[0],
+        endpointLat: endpoint[1],
+      })
+      if (closing) {
+        const remainingBeforeClose = Math.max(0, targetMetres - (running - finalLeg.distanceMeters))
+        traceDecision('closure', {
+          targetDistance: Math.round(targetMetres),
+          remainingBudgetBeforeClose: Math.round(remainingBeforeClose),
+          straightLineHome: Math.round(haversine(from, start)),
+          actualGraphHopperCloseDistance: Math.round(finalLeg.distanceMeters),
+          closeDistanceOverRemainingBudget: remainingBeforeClose > 0
+            ? Math.round((finalLeg.distanceMeters / remainingBeforeClose) * 1000) / 1000
+            : undefined,
+          finalTotalDistance: Math.round(running),
+          distanceError: Math.round(running - targetMetres),
+        })
+      }
       // Ready for the leg after next; the closing leg never needs a heading.
       if (!closing) heading = normaliseBearing(heading + (turn * 360) / (cornerCount + 1))
       return 'continued' as const
