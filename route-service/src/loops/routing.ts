@@ -6,6 +6,7 @@ import { MIN_BACKTRACK_METRES, sharedCorridorMetres } from './quality.js'
 import { GraphHopperError, type GraphHopperLeg, type GraphHopperStep } from '../graphhopper.js'
 import type { BoundaryTrace, FixupKind, RoutePurpose } from './metrics.js'
 import type { EdgeSpan } from './edges.js'
+import { noteCall, traceDecision, withAttemptScope, withImpliedAttemptScope, withLegScope } from './trace.js'
 
 /**
  * Building a loop, a leg at a time.
@@ -160,6 +161,20 @@ export type SequentialRoutingOptions = {
   budgetDetourGate?: boolean
   /** See AlgorithmFlags.pullbackTurnOnly. */
   pullbackTurnOnly?: boolean
+  /** See AlgorithmFlags.pullbackReusesPrevious. */
+  pullbackReusesPrevious?: boolean
+  /** See AlgorithmFlags.backtrackNeedsBudgetToo. */
+  backtrackNeedsBudgetToo?: boolean
+  /** See AlgorithmFlags.keepBestLegAttempt. */
+  keepBestLegAttempt?: boolean
+  /** See AlgorithmFlags.budgetOncePerLeg. */
+  budgetOncePerLeg?: boolean
+  /**
+   * Shared across the attempts at one leg, so a later attempt can see what the
+   * first one's cheaper reroute came to. Set by `attemptLeg`, which is the only
+   * thing that knows where one leg's attempts begin and end.
+   */
+  budgetLatch?: { relaxedHelped: boolean }
   /**
    * Told whenever a speculative reroute finishes, and whether its result was
    * kept. A fix-up that is attempted far more often than it is kept is paying
@@ -205,6 +220,17 @@ export async function routeLegAttempt(
   toPoint: LngLat,
   options: SequentialRoutingOptions = {},
 ): Promise<LegAttemptResult | undefined> {
+  return withImpliedAttemptScope(() => routeLegAttemptInScope(route, start, walked, fromPoint, toPoint, options))
+}
+
+async function routeLegAttemptInScope(
+  route: LegRouter,
+  start: LngLat,
+  walked: LngLat[][],
+  fromPoint: LngLat,
+  toPoint: LngLat,
+  options: SequentialRoutingOptions,
+): Promise<LegAttemptResult | undefined> {
   const areas: Feature<Polygon>[] = walked.length
     ? buildAvoidanceAreas(walked, start, {
         halfWidthMetres: options.corridorHalfWidthMetres,
@@ -212,6 +238,7 @@ export async function routeLegAttempt(
       })
     : []
   const pair: LngLat[] = [fromPoint, toPoint]
+  noteCall({ askMetres: Math.round(haversine(fromPoint, toPoint)), areas: areas.length })
 
   let leg: GraphHopperLeg | undefined
   let relaxed = false
@@ -241,10 +268,18 @@ export async function routeLegAttempt(
   // back with the same answer at the cost of a call.
   const detoursRoundSomething = !options.budgetDetourGate
     || leg.distanceMeters > haversine(fromPoint, toPoint) * BUDGET_DETOUR_RATIO
-  if (!relaxed && areas.length && detoursRoundSomething && options.legBudgetMetres && leg.distanceMeters > options.legBudgetMetres) {
+  const budgetWorthAsking = !options.budgetOncePerLeg || (options.budgetLatch?.relaxedHelped ?? true)
+  if (!relaxed && areas.length && detoursRoundSomething && budgetWorthAsking && options.legBudgetMetres && leg.distanceMeters > options.legBudgetMetres) {
+    noteCall({
+      budgetMetres: Math.round(options.legBudgetMetres),
+      strongDistance: Math.round(leg.distanceMeters),
+      straightLine: Math.round(haversine(fromPoint, toPoint)),
+    })
     try {
       const cheaper = await route(pair, avoidanceCustomModel(areas, options.relaxedPriority ?? RELAXED_AVOID_PRIORITY), 'leg-budget')
       const better = cheaper.distanceMeters < leg.distanceMeters
+      if (options.budgetLatch) options.budgetLatch.relaxedHelped = better
+      traceDecision('leg-budget', { kept: better, before: Math.round(leg.distanceMeters), after: Math.round(cheaper.distanceMeters) })
       options.onFixup?.('leg-budget', better)
       if (better) {
         leg = cheaper
@@ -266,6 +301,7 @@ export async function routeLegAttempt(
       const rerouted = await route(pair, avoidanceCustomModel(spikeAreas, relaxed ? (options.relaxedPriority ?? RELAXED_AVOID_PRIORITY) : (options.strongPriority ?? AVOID_PRIORITY)), 'spike')
       const stillSpiked = findLegSpike(rerouted.coordinates)
       const better = !stillSpiked && rerouted.distanceMeters < leg.distanceMeters * 1.5
+      traceDecision('spike', { kept: better, before: Math.round(leg.distanceMeters), after: Math.round(rerouted.distanceMeters), stillSpiked: Boolean(stillSpiked) })
       options.onFixup?.('spike', better)
       if (better) {
         leg = rerouted
@@ -324,7 +360,27 @@ export async function applyJoinPullback(
   }
 
   const pullbackScale = options.waypointPullbackScale ?? WAYPOINT_PULLBACK_SCALE
-  const pulledIn = destination(start, haversine(start, original) * pullbackScale, bearingBetween(start, original))
+  const wantedFromStart = haversine(start, original) * pullbackScale
+  // Where the pulled-back corner goes, and whether getting there costs a call.
+  const onPath = options.pullbackReusesPrevious ? pullbackOnPath(previous.coordinates, start, wantedFromStart) : undefined
+  const pulledIn = onPath?.point ?? destination(start, wantedFromStart, bearingBetween(start, original))
+  noteCall({
+    ...(options.pullbackReusesPrevious ? {
+      onPath: Boolean(onPath),
+      keptFraction: onPath ? Math.round((onPath.index / (previous.coordinates.length - 1)) * 100) : undefined,
+      wantedFromStart: Math.round(wantedFromStart),
+      gotFromStart: onPath ? Math.round(haversine(start, onPath.point)) : undefined,
+      previousStartFromStart: Math.round(haversine(start, previousPoint)),
+    } : {}),
+    trigger: turn > (options.joinTurnThresholdDegrees ?? JOIN_TURN_THRESHOLD_DEGREES)
+      ? (boundarySpike ? 'turn+spike' : 'turn')
+      : 'spike',
+    joinTurn: Math.round(turn),
+    fromStart: Math.round(haversine(start, original)),
+    moved: Math.round(haversine(original, pulledIn)),
+    previousDistance: Math.round(previous.distanceMeters),
+    currentDistance: Math.round(leg.distanceMeters),
+  })
   const areasBeforePrevious = walkedBeforePrevious.length
     ? buildAvoidanceAreas(walkedBeforePrevious, start, {
         halfWidthMetres: options.corridorHalfWidthMetres,
@@ -332,11 +388,13 @@ export async function applyJoinPullback(
       })
     : []
   try {
-    const redonePrevious = await route(
-      [previousPoint, pulledIn],
-      avoidanceCustomModel(areasBeforePrevious, previous.relaxed ? (options.relaxedPriority ?? RELAXED_AVOID_PRIORITY) : (options.strongPriority ?? AVOID_PRIORITY)),
-      'join-pullback',
-    )
+    const redonePrevious = onPath
+      ? trimLegTo(previous, onPath.index)
+      : await route(
+        [previousPoint, pulledIn],
+        avoidanceCustomModel(areasBeforePrevious, previous.relaxed ? (options.relaxedPriority ?? RELAXED_AVOID_PRIORITY) : (options.strongPriority ?? AVOID_PRIORITY)),
+        'join-pullback',
+      )
     const walkedWithRedone = [...walkedBeforePrevious, redonePrevious.coordinates]
     const areasForCurrent = buildAvoidanceAreas(walkedWithRedone, start, {
       halfWidthMetres: options.corridorHalfWidthMetres,
@@ -354,6 +412,12 @@ export async function applyJoinPullback(
     // still-present branch would only be trading one dead end for another,
     // for the price of two extra requests.
     const better = redoneTurn < turn || Boolean(boundarySpike && !redoneSpike)
+    traceDecision('join-pullback', {
+      kept: better, joinTurn: Math.round(turn), redoneTurn: Math.round(redoneTurn),
+      spikeCleared: Boolean(boundarySpike && !redoneSpike),
+      before: Math.round(previous.distanceMeters + leg.distanceMeters),
+      after: Math.round(redonePrevious.distanceMeters + redoneCurrent.distanceMeters),
+    })
     options.onFixup?.('join-pullback', better)
     if (better) {
       return {
@@ -367,6 +431,84 @@ export async function applyJoinPullback(
     // Keep the dead-ending join: pulling the waypoint in found no way round either.
   }
   return { leg, relaxed }
+}
+
+
+/**
+ * Where on an already-routed path to put a pulled-back corner.
+ *
+ * The corner is being moved toward the start, and the geometric rule says how
+ * far: `pullbackScale` of its straight-line distance from the start. Nothing
+ * says the point that rule names is anywhere a walker can stand, which is why
+ * moving there costs a routing call to find out.
+ *
+ * The previous leg's own geometry is a list of places a walker demonstrably
+ * can stand, every one of them already paid for. Taking the point on it whose
+ * distance from the start is closest to what the rule asked for keeps the
+ * rule's intent — a corner this much nearer home — and makes the leg that
+ * arrives there a prefix of the leg we already have. Routing to a point on a
+ * routed path returns that path's prefix; measured on the Isle of Man graph,
+ * byte-identically, with GraphHopper's distance agreeing with its own geometry
+ * to 0.015%. So the reroute would buy back exactly what is being trimmed.
+ *
+ * The path's own last point is never chosen — that is the corner we are trying
+ * to move — and neither is its first, which is where the leg set off from.
+ *
+ * Two guards, and they are what make this a saving rather than a different
+ * algorithm. A leg heading away from the start need never come as near it as
+ * the rule asks — measured, that is half of all pullbacks — and the nearest
+ * point it can offer is then its own beginning, which would collapse the leg
+ * to nothing and hand the loop a corner it never asked for. So the point is
+ * taken only when the path genuinely passes near the wanted reach, and only
+ * when enough of the leg survives the trim. Everything else falls back to
+ * routing the pulled-back leg exactly as before, at the price it always cost.
+ */
+const PULLBACK_REACH_TOLERANCE = 0.15
+const PULLBACK_MIN_KEPT_FRACTION = 0.4
+
+function pullbackOnPath(path: LngLat[], start: LngLat, wantedFromStart: number): { point: LngLat; index: number } | undefined {
+  if (path.length < 3 || wantedFromStart <= 0) return undefined
+  let bestIndex = -1
+  let bestMiss = Infinity
+  for (let index = 1; index < path.length - 1; index++) {
+    const miss = Math.abs(haversine(start, path[index]) - wantedFromStart)
+    if (miss < bestMiss) {
+      bestMiss = miss
+      bestIndex = index
+    }
+  }
+  if (bestIndex < 0 || bestMiss > wantedFromStart * PULLBACK_REACH_TOLERANCE) return undefined
+  const whole = pathLength(path)
+  if (whole <= 0 || pathLength(path.slice(0, bestIndex + 1)) < whole * PULLBACK_MIN_KEPT_FRACTION) return undefined
+  return { point: path[bestIndex], index: bestIndex }
+}
+
+/**
+ * The leg that arrives at a pulled-back corner, taken from the leg that
+ * arrived at the original one.
+ *
+ * Geometry is the prefix. Distance and duration are re-derived from that
+ * geometry rather than scaled: GraphHopper's own distance is the same sum, and
+ * scaling would let a leg whose speed varied along it report a length it never
+ * had. Steps are kept while their interval fits, and the edge spans likewise,
+ * so nothing downstream is handed an index past the end of the line.
+ */
+function trimLegTo(leg: GraphHopperLeg, index: number): GraphHopperLeg {
+  const coordinates = leg.coordinates.slice(0, index + 1)
+  const distanceMeters = pathLength(coordinates)
+  return {
+    ...leg,
+    coordinates,
+    distanceMeters,
+    durationSeconds: leg.distanceMeters > 0 ? leg.durationSeconds * (distanceMeters / leg.distanceMeters) : leg.durationSeconds,
+    steps: leg.steps.filter(step => step.endIndex === undefined || step.endIndex <= index),
+    edges: leg.edges?.filter(span => span.endIndex <= index),
+    roadClasses: leg.roadClasses?.filter(span => span.endIndex <= index),
+    // The engine settled what it settled for the whole leg. Attributing a
+    // share of it to a prefix would invent a measurement, so the count stays
+    // with the call that earned it and this leg reports none.
+    visitedNodes: undefined,
+  }
 }
 
 /**
@@ -401,71 +543,75 @@ export async function buildLoopIncrementally(
   let heading = initialBearing
 
   for (let step = 0; step <= cornerCount; step++) {
-    options.signal?.throwIfAborted()
-    const closing = step === cornerCount
-    const legsLeft = cornerCount - step + 1
-    const plannedLength = Math.max(0, targetMetres - running) / legsLeft
-    const from = points[points.length - 1]
+    const stepOutcome = await withLegScope({ legIndex: step, cornerCount }, async () => {
+      options.signal?.throwIfAborted()
+      const closing = step === cornerCount
+      const legsLeft = cornerCount - step + 1
+      const plannedLength = Math.max(0, targetMetres - running) / legsLeft
+      const from = points[points.length - 1]
 
-    const attempted = await attemptLeg({
-      route,
-      start,
-      walked,
-      from,
-      previous: legs[legs.length - 1],
-      pickTarget: attempt => closing
-        ? start
-        : destination(
-            from,
-            plannedLength * Math.max(0.4, 1 - attempt * LEG_RETRY_LENGTH_STEP),
-            normaliseBearing(heading + attempt * turn * LEG_RETRY_BEARING_STEP_DEGREES),
-          ),
-      plannedLength: closing ? undefined : plannedLength,
-      maxAttempts: maxLegAttempts,
-      overshootTolerance,
-      options,
-    })
-    if (!attempted) return undefined
-
-    points.push(attempted.target)
-    let finalLeg = attempted.leg
-    let finalRelaxed = attempted.relaxed
-
-    // Every waypoint but the first and last is somebody's arrival and
-    // somebody's departure; check the seam this leg's start sits on.
-    if (legs.length > 0) {
-      const previous = legs[legs.length - 1]
-      const outcome = await applyJoinPullback(
+      const attempted = await attemptLeg({
         route,
         start,
-        walked.slice(0, -1),
-        points[points.length - 3],
-        previous,
-        points[points.length - 2],
-        attempted.target,
-        finalLeg,
-        finalRelaxed,
+        walked,
+        from,
+        previous: legs[legs.length - 1],
+        pickTarget: attempt => closing
+          ? start
+          : destination(
+              from,
+              plannedLength * Math.max(0.4, 1 - attempt * LEG_RETRY_LENGTH_STEP),
+              normaliseBearing(heading + attempt * turn * LEG_RETRY_BEARING_STEP_DEGREES),
+            ),
+        plannedLength: closing ? undefined : plannedLength,
+        maxAttempts: maxLegAttempts,
+        overshootTolerance,
         options,
-      )
-      finalLeg = outcome.leg
-      finalRelaxed = outcome.relaxed
-      if (outcome.revisedPrevious) {
-        running -= previous.distanceMeters
-        legs.pop()
-        walked.pop()
-        legs.push(outcome.revisedPrevious.leg)
-        walked.push(outcome.revisedPrevious.leg.coordinates)
-        running += outcome.revisedPrevious.leg.distanceMeters
-        points[points.length - 2] = outcome.revisedPrevious.point
-      }
-    }
+      })
+      if (!attempted) return undefined
 
-    running += finalLeg.distanceMeters
-    if (options.abandonAboveMetres && running > options.abandonAboveMetres) return undefined
-    legs.push({ ...finalLeg, relaxed: finalRelaxed, avoidanceAreaCount: walked.length })
-    walked.push(finalLeg.coordinates)
-    // Ready for the leg after next; the closing leg never needs a heading.
-    if (!closing) heading = normaliseBearing(heading + (turn * 360) / (cornerCount + 1))
+      points.push(attempted.target)
+      let finalLeg = attempted.leg
+      let finalRelaxed = attempted.relaxed
+
+      // Every waypoint but the first and last is somebody's arrival and
+      // somebody's departure; check the seam this leg's start sits on.
+      if (legs.length > 0) {
+        const previous = legs[legs.length - 1]
+        const outcome = await applyJoinPullback(
+          route,
+          start,
+          walked.slice(0, -1),
+          points[points.length - 3],
+          previous,
+          points[points.length - 2],
+          attempted.target,
+          finalLeg,
+          finalRelaxed,
+          options,
+        )
+        finalLeg = outcome.leg
+        finalRelaxed = outcome.relaxed
+        if (outcome.revisedPrevious) {
+          running -= previous.distanceMeters
+          legs.pop()
+          walked.pop()
+          legs.push(outcome.revisedPrevious.leg)
+          walked.push(outcome.revisedPrevious.leg.coordinates)
+          running += outcome.revisedPrevious.leg.distanceMeters
+          points[points.length - 2] = outcome.revisedPrevious.point
+        }
+      }
+
+      running += finalLeg.distanceMeters
+      if (options.abandonAboveMetres && running > options.abandonAboveMetres) return undefined
+      legs.push({ ...finalLeg, relaxed: finalRelaxed, avoidanceAreaCount: walked.length })
+      walked.push(finalLeg.coordinates)
+      // Ready for the leg after next; the closing leg never needs a heading.
+      if (!closing) heading = normaliseBearing(heading + (turn * 360) / (cornerCount + 1))
+      return 'continued' as const
+    })
+    if (stepOutcome === undefined) return undefined
   }
 
   const joined = joinAndTrimLegs(legs)
@@ -722,12 +868,28 @@ async function attemptLeg(params: {
   options: SequentialRoutingOptions
 }): Promise<{ target: LngLat; leg: GraphHopperLeg; relaxed: boolean } | undefined> {
   let best: { target: LngLat; leg: GraphHopperLeg; relaxed: boolean } | undefined
+  let bestMiss = Infinity
   const attempts = params.plannedLength === undefined ? 0 : params.maxAttempts
+  // One latch for the whole leg, so its attempts can tell each other what the
+  // cheaper reroute was worth here rather than each finding out for itself.
+  const options = params.options.budgetOncePerLeg
+    ? { ...params.options, budgetLatch: { relaxedHelped: true } }
+    : params.options
   for (let attempt = 0; attempt <= attempts; attempt++) {
     const target = params.pickTarget(attempt)
-    const outcome = await routeLegAttempt(params.route, params.start, params.walked, params.from, target, params.options)
+    const outcome = await withAttemptScope(
+      { legAttempt: attempt, plannedMetres: params.plannedLength === undefined ? undefined : Math.round(params.plannedLength) },
+      () => routeLegAttempt(params.route, params.start, params.walked, params.from, target, options),
+    )
     if (!outcome) continue
-    best = { target, leg: outcome.leg, relaxed: outcome.relaxed }
+    // Which answer to keep once the retries run out. Overwriting on every
+    // attempt keeps the last one, which is the shortest and most swung guess
+    // the leg made rather than its closest fit.
+    const miss = params.plannedLength === undefined ? 0 : Math.abs(outcome.leg.distanceMeters - params.plannedLength)
+    if (!params.options.keepBestLegAttempt || best === undefined || miss < bestMiss) {
+      best = { target, leg: outcome.leg, relaxed: outcome.relaxed }
+      bestMiss = miss
+    }
     if (params.plannedLength === undefined) return best
     const fitsBudget = outcome.leg.distanceMeters <= params.plannedLength * params.overshootTolerance
       && (!params.options.legBudgetMetres || outcome.leg.distanceMeters <= params.options.legBudgetMetres)
@@ -736,7 +898,21 @@ async function attemptLeg(params: {
     // worth a different aim, exactly like a leg that blew its budget, rather
     // than accepted and left for the reactive join fix-up further down.
     const backtrack = params.previous ? overlapMetres(params.previous.coordinates, outcome.leg.coordinates) : 0
+    // Retrying for a short backtrack alone was measured to clear it 15 times in
+    // 256 on the production corpus: a bearing swung twenty degrees and a reach
+    // a fifth shorter is not what moves a corner out of a dead end. The join
+    // fix-up below is, and it still runs. See AlgorithmFlags.
     const isShortBacktrack = backtrack > 0 && backtrack < MIN_BACKTRACK_METRES
+      && !(params.options.backtrackNeedsBudgetToo && fitsBudget)
+    traceDecision('leg-attempt', {
+      kept: fitsBudget && !isShortBacktrack,
+      attempt,
+      planned: params.plannedLength === undefined ? undefined : Math.round(params.plannedLength),
+      got: Math.round(outcome.leg.distanceMeters),
+      fitsBudget,
+      shortBacktrack: isShortBacktrack,
+      last: attempt === attempts,
+    })
     if (fitsBudget && !isShortBacktrack) return best
   }
   return best

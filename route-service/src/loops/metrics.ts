@@ -3,6 +3,7 @@ import type { CustomModel } from './avoidance.js'
 import { pavementReport } from './edges.js'
 import type { GraphHopperLeg } from '../graphhopper.js'
 import { appendFileSync } from 'node:fs'
+import { attributeCall, setTraceSink } from './trace.js'
 
 /**
  * What one request actually cost.
@@ -420,6 +421,10 @@ function trace(record: Record<string, unknown>) {
   }
 }
 
+let nextCallId = 1
+
+setTraceSink(trace)
+
 const COUNTED_BY = Symbol('looper.countedBy')
 type Counted = { [COUNTED_BY]?: RequestMetrics }
 
@@ -435,11 +440,18 @@ export function countingRouter(
   if ((route as Counted)[COUNTED_BY] === metrics) return route
   const counted = async (points: LngLat[], customModel: CustomModel | undefined, purpose: RoutePurpose = 'other') => {
     const began = now()
+    // Assigned before the call rather than after it, so a fix-up dispatched
+    // while its parent is still in flight still names the right parent, and so
+    // ids order by dispatch rather than by completion.
+    const callId = nextCallId++
+    const attribution = attributeCall(callId, purpose)
     const boundary: BoundaryTrace = {}
     let visitedNodes: number | undefined
+    let resultMetres: number | undefined
     let pavement: { hops: number; measuredMetres: number } | undefined
     try {
       const leg = await route(points, customModel, purpose, boundary)
+      resultMetres = Math.round(leg.distanceMeters)
       visitedNodes = leg.visitedNodes
       pavement = pavementReport(leg.coordinates, leg.roadClasses)
       return leg
@@ -449,12 +461,15 @@ export function countingRouter(
       const elapsed = now() - began
       metrics.countCall(purpose, elapsed, Math.max(1, points.length - 1), customModel?.areas?.features?.length ?? 0, visitedNodes, pavement)
       trace({
+        callId,
+        ...attribution,
         purpose,
         class: classifyRequest(customModel),
         points: points.length,
         areas: customModel?.areas?.features?.length ?? 0,
         areaVertices: customModel?.areas?.features?.reduce((sum, f) => sum + (f.geometry.coordinates[0]?.length ?? 0), 0) ?? 0,
         ms: elapsed,
+        resultMetres,
         visitedNodes,
         ...boundary,
         ...(TRACE_BODIES ? { points, model: customModel ?? null } : {}),

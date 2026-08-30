@@ -18,6 +18,7 @@ import { findRepeatedCorridors, MIN_SHARED_RUN_METRES } from './quality.js'
 import { normaliseBearing } from './geo.js'
 import { biasAttemptsToNetwork, summariseNetwork, type NetworkSummary, type ReachedPoint } from './network.js'
 import { allocateSlack, DEFAULT_ALLOCATION, fitsInPlan, planSegmentOptions, type SegmentOption } from './waypoints.js'
+import { traceDecision, withCallContext, withLegScope } from './trace.js'
 import { pickForRefinement, screenSkeleton, type ScreenVerdict } from './screening.js'
 import { destination as pointAtBearing } from './geo.js'
 import { targetMetresFor, targetSecondsFor, type LoopMode } from './units.js'
@@ -815,6 +816,21 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
       shape: { cornerCount: number; targetScale: number; bearingShift: number; preAvoid?: LngLat[][] },
       route: LegRouter,
     ): Promise<Analysed | undefined> {
+      return withCallContext({
+        candidateId: `${loopAttempt.id}@${shape.cornerCount}${shape.targetScale === 1 && shape.bearingShift === 0 ? '' : `/r${shape.targetScale}+${shape.bearingShift}`}`,
+        candidateKind: shape.preAvoid ? 'repair' : 'ring',
+        candidateIndex: loopAttempt.index,
+        bearing: Math.round(loopAttempt.initialBearing),
+        direction: loopAttempt.direction,
+        cornerCount: shape.cornerCount,
+      }, () => buildAndAnalyseInScope(loopAttempt, shape, route))
+    }
+
+    async function buildAndAnalyseInScope(
+      loopAttempt: LoopAttempt,
+      shape: { cornerCount: number; targetScale: number; bearingShift: number; preAvoid?: LngLat[][] },
+      route: LegRouter,
+    ): Promise<Analysed | undefined> {
       // Swinging with the direction of travel, so a repair to a clockwise loop
       // and the same repair to its mirror are the same repair.
       const turn = loopAttempt.direction === 'clockwise' ? 1 : -1
@@ -834,12 +850,19 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
           onFixup: (kind, kept) => metrics?.countFixup(kind, kept),
           budgetDetourGate: flags.budgetDetourGate,
           pullbackTurnOnly: flags.pullbackTurnOnly,
+          pullbackReusesPrevious: flags.pullbackReusesPrevious,
+          backtrackNeedsBudgetToo: flags.backtrackNeedsBudgetToo,
+          keepBestLegAttempt: flags.keepBestLegAttempt,
+          budgetOncePerLeg: flags.budgetOncePerLeg,
           cornerCount: shape.cornerCount,
           preAvoidGeometries: shape.preAvoid,
           signal: options.signal,
         },
       )
-      if (!candidate) return undefined
+      if (!candidate) {
+        traceDecision('candidate', { outcome: 'failed-routing' })
+        return undefined
+      }
       const traversals = flags.edgeOverlap ? measureTraversals(candidate.coordinates, candidate.edges) : undefined
       const report = analyseRouteQuality({
         traversals,
@@ -854,6 +877,17 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
         thresholds: overrides?.quality,
       })
       if (flags.edgeOverlap) metrics?.countOverlapSource(report.overlapSource)
+      traceDecision('candidate', {
+        outcome: report.pass ? 'passed' : 'failed-quality',
+        rejections: report.rejections,
+        distance: Math.round(candidate.distanceMeters),
+        target: Math.round(qualityTarget),
+        quality: report.quality.score,
+        repeatedPercent: report.quality.repeatedPercent,
+        uTurns: report.quality.uTurnCount,
+        distanceErrorFraction: Math.round(report.distanceErrorFraction * 1000) / 1000,
+        legs: candidate.legDistances.length,
+      })
       return {
         candidate,
         report,
@@ -1338,12 +1372,21 @@ async function generateBackboneWaypointLoops(
       const stretch = crow > 0 ? directs[gap].distanceMeters / crow : 1
       for (const plan of planSegmentOptions(gap, anchors[gap], anchors[gap + 1], perGap, stretch)) {
         if (!plan.guides.length) continue
-        const legs = await routeThrough(
-          options.route,
-          [anchors[gap], ...plan.guides, anchors[gap + 1]],
-          options.signal,
-          (kind, kept) => metrics?.countFixup(kind, kept),
-          flags.guidePointPullback,
+        const legs = await withCallContext(
+          { candidateId: `backbone-gap${gap}-${plan.id}`, candidateKind: 'waypoint-backbone' },
+          () => routeThrough(
+            options.route,
+            [anchors[gap], ...plan.guides, anchors[gap + 1]],
+            options.signal,
+            (kind, kept) => metrics?.countFixup(kind, kept),
+            flags.guidePointPullback,
+            {
+              pullbackReusesPrevious: flags.pullbackReusesPrevious,
+              backtrackNeedsBudgetToo: flags.backtrackNeedsBudgetToo,
+              keepBestLegAttempt: flags.keepBestLegAttempt,
+              budgetOncePerLeg: flags.budgetOncePerLeg,
+            },
+          ),
         )
         if (!legs) continue
         routed.set(plan.id, legs)
@@ -1598,6 +1641,7 @@ async function routeThrough(
   signal: AbortSignal | undefined,
   onFixup?: SequentialRoutingOptions['onFixup'],
   repairGuides = false,
+  tuning: Pick<SequentialRoutingOptions, 'pullbackReusesPrevious' | 'backtrackNeedsBudgetToo' | 'keepBestLegAttempt' | 'budgetOncePerLeg'> = {},
 ): Promise<RoutedLeg[] | undefined> {
   const legs: RoutedLeg[] = []
   const walked: LngLat[][] = []
@@ -1607,11 +1651,13 @@ async function routeThrough(
   const shaped = [...points]
 
   for (let index = 1; index < shaped.length; index++) {
+    const hop = await withLegScope({ legIndex: index - 1 }, async () => {
     signal?.throwIfAborted()
     const result = await routeLegAttempt(route, shaped[0], walked, shaped[index - 1], shaped[index], {
       signal,
       basePurpose: 'waypoint-leg',
       onFixup,
+      ...tuning,
     })
     if (!result) return undefined
     let leg = result.leg
@@ -1635,7 +1681,7 @@ async function routeThrough(
         shaped[index],
         leg,
         relaxed,
-        { signal, basePurpose: 'waypoint-leg', onFixup },
+        { signal, basePurpose: 'waypoint-leg', onFixup, ...tuning },
       )
       leg = outcome.leg
       relaxed = outcome.relaxed
@@ -1651,6 +1697,9 @@ async function routeThrough(
 
     legs.push({ ...leg, relaxed, avoidanceAreaCount: walked.length })
     walked.push(leg.coordinates)
+    return 'routed' as const
+    })
+    if (hop === undefined) return undefined
   }
   return legs
 }
@@ -1737,9 +1786,24 @@ async function routeWaypointCandidate(
   /** The walker's pins — never simply `points`, which may hold a guide too. */
   protectedPoints: LngLat[] = [],
 ): Promise<RoutedCandidate | undefined> {
+  return withCallContext(
+    { candidateKind: 'waypoint', candidateId: `waypoints-${points.length}${avoidWalkedGround ? '' : '-direct'}` },
+    () => routeWaypointCandidateInScope(points, route, avoidWalkedGround, signal, basePurpose, protectedPoints),
+  )
+}
+
+async function routeWaypointCandidateInScope(
+  points: LngLat[],
+  route: LegRouter,
+  avoidWalkedGround: boolean,
+  signal: AbortSignal | undefined,
+  basePurpose: RoutePurpose,
+  protectedPoints: LngLat[],
+): Promise<RoutedCandidate | undefined> {
   const legs: RoutedLeg[] = []
   const walked: LngLat[][] = []
   for (let index = 1; index < points.length; index++) {
+    const hop = await withLegScope({ legIndex: index - 1 }, async () => {
     signal?.throwIfAborted()
     const from = points[index - 1]
     const to = points[index]
@@ -1760,6 +1824,9 @@ async function routeWaypointCandidate(
         throw error
       }
     }
+    return 'routed' as const
+    })
+    if (hop === undefined) return undefined
   }
   const joined = joinAndTrimLegs(legs, protectedPoints)
   return {
