@@ -150,6 +150,77 @@ export const maneuverName = (sign: number | undefined) => (sign === undefined ? 
 /** The signs GraphHopper uses for a genuine turn-around. */
 export const isUTurnSign = (sign: number | undefined) => sign === 8 || sign === -8 || sign === -98
 
+
+/**
+ * One closed walk from the direct search, as it arrives from the facade.
+ *
+ * The walk is an ordinary GraphHopper response — `paths[0]` with its points,
+ * instructions and path details — so {@link parseLeg} reads it with exactly
+ * the code it reads a routed leg with, and nothing downstream has to know
+ * which engine drew the line. Beside it sits `looper`, which carries what the
+ * search knows and a routed leg cannot: the length it searched for, the exact
+ * compactness at the moment the walk closed, the bounding-box ratio, the turn
+ * count and the compass octant it committed to.
+ */
+export type ClosedWalk = {
+  paths: unknown[]
+  looper: {
+    searchedMetres: number
+    compactness: number
+    /** -1 where the walk encloses no width at all. */
+    bboxRatio: number
+    uTurns: number
+    family: number
+    rank: number
+  }
+}
+
+export type ClosedWalkSearch = {
+  walks: ClosedWalk[]
+  closedWalks: number
+  rejectedShape: number
+  rejectedTurns: number
+  limitMetres: number
+  snapped?: [number, number]
+  failure?: string
+  search?: {
+    generated: number
+    expanded: number
+    pruned_distance: number
+    pruned_reuse: number
+    pruned_beam: number
+    pruned_dominated: number
+    peak_band: number
+    completed: number
+    search_ms: number
+    store_size: number
+    chunks_released: number
+    retained_bytes: number
+    peak_store_bytes: number
+    peak_heap_delta_bytes: number
+    stem_metres: number
+    root: number
+  }
+  graph?: {
+    raw_nodes: number; raw_edges: number; core_nodes: number; core_edges: number
+    nodes: number; super_edges: number; arcs: number; build_ms: number
+  }
+  timing?: { explore_ms: number; build_ms: number; search_ms: number; judge_ms: number; assemble_ms: number; total_ms: number }
+}
+
+export type ClosedWalkOptions = {
+  /** How many walks to hand back for the gate to judge. */
+  wanted?: number
+  beam?: number
+  band?: number
+  perNode?: number
+  diversityQuota?: boolean
+  turnAware?: boolean
+  locale?: string
+  timeoutMs?: number
+  signal?: AbortSignal
+}
+
 export class GraphHopperClient {
   constructor(
     private readonly baseUrl: string,
@@ -223,10 +294,49 @@ export class GraphHopperClient {
     }
   }
 
-  async info(timeoutMs = 3000): Promise<{ version?: string; profiles: string[]; bbox?: number[] }> {
+  /**
+   * Ask the facade to search for closed walks from a point.
+   *
+   * This is not a routing call and it is deliberately not on the `route` path:
+   * nothing between here and the graph asks for a path between two points. The
+   * facade explores a bounded region of its own graph, searches the walk over
+   * it, and returns the walks it found already materialised as GraphHopper
+   * paths. A build that does not advertise `looper_closed_walk` answers 404,
+   * which is an ordinary outcome — the caller has Phase 3B — rather than a
+   * fault.
+   */
+  async closedWalks(point: LngLat, targetMetres: number, options: ClosedWalkOptions = {}): Promise<ClosedWalkSearch> {
+    const body: Record<string, unknown> = {
+      lat: point[1],
+      lng: point[0],
+      targetMetres,
+      wanted: options.wanted ?? 24,
+      locale: options.locale ?? 'en',
+    }
+    if (options.beam !== undefined) body.beam = options.beam
+    if (options.band !== undefined) body.band = options.band
+    if (options.perNode !== undefined) body.perNode = options.perNode
+    if (options.diversityQuota !== undefined) body.diversityQuota = options.diversityQuota
+    if (options.turnAware !== undefined) body.turnAware = options.turnAware
+    const response = await this.request('/looper/closed-walk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }, options.timeoutMs ?? this.defaultTimeoutMs, options.signal)
+    return (await response.json()) as ClosedWalkSearch
+  }
+
+  async info(timeoutMs = 3000): Promise<{ version?: string; profiles: string[]; bbox?: number[]; capabilities: string[] }> {
     const response = await this.request('/info', { method: 'GET' }, timeoutMs)
     const data = (await response.json()) as any
-    return { version: data?.version, profiles: (data?.profiles ?? []).map((p: any) => p?.name).filter(Boolean), bbox: data?.bbox }
+    return {
+      version: data?.version,
+      profiles: (data?.profiles ?? []).map((p: any) => p?.name).filter(Boolean),
+      bbox: data?.bbox,
+      // Absent on the shipped GraphHopper container, which is how a caller
+      // tells a facade that can search walks from one that only routes.
+      capabilities: Array.isArray(data?.capabilities) ? data.capabilities.filter((value: unknown) => typeof value === 'string') : [],
+    }
   }
 
   private async post(path: string, body: unknown, timeoutMs: number, signal?: AbortSignal): Promise<RouteResult> {

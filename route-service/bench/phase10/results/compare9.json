@@ -1,0 +1,69 @@
+{
+  "java": {
+    "douglas-5km": {
+      "offered": 3,
+      "engine": "direct",
+      "meanAbsErrorMetres": 58,
+      "meanQuality": 74.1,
+      "meanRepeatedPercent": 0,
+      "uTurns": 0,
+      "worstOverlapPercent": 44.8,
+      "states": 276347,
+      "closedWalks": 153,
+      "turnRejections": 25,
+      "searchMs": 130.134625,
+      "expanded": 131074,
+      "graphNodes": 3006,
+      "rawNodes": 6586
+    },
+    "douglas-3km": {
+      "offered": 3,
+      "engine": "direct",
+      "meanAbsErrorMetres": 16,
+      "meanQuality": 75.6,
+      "meanRepeatedPercent": 0,
+      "uTurns": 1,
+      "worstOverlapPercent": 49.2,
+      "states": 144849,
+      "closedWalks": 128,
+      "turnRejections": 2,
+      "searchMs": 51.69025,
+      "expanded": 69854,
+      "graphNodes": 2189,
+      "rawNodes": 4395
+    },
+    "peel-5km": {
+      "offered": 3,
+      "engine": "direct",
+      "meanAbsErrorMetres": 48,
+      "meanQuality": 70.2,
+      "meanRepeatedPercent": 0,
+      "uTurns": 2,
+      "worstOverlapPercent": 41.1,
+      "states": 99967,
+      "closedWalks": 144,
+      "turnRejections": 59,
+      "searchMs": 32.535917,
+      "expanded": 55453,
+      "graphNodes": 596,
+      "rawNodes": 1401
+    },
+    "onchan-5km": {
+      "offered": 3,
+      "engine": "direct",
+      "meanAbsErrorMetres": 16,
+      "meanQuality": 76.3,
+      "meanRepeatedPercent": 0,
+      "uTurns": 1,
+      "worstOverlapPercent": 24.3,
+      "states": 119831,
+      "closedWalks": 150,
+      "turnRejections": 1,
+      "searchMs": 41.668833,
+      "expanded": 64589,
+      "graphNodes": 1554,
+      "rawNodes": 3927
+    }
+  },
+  "phase9": []
+}

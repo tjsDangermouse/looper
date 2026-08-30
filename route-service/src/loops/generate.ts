@@ -22,6 +22,7 @@ import { traceDecision, tracingCalls, withCallContext, withLegScope } from './tr
 import { pickForRefinement, screenSkeleton, type ScreenVerdict } from './screening.js'
 import { destination as pointAtBearing } from './geo.js'
 import { targetMetresFor, targetSecondsFor, type LoopMode } from './units.js'
+import type { EngineDiagnostics, RoutingEngine } from './engine.js'
 
 /**
  * The loop generator, end to end.
@@ -120,6 +121,12 @@ export type LoopRequest = {
   exclude?: LngLat[][]
   /** Places the walker explicitly asked every offered loop to visit, in order. */
   waypoints?: Array<{ lng: number; lat: number }>
+  /**
+   * Which generator to use, when the client cares. Absent means the server
+   * default. Resolved once, in loops/engine.ts, and never read here: this
+   * generator is the `remote` engine and does not need to know that.
+   */
+  routingEngine?: RoutingEngine
   overrides?: LoopOverrides
 }
 
@@ -169,7 +176,22 @@ export type LoopRoute = {
   }
 }
 
-export type LoopResponse = { routes: LoopRoute[]; warning?: string; expectationExceeded?: boolean; diagnostics?: Diagnostics }
+export type LoopResponse = {
+  routes: LoopRoute[]
+  warning?: string
+  expectationExceeded?: boolean
+  diagnostics?: Diagnostics
+  /**
+   * Which engine produced this answer, and what it cost.
+   *
+   * Deliberately beside the routes and not inside them: a route means the
+   * same thing whichever engine drew it, and the app's map, walk screen and
+   * instructions must not start branching on this. It is here so that a
+   * developer build can show a badge, and so a field test can tell an A from
+   * a B afterwards. See loops/engine.ts.
+   */
+  engine?: EngineDiagnostics
+}
 
 export type GenerateOptions = {
   route: LegRouter

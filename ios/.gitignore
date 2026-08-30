@@ -3,5 +3,8 @@
 DerivedData/
 build/
 build-dev/
+# Simulator builds made with a local LOOPER_API_BASE, for testing against a
+# route service running on this machine.
+build-sim/
 xcuserdata/
 *.xcworkspace/xcuserdata/

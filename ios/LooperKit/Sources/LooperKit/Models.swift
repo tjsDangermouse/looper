@@ -41,6 +41,77 @@ public enum Activity: String, Codable, Hashable, Sendable {
     case running
 }
 
+/// Which generator the route service should use.
+///
+/// A developer/testing choice rather than a walker's: both engines answer the
+/// same question and return the same kind of route, so nothing in the map, the
+/// walk screen or the spoken guidance branches on this. It exists so that the
+/// two can be compared on real ground.
+///
+/// - `remote`: the current hosted generator — candidate bearings, legs routed
+///   one at a time.
+/// - `direct`: the closed-walk search, which searches the walk itself over the
+///   routing graph and returns the exact edges it walked.
+///
+/// Ordered waypoints always use `remote`; the service decides that, and says so
+/// in the answer.
+public enum RoutingEngine: String, Codable, Hashable, Sendable, CaseIterable {
+    case remote
+    case direct
+
+    /// What to show a tester. Deliberately short enough for a badge.
+    public var badge: String {
+        switch self {
+        case .remote: return "REMOTE"
+        case .direct: return "DIRECT"
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .remote: return "Remote / Current"
+        case .direct: return "Direct Search / New"
+        }
+    }
+}
+
+/// What the service said about how an answer was produced. Developer-facing.
+public struct RoutingEngineReport: Codable, Equatable, Sendable {
+    public var routingEngine: RoutingEngine
+    public var requestedEngine: RoutingEngine?
+    public var engineReason: String?
+    public var generationMs: Double?
+    public var fallbackReason: String?
+    public var searchClosedWalks: Int?
+    public var searchStates: Int?
+    public var searchMs: Double?
+
+    public init(
+        routingEngine: RoutingEngine,
+        requestedEngine: RoutingEngine? = nil,
+        engineReason: String? = nil,
+        generationMs: Double? = nil,
+        fallbackReason: String? = nil,
+        searchClosedWalks: Int? = nil,
+        searchStates: Int? = nil,
+        searchMs: Double? = nil
+    ) {
+        self.routingEngine = routingEngine
+        self.requestedEngine = requestedEngine
+        self.engineReason = engineReason
+        self.generationMs = generationMs
+        self.fallbackReason = fallbackReason
+        self.searchClosedWalks = searchClosedWalks
+        self.searchStates = searchStates
+        self.searchMs = searchMs
+    }
+
+    /// True when Direct Search was asked for and something else answered.
+    public var didFallBack: Bool {
+        requestedEngine != nil && requestedEngine != routingEngine
+    }
+}
+
 /// A step's maneuver comes back as either GraphHopper/ORS's numeric code or
 /// the loop service's own named string — both routers describe the same turn
 /// differently, so this holds either.
@@ -113,6 +184,11 @@ public struct Route: Codable, Equatable {
     public var geometry: LineGeometry
     public var steps: [Step]
     public var reversed: Bool?
+    /// Which engine produced this route. Stamped by `requestLoops` from the
+    /// answer's own report, so a route carries its provenance into the walk
+    /// screen and into a saved favourite. Nothing about the route's meaning
+    /// depends on it.
+    public var routingEngine: RoutingEngine?
 
     public init(
         id: String,
@@ -122,7 +198,8 @@ public struct Route: Codable, Equatable {
         targetDifferencePercent: Double,
         geometry: LineGeometry,
         steps: [Step],
-        reversed: Bool? = nil
+        reversed: Bool? = nil,
+        routingEngine: RoutingEngine? = nil
     ) {
         self.id = id
         self.name = name
@@ -132,5 +209,6 @@ public struct Route: Codable, Equatable {
         self.geometry = geometry
         self.steps = steps
         self.reversed = reversed
+        self.routingEngine = routingEngine
     }
 }

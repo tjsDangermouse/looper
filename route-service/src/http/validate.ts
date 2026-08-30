@@ -1,3 +1,4 @@
+import { isRoutingEngine } from '../loops/engine.js'
 import type { LoopOverrides, LoopRequest } from '../loops/generate.js'
 import type { QualityThresholds } from '../loops/quality.js'
 
@@ -79,6 +80,10 @@ export function parseLoopRequest(body: unknown): LoopRequest {
   }
   const exclude = parseExcludedRoutes(input.exclude)
   const waypoints = parseWaypoints(input.waypoints)
+  // Which generator answers. Developer-facing rather than a walker's choice,
+  // so an unknown value is ignored and the server default applies: a client
+  // built against a newer engine list must not be told its request is invalid.
+  const routingEngine = isRoutingEngine(input.routingEngine) ? input.routingEngine : undefined
 
   return {
     start: { lng, lat },
@@ -91,6 +96,7 @@ export function parseLoopRequest(body: unknown): LoopRequest {
     variation: Math.trunc(rawVariation),
     ...(waypoints ? { waypoints } : {}),
     ...(exclude ? { exclude } : {}),
+    ...(routingEngine ? { routingEngine } : {}),
     overrides: parseOverrides(input.overrides),
   }
 }

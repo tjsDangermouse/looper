@@ -1,4 +1,6 @@
 import { DEFAULT_FLAGS, type AlgorithmFlags } from './loops/flags.js'
+import { DEFAULT_ROUTING_ENGINE, type RoutingEngine } from './loops/engine.js'
+import { DEFAULT_CANDIDATE_WALKS, DEFAULT_MIN_ROUTES } from './loops/direct.js'
 
 /** Every knob the service has, read once at start-up. */
 const number = (value: string | undefined, fallback: number) => {
@@ -88,6 +90,35 @@ export const config = {
     modelRegistry: flag(process.env.LOOPER_MODEL_REGISTRY, false),
     /** Answer an identical request from the one already asked, within a generation. */
     routeMemo: flag(process.env.LOOPER_ROUTE_MEMO, false),
+  },
+  /**
+   * The direct closed-walk search — Phase 9's engine, productionised.
+   *
+   * Separate from `flags` because it is not a change to how the Phase 3B
+   * generator behaves: it is a different generator. Nothing in `flags`
+   * reaches it and nothing it does reaches them.
+   *
+   * `LOOPER_DIRECT_CLOSED_WALK_SEARCH` sets the *default* engine for requests
+   * that do not name one. It does not gate the engine's existence: a client
+   * that explicitly asks for `direct` gets it either way, which is what makes
+   * the iOS developer toggle work against a server that still defaults to
+   * Phase 3B. See loops/engine.ts for the whole precedence.
+   */
+  direct: {
+    defaultEngine: (flag(process.env.LOOPER_DIRECT_CLOSED_WALK_SEARCH, false) ? 'direct' : DEFAULT_ROUTING_ENGINE) as RoutingEngine,
+    /** How many searched walks the facade hands back for the gate to judge. */
+    candidateWalks: number(process.env.LOOPER_DIRECT_CANDIDATE_WALKS, DEFAULT_CANDIDATE_WALKS),
+    /** Fewer offered walks than this and the whole request goes to Phase 3B. */
+    minRoutes: number(process.env.LOOPER_DIRECT_MIN_ROUTES, DEFAULT_MIN_ROUTES),
+    /** The search's own leash. Longer than a leg, shorter than the request. */
+    timeoutMs: number(process.env.LOOPER_DIRECT_TIMEOUT_MS, 10000),
+    /**
+     * Whether the search knows about turns: a ranking penalty for a tight
+     * junction return during the search, and the gate's own exact u-turn count
+     * applied to a completed walk before it is handed on. A knob only so that
+     * the measurement in the Phase 10 report can be reproduced — see §7.
+     */
+    turnAware: flag(process.env.LOOPER_DIRECT_TURN_AWARE, true),
   },
   cacheMaxEntries: number(process.env.ROUTE_CACHE_MAX_ENTRIES, 500),
   cacheTtlMs: number(process.env.ROUTE_CACHE_TTL_MS, 10 * 60 * 1000),

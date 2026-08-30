@@ -69,6 +69,15 @@ services:
       LOOPER_MODEL_REGISTRY: ${LOOPER_MODEL_REGISTRY:-}
       LOOPER_ROUTE_MEMO: ${LOOPER_ROUTE_MEMO:-}
       LOOPER_PERIMETER_RETENTION: ${LOOPER_PERIMETER_RETENTION:-}
+      # The direct closed-walk engine (Phase 10). This sets the *default*
+      # engine for requests that do not name one; it does not gate the engine,
+      # because a client that explicitly asks for `direct` gets it either way.
+      # Ships off — see src/loops/engine.ts for the whole precedence.
+      LOOPER_DIRECT_CLOSED_WALK_SEARCH: ${LOOPER_DIRECT_CLOSED_WALK_SEARCH:-}
+      LOOPER_DIRECT_CANDIDATE_WALKS: ${LOOPER_DIRECT_CANDIDATE_WALKS:-}
+      LOOPER_DIRECT_MIN_ROUTES: ${LOOPER_DIRECT_MIN_ROUTES:-}
+      LOOPER_DIRECT_TIMEOUT_MS: ${LOOPER_DIRECT_TIMEOUT_MS:-}
+      LOOPER_DIRECT_TURN_AWARE: ${LOOPER_DIRECT_TURN_AWARE:-}
     ports:
       - "${ROUTE_SERVICE_PORT:-8988}:8080"
     depends_on:

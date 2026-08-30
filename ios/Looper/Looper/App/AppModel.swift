@@ -34,6 +34,15 @@ final class AppModel: ObservableObject {
     @Published var runningPaceUnit = LooperKit.Unit(rawValue: UserDefaults.standard.string(forKey: "running-pace-unit") ?? "km") ?? .km {
         didSet { UserDefaults.standard.set(runningPaceUnit.rawValue, forKey: "running-pace-unit") }
     }
+    /// Which generator to ask for. A developer/testing setting: it changes
+    /// which engine draws the walk, not what a walk is. Persisted like every
+    /// other preference in here, and defaulting to the current engine until
+    /// real-world testing says otherwise.
+    @Published var routingEngine = RoutingEngine(rawValue: UserDefaults.standard.string(forKey: "routing-engine") ?? "") ?? .remote {
+        didSet { UserDefaults.standard.set(routingEngine.rawValue, forKey: "routing-engine") }
+    }
+    /// What the service said about the answer currently on screen, if it said.
+    @Published private(set) var engineReport: RoutingEngineReport?
     @Published var routes: [Route] = []
     @Published var selected: Route?
     @Published var showsRouteOverlay = true
@@ -72,6 +81,9 @@ final class AppModel: ObservableObject {
     /// Kept on the model so Settings can show and export the same on-device
     /// event stream used by the navigation and speech code.
     let navigationLogger = NavigationLogger.shared
+    let routingTrials = RoutingTrialLog.shared
+    /// The trial row the routes on screen belong to, so a rating can find it.
+    @Published private(set) var currentTrialID: String?
     /// The Apple Watch, if there is one. Always present as an object; it
     /// reports `.unavailable` when there is no Watch to talk to, and every
     /// path through this model works with it in that state.
@@ -264,6 +276,11 @@ final class AppModel: ObservableObject {
     var activePaceUnit: LooperKit.Unit { activity == .walking ? walkingPaceUnit : runningPaceUnit }
     var activePaceMinutesPerKm: Double { activity == .walking ? walkingPaceMinutesPerKm : runningPaceMinutesPerKm }
 
+    /// Which of the offered walks the tester picked, for the trial record.
+    func recordRouteChoice(_ index: Int) {
+        routingTrials.recordSelection(trialID: currentTrialID, index: index)
+    }
+
     var turn: TurnHit? { selected.flatMap { nextTurn($0, progress) } }
     var remaining: Double { selected.map { max(0, $0.distanceMeters - progress) } ?? 0 }
     var waypointsNeedSearch: Bool { waypoints != routeWaypoints }
@@ -389,6 +406,8 @@ final class AppModel: ObservableObject {
         startFindingStageTimer()
         let requestedWaypoints = waypoints
 
+        let engineForRequest = routingEngine
+        let askedAt = Date()
         Task {
             do {
                 let result = try await requestLoops(
@@ -403,6 +422,7 @@ final class AppModel: ObservableObject {
                     variation: variation,
                     waypoints: requestedWaypoints,
                     excludeRoutes: sameSpot ? routes : [],
+                    routingEngine: engineForRequest,
                     apiBase: apiBase,
                     client: httpClient
                 )
@@ -419,6 +439,20 @@ final class AppModel: ObservableObject {
                 }
                 routes = result.routes
                 selected = result.routes.first
+                engineReport = result.engine
+                // One row per set of walks offered, written the moment they
+                // arrive. Local only — see RoutingTrialLog.
+                currentTrialID = routingTrials.record(
+                    engine: result.engine,
+                    selectedEngine: engineForRequest,
+                    requestedMetres: distanceKm * 1000,
+                    mode: mode,
+                    activity: activity,
+                    start: start,
+                    hadWaypoints: !requestedWaypoints.isEmpty,
+                    routes: result.routes,
+                    generationMs: Date().timeIntervalSince(askedAt) * 1000
+                )?.id
                 routeWaypoints = requestedWaypoints
                 showsRouteOverlay = true
                 screen = .choices

@@ -44,6 +44,7 @@
 		B2DED604EB22D54E8F1F559D /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BE92C8BC17D92224E09728C /* SessionStore.swift */; };
 		B50B2E274849A81CFCB00B3E /* LooperWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D620E133A1F320C92754B2 /* LooperWatchApp.swift */; };
 		BC7589E1419BCAB24E8651D3 /* AppVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54A22A4CA8E73EB5ADC2C935 /* AppVersion.swift */; };
+		BF340E2FD40182478D1669D0 /* RoutingTrialLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB0E1D49B21A20B5C908BBFB /* RoutingTrialLog.swift */; };
 		C08051705770F95DD9E3F92B /* Icons.swift in Sources */ = {isa = PBXBuildFile; fileRef = D96BFD021638C638473CB574 /* Icons.swift */; };
 		C411CA3A8A7B47B01F8B7584 /* LooperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A64D791F4AECBFEFC9B0213 /* LooperApp.swift */; };
 		C9A3449A63B42278C81FCA9B /* WatchLinkSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35198FC815755AEB4575E048 /* WatchLinkSession.swift */; };
@@ -119,6 +120,7 @@
 		B3AE51BA2538D9799ADF9AEF /* SheetHeightKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetHeightKey.swift; sourceTree = "<group>"; };
 		B723E2A8859EC2D70D5BF786 /* WatchModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchModel.swift; sourceTree = "<group>"; };
 		CA5BC29876B8514C886B3BB7 /* RouteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteStore.swift; sourceTree = "<group>"; };
+		CB0E1D49B21A20B5C908BBFB /* RoutingTrialLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutingTrialLog.swift; sourceTree = "<group>"; };
 		CD7E139CE785165EC60CD60C /* WatchHapticPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchHapticPlayer.swift; sourceTree = "<group>"; };
 		D11D25EB1EDAB1EFF5EC303B /* ResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultView.swift; sourceTree = "<group>"; };
 		D2F3A850A72119C86556B656 /* StartLoopView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartLoopView.swift; sourceTree = "<group>"; };
@@ -208,6 +210,7 @@
 				1D2B9EBE1558A9702C75C760 /* NavigationLogger.swift */,
 				CA5BC29876B8514C886B3BB7 /* RouteStore.swift */,
 				892C896BBE805E15C40FF985 /* RouteTileCache.swift */,
+				CB0E1D49B21A20B5C908BBFB /* RoutingTrialLog.swift */,
 				6BE92C8BC17D92224E09728C /* SessionStore.swift */,
 				B3AE51BA2538D9799ADF9AEF /* SheetHeightKey.swift */,
 				0260C72DA86CF4538286A4A7 /* SpeechManager.swift */,
@@ -421,6 +424,7 @@
 				2563DCC062E820C93E6AC2E7 /* PlannerView.swift in Sources */,
 				B176A7380FD731F6AC1BF0E0 /* RouteStore.swift in Sources */,
 				DB4CC7575D4A1E08A04356AE /* RouteTileCache.swift in Sources */,
+				BF340E2FD40182478D1669D0 /* RoutingTrialLog.swift in Sources */,
 				B2DED604EB22D54E8F1F559D /* SessionStore.swift in Sources */,
 				2C208F6420CC464DCF526295 /* SettingsView.swift in Sources */,
 				10F4FF7E51B3E465A5B6321B /* SheetHeightKey.swift in Sources */,

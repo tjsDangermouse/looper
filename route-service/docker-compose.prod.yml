@@ -97,6 +97,13 @@ services:
       LOOPER_REQUEST_CACHE: ${LOOPER_REQUEST_CACHE:-}
       LOOPER_MODEL_REGISTRY: ${LOOPER_MODEL_REGISTRY:-}
       LOOPER_ROUTE_MEMO: ${LOOPER_ROUTE_MEMO:-}
+      # Phase 10's direct closed-walk engine. Ships off: this only sets the
+      # default for requests that do not name an engine, and the iOS developer
+      # toggle asks for one explicitly. See src/loops/engine.ts.
+      LOOPER_DIRECT_CLOSED_WALK_SEARCH: ${LOOPER_DIRECT_CLOSED_WALK_SEARCH:-}
+      LOOPER_DIRECT_CANDIDATE_WALKS: ${LOOPER_DIRECT_CANDIDATE_WALKS:-}
+      LOOPER_DIRECT_MIN_ROUTES: ${LOOPER_DIRECT_MIN_ROUTES:-}
+      LOOPER_DIRECT_TIMEOUT_MS: ${LOOPER_DIRECT_TIMEOUT_MS:-}
     ports:
       # Nginx is the public HTTPS entry point; keep the service local to this host.
       - "127.0.0.1:${ROUTE_SERVICE_PORT:-8988}:8080"

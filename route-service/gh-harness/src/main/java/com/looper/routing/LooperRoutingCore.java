@@ -293,6 +293,25 @@ public final class LooperRoutingCore implements AutoCloseable {
      * physical edges rather than on the snap's artefacts.
      */
     public Subgraph exploreSubgraph(double lat, double lon, double limitMetres, boolean withGeometry) {
+        return exploreForWalk(lat, lon, limitMetres, withGeometry).subgraph();
+    }
+
+    /**
+     * What the exported subgraph leaves behind: the very {@link QueryGraph} the
+     * exploration ran on, and the weighting that filtered it.
+     *
+     * Phase 9 exported a subgraph to TypeScript and searched there, so it only
+     * ever needed the numbers. Phase 10 searches inside this process and then
+     * has to turn the walk it chose back into a GraphHopper path — geometry,
+     * duration and instructions — which means holding on to the graph the
+     * virtual start node lives in. Rebuilding a second QueryGraph from a second
+     * snap would be a different graph with different virtual edge ids, and the
+     * searched walk would no longer be expressible in it.
+     */
+    public record WalkContext(Subgraph subgraph, QueryGraph graph, Weighting weighting,
+                              int startNode, int baseEdges, int snappedEdge) {}
+
+    public WalkContext exploreForWalk(double lat, double lon, double limitMetres, boolean withGeometry) {
         long began = System.nanoTime();
         Runtime runtime = Runtime.getRuntime();
         long heapBefore = runtime.totalMemory() - runtime.freeMemory();
@@ -308,7 +327,8 @@ public final class LooperRoutingCore implements AutoCloseable {
                     snapPreventionsDefault);
         Snap snap = hopper.getLocationIndex().findClosest(lat, lon, filter);
         if (!snap.isValid())
-            return new Subgraph(List.of(), List.of(), 0, 0, 0, Double.NaN, Double.NaN, -1, limitMetres);
+            return new WalkContext(new Subgraph(List.of(), List.of(), 0, 0, 0, Double.NaN, Double.NaN, -1, limitMetres),
+                    null, weighting, -1, base.getEdges(), -1);
         QueryGraph graph = QueryGraph.create(base, snap);
         GHPoint snapped = snap.getSnappedPoint();
         int snappedEdge = snap.getClosestEdge().getEdge();
@@ -381,9 +401,10 @@ public final class LooperRoutingCore implements AutoCloseable {
             }
         }
         long heapAfter = runtime.totalMemory() - runtime.freeMemory();
-        return new Subgraph(reached, subEdges, reached.size(),
+        Subgraph subgraph = new Subgraph(reached, subEdges, reached.size(),
                 (System.nanoTime() - began) / 1e6, heapAfter - heapBefore,
                 snapped.lat, snapped.lon, start, limitMetres);
+        return new WalkContext(subgraph, graph, weighting, start, baseEdges, snappedEdge);
     }
 
     /** The narrow route call: ordered via points in, one path out. */

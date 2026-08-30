@@ -6,6 +6,7 @@ import com.graphhopper.GHRequest;
 import com.graphhopper.GHResponse;
 import com.graphhopper.jackson.Jackson;
 import com.graphhopper.jackson.ResponsePathSerializer;
+import com.looper.routing.direct.DirectWalks;
 import com.graphhopper.util.JsonFeature;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -132,6 +133,44 @@ public final class Serve {
             }
         });
 
+        // The direct closed-walk engine. Not a routing endpoint: nothing here
+        // asks GraphHopper for a path between two points. It searches the walk
+        // over the request-local graph and hands back the walks it found,
+        // already materialised as ordinary GraphHopper paths so that the route
+        // service parses them with exactly the code it parses a leg with.
+        //
+        // What is *not* decided here is which walks are offered. Looper's own
+        // acceptance gate runs in the route service on what comes back, with no
+        // threshold relaxed, and it has the last word.
+        server.createContext("/looper/closed-walk", exchange -> {
+            if (!"POST".equals(exchange.getRequestMethod())) { send(exchange, 405, "{}"); return; }
+            try (InputStream in = exchange.getRequestBody()) {
+                var body = mapper.readTree(in);
+                double lat = body.path("lat").asDouble(Double.NaN);
+                double lon = body.path("lng").asDouble(body.path("lon").asDouble(Double.NaN));
+                double target = body.path("targetMetres").asDouble(0);
+                if (!Double.isFinite(lat) || !Double.isFinite(lon) || target <= 0) {
+                    send(exchange, 400, "{\"message\":\"lat, lng and targetMetres are required\"}");
+                    return;
+                }
+                DirectWalks.Request request = new DirectWalks.Request(lat, lon, target,
+                        body.path("wanted").asInt(24),
+                        body.path("beam").asInt(com.looper.routing.direct.WalkSearch.BEAM),
+                        body.path("band").asDouble(com.looper.routing.direct.WalkSearch.BAND_METRES),
+                        body.path("perNode").asInt(com.looper.routing.direct.WalkSearch.PER_NODE),
+                        body.path("diversityQuota").asBoolean(true),
+                        body.path("turnAware").asBoolean(true),
+                        body.path("budget").asLong(4_000_000L),
+                        body.path("locale").asText("en"));
+                DirectWalks.Answer answer = DirectWalks.search(core, request);
+                send(exchange, 200, mapper.writeValueAsString(closedWalkJson(mapper, answer)));
+            } catch (Exception e) {
+                ObjectNode error = mapper.createObjectNode();
+                error.put("message", e.getClass().getSimpleName() + ": " + e.getMessage());
+                send(exchange, 500, mapper.writeValueAsString(error));
+            }
+        });
+
         server.createContext("/generation", exchange -> {
             try {
                 String path = exchange.getRequestURI().getPath();
@@ -163,7 +202,7 @@ public final class Serve {
             info.put("version", com.graphhopper.util.Constants.VERSION);
             // Advertised so a caller can tell a facade that understands handles
             // from the shipped container, which does not.
-            info.putArray("capabilities").add("looper_model_registry");
+            info.putArray("capabilities").add("looper_model_registry").add("looper_closed_walk");
             info.putArray("profiles").addObject().put("name", "foot");
             var bbox = core.raw().getBaseGraph().getBounds();
             info.putArray("bbox").add(bbox.minLon).add(bbox.minLat).add(bbox.maxLon).add(bbox.maxLat);
@@ -172,6 +211,47 @@ public final class Serve {
 
         server.start();
         System.out.println("LooperRoutingCore listening on :" + port);
+    }
+
+    /**
+     * One answer from the direct engine, on the wire.
+     *
+     * Each walk is serialised by GraphHopper's own {@link ResponsePathSerializer},
+     * so its {@code paths[0]} is byte-for-byte the shape {@code parseLeg} in
+     * the route service already reads — the same points, the same instructions,
+     * the same {@code edge_id} path detail. Only the {@code looper} object
+     * beside it is new, and it carries what the search knows and a routed leg
+     * could not: the searched length, the exact compactness at closure, the
+     * bounding-box ratio, the turn count and the compass octant.
+     */
+    private static ObjectNode closedWalkJson(ObjectMapper mapper, DirectWalks.Answer answer) {
+        ObjectNode json = mapper.createObjectNode();
+        if (answer.failure() != null) json.put("failure", answer.failure());
+        json.put("closedWalks", answer.closedWalks());
+        json.put("rejectedShape", answer.rejectedShape());
+        json.put("rejectedTurns", answer.rejectedTurns());
+        json.put("limitMetres", answer.limitMetres());
+        if (Double.isFinite(answer.snappedLat())) {
+            json.putArray("snapped").add(answer.snappedLon()).add(answer.snappedLat());
+        }
+        if (answer.search() != null) json.set("search", mapper.valueToTree(answer.search()));
+        if (answer.graph() != null) json.set("graph", mapper.valueToTree(answer.graph()));
+        json.set("timing", mapper.valueToTree(answer.timing()));
+        var walks = json.putArray("walks");
+        for (DirectWalks.Candidate candidate : answer.candidates()) {
+            ObjectNode walk = (ObjectNode) ResponsePathSerializer.jsonObject(DirectWalks.asResponse(candidate.path()),
+                    new ResponsePathSerializer.Info(List.of("GraphHopper", "OpenStreetMap contributors"), 0, null),
+                    true, true, false, false, 1e5);
+            ObjectNode meta = walk.putObject("looper");
+            meta.put("searchedMetres", candidate.searchedMetres());
+            meta.put("compactness", candidate.compactness());
+            meta.put("bboxRatio", Double.isFinite(candidate.bboxRatio()) ? candidate.bboxRatio() : -1);
+            meta.put("uTurns", candidate.uTurns());
+            meta.put("family", candidate.family());
+            meta.put("rank", candidate.rank());
+            walks.add(walk);
+        }
+        return json;
     }
 
     /** A batch of ordinary route bodies. Deliberately the only field. */

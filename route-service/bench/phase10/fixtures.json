@@ -1,0 +1,6 @@
+[
+  { "name": "douglas-5km", "lat": 54.1506, "lon": -4.4816, "targetMetres": 5000, "explorationShare": 0.56 },
+  { "name": "douglas-3km", "lat": 54.1506, "lon": -4.4816, "targetMetres": 3000, "explorationShare": 0.56 },
+  { "name": "peel-5km", "lat": 54.2247, "lon": -4.6947, "targetMetres": 5000, "explorationShare": 0.56 },
+  { "name": "onchan-5km", "lat": 54.1745, "lon": -4.4530, "targetMetres": 5000, "explorationShare": 0.56 }
+]

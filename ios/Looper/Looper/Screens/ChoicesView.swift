@@ -56,6 +56,8 @@ struct ChoicesView: View {
                         Text(model.error).font(.footnote).foregroundStyle(.orange)
                     }
 
+                    EngineBadge(report: model.engineReport)
+
                     WaypointHint(model: model)
 
                     ForEach(Array(model.shownRoutes.enumerated()), id: \.element.id) { index, route in
@@ -63,6 +65,7 @@ struct ChoicesView: View {
                             Button {
                                 model.selected = route
                                 model.showsRouteOverlay = true
+                                model.recordRouteChoice(index)
                             } label: {
                             HStack(spacing: 10) {
                                 Circle()
@@ -153,5 +156,50 @@ struct ChoicesView: View {
             if let selected = model.selected { model.prepareWatch(for: selected) }
         }
         .onDisappear { model.clearWatch() }
+    }
+}
+
+/// Which engine drew these walks, while both are being tested on real ground.
+///
+/// Deliberately small and grey rather than a headline: it is a developer
+/// affordance, and it exists so that a tester on a hillside never has to guess
+/// what they are comparing. It disappears entirely from a build with
+/// `RoutingTrialLog.includedInThisBuild` off, and it says nothing a walker
+/// would need in order to use the app.
+private struct EngineBadge: View {
+    let report: RoutingEngineReport?
+
+    var body: some View {
+        if RoutingTrialLog.includedInThisBuild, let report {
+            HStack(spacing: 6) {
+                Text(report.routingEngine.badge)
+                    .font(.caption2.weight(.bold))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(report.routingEngine == .direct ? Color.looperAccent.opacity(0.25) : Color.white.opacity(0.10))
+                    )
+                if report.didFallBack {
+                    Text(fallbackNote(report))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                if let ms = report.generationMs {
+                    Text("\(Int(ms)) ms").font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .accessibilityLabel("Routed by \(report.routingEngine.title)")
+        }
+    }
+
+    /// Falling back is an ordinary outcome, not an error, so it reads as one.
+    private func fallbackNote(_ report: RoutingEngineReport) -> String {
+        switch report.engineReason {
+        case "waypoint-fallback": return "waypoints use the current engine"
+        case "engine-unsupported": return "direct search unavailable here"
+        default: return report.fallbackReason.map { "direct search gave way: \($0)" } ?? "fell back"
+        }
     }
 }

@@ -29,17 +29,34 @@ struct SettingsView: View {
                     Text("Save a route from your choices to keep it here for later.")
                 }
 
-                if NavigationLogger.includedInThisBuild {
+                if NavigationLogger.includedInThisBuild || RoutingTrialLog.includedInThisBuild {
                     Section {
-                        NavigationLink {
-                            NavigationDiagnosticsView(logger: model.navigationLogger)
-                        } label: {
-                            Label("Navigation diagnostics", systemImage: "waveform.path.ecg")
+                        if NavigationLogger.includedInThisBuild {
+                            NavigationLink {
+                                NavigationDiagnosticsView(logger: model.navigationLogger)
+                            } label: {
+                                Label("Navigation diagnostics", systemImage: "waveform.path.ecg")
+                            }
+                        }
+                        if RoutingTrialLog.includedInThisBuild {
+                            Picker(selection: $model.routingEngine) {
+                                ForEach(RoutingEngine.allCases, id: \.self) { engine in
+                                    Text(engine.title).tag(engine)
+                                }
+                            } label: {
+                                Label("Routing engine", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                            }
+                            .pickerStyle(.inline)
+                            NavigationLink {
+                                RoutingTrialsView(log: model.routingTrials)
+                            } label: {
+                                Label("Routing engine trials", systemImage: "list.clipboard")
+                            }
                         }
                     } header: {
                         Text("Temporary testing")
                     } footer: {
-                        Text("Export a local record of GPS progress and spoken guidance to help investigate navigation issues.")
+                        Text("Direct Search is the new engine that searches the walk itself. Loops with waypoints always use the current engine, and a route screen says which engine actually answered.")
                     }
                 }
 
@@ -146,6 +163,148 @@ private struct NavigationDiagnosticsView: View {
 
     private func refreshExport() {
         exportURL = logger.makeExport()
+    }
+}
+
+/// The routing-engine trial list, for field testing. Same shape as the
+/// navigation diagnostics above it: everything is on this device until the
+/// tester shares it, and the whole section disappears with
+/// `RoutingTrialLog.includedInThisBuild`.
+private struct RoutingTrialsView: View {
+    @ObservedObject var log: RoutingTrialLog
+    @State private var exportURL: URL?
+
+    var body: some View {
+        List {
+            Section {
+                if let exportURL {
+                    ShareLink(item: exportURL) {
+                        Label("Share results", systemImage: "square.and.arrow.up")
+                    }
+                }
+                Text(summary)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } footer: {
+                Text("One row per set of loops offered: which engine answered, how long it took, what it offered, and how you rated it.")
+            }
+
+            ForEach(log.trials.reversed()) { trial in
+                NavigationLink {
+                    RoutingTrialRatingView(log: log, trial: trial)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text(trial.routingEngine.uppercased())
+                                .font(.caption.weight(.bold))
+                            if let fallback = trial.fallbackReason {
+                                Text("fallback: \(fallback)").font(.caption2).foregroundStyle(.orange)
+                            }
+                            Spacer()
+                            if let verdict = trial.verdict {
+                                Text(verdict.title).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        Text("\(trial.timestamp.formatted(date: .abbreviated, time: .shortened)) · \(trial.offeredMetres.count) loop\(trial.offeredMetres.count == 1 ? "" : "s") · \(Int(trial.generationMs)) ms")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            if !log.trials.isEmpty {
+                Section {
+                    Button("Clear trial results", role: .destructive) {
+                        log.clear()
+                        refreshExport()
+                    }
+                }
+            }
+        }
+        .navigationTitle("Routing engine trials")
+        .overlay {
+            if log.trials.isEmpty {
+                ContentUnavailableView("No trials yet", systemImage: "list.clipboard",
+                                       description: Text("Find some loops and they will be recorded here."))
+            }
+        }
+        .onAppear(perform: refreshExport)
+        .onChange(of: log.trials.count) { _, _ in refreshExport() }
+    }
+
+    private var summary: String {
+        let direct = log.trials.filter { $0.routingEngine == "direct" }.count
+        let remote = log.trials.count - direct
+        return "\(log.trials.count) recorded · \(direct) direct · \(remote) remote"
+    }
+
+    private func refreshExport() {
+        exportURL = log.makeExport()
+    }
+}
+
+/// A verdict and, optionally, what was wrong with it. Deliberately three taps
+/// at most: a rating nobody fills in on a wet hillside measures nothing.
+private struct RoutingTrialRatingView: View {
+    @ObservedObject var log: RoutingTrialLog
+    let trial: RoutingTrialLog.Trial
+    @State private var verdict: RoutingTrialLog.Verdict?
+    @State private var issues: Set<RoutingTrialLog.Issue> = []
+    @State private var note = ""
+
+    var body: some View {
+        List {
+            Section("Route test") {
+                Picker("Verdict", selection: $verdict) {
+                    Text("Not rated").tag(RoutingTrialLog.Verdict?.none)
+                    ForEach(RoutingTrialLog.Verdict.allCases) { value in
+                        Text(value.title).tag(RoutingTrialLog.Verdict?.some(value))
+                    }
+                }
+                .pickerStyle(.inline)
+            }
+
+            Section("What was wrong") {
+                ForEach(RoutingTrialLog.Issue.allCases) { issue in
+                    Button {
+                        if issues.contains(issue) { issues.remove(issue) } else { issues.insert(issue) }
+                    } label: {
+                        HStack {
+                            Text(issue.title)
+                            Spacer()
+                            if issues.contains(issue) { Image(systemName: "checkmark") }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Section("Note") {
+                TextField("Anything else", text: $note, axis: .vertical)
+            }
+
+            Section("What was generated") {
+                LabeledContent("Engine", value: trial.routingEngine)
+                if let requested = trial.requestedEngine, requested != trial.routingEngine {
+                    LabeledContent("Requested", value: requested)
+                }
+                if let reason = trial.fallbackReason { LabeledContent("Fallback", value: reason) }
+                LabeledContent("Asked for", value: "\(Int(trial.requestedMetres)) m")
+                LabeledContent("Offered", value: trial.offeredMetres.map { "\(Int($0))" }.joined(separator: ", "))
+                LabeledContent("Round trip", value: "\(Int(trial.generationMs)) ms")
+                if let searchMs = trial.searchMs { LabeledContent("Search", value: String(format: "%.0f ms", searchMs)) }
+                if let closed = trial.searchClosedWalks { LabeledContent("Closed walks", value: String(closed)) }
+            }
+        }
+        .navigationTitle("Rate this test")
+        .onAppear {
+            verdict = trial.verdict
+            issues = Set(trial.issues ?? [])
+            note = trial.note ?? ""
+        }
+        .onDisappear {
+            log.rate(trialID: trial.id, verdict: verdict, issues: Array(issues), note: note)
+        }
     }
 }
 
