@@ -3,6 +3,7 @@
 DerivedData/
 build/
 build-dev/
+build-rel/
 # Simulator builds made with a local LOOPER_API_BASE, for testing against a
 # route service running on this machine.
 build-sim/
