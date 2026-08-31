@@ -39,24 +39,42 @@ struct SettingsView: View {
                             }
                         }
                         if RoutingTrialLog.includedInThisBuild {
-                            Picker(selection: $model.routingEngine) {
-                                ForEach(RoutingEngine.allCases, id: \.self) { engine in
+                            Picker(selection: $model.routingMode) {
+                                ForEach(RoutingEngine.selectableOnDevice, id: \.self) { engine in
                                     Text(engine.title).tag(engine)
                                 }
                             } label: {
                                 Label("Routing engine", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
                             }
                             .pickerStyle(.inline)
+                            // The service's own second generator, which is a
+                            // choice *within* Remote rather than an
+                            // alternative to it. Hidden when On-device is
+                            // selected, because nothing is being asked of the
+                            // service at all then.
+                            if model.routingMode == .remote {
+                                Picker(selection: $model.routingEngine) {
+                                    Text("Current").tag(RoutingEngine.remote)
+                                    Text("Direct search").tag(RoutingEngine.direct)
+                                } label: {
+                                    Label("Remote generator", systemImage: "server.rack")
+                                }
+                            }
                             NavigationLink {
                                 RoutingTrialsView(log: model.routingTrials)
                             } label: {
                                 Label("Routing engine trials", systemImage: "list.clipboard")
                             }
+                            NavigationLink {
+                                RoutingDataView(model: model)
+                            } label: {
+                                Label("Downloaded walking paths", systemImage: "arrow.down.circle")
+                            }
                         }
                     } header: {
                         Text("Temporary testing")
                     } footer: {
-                        Text("Direct Search is the new engine that searches the walk itself. Loops with waypoints always use the current engine, and a route screen says which engine actually answered.")
+                        Text("On-device finds the walk on this phone, using walking paths it downloads for the area and keeps. Loops with waypoints need Remote. A route screen says which engine actually answered.")
                     }
                 }
 
@@ -448,5 +466,62 @@ private struct AppleHealthRow: View {
                 ? "Completed loops are saved to Apple Health"
                 : "Save completed walks and runs to Apple Health"
         }
+    }
+}
+
+
+/// What routing data the phone is holding, and what the last local search
+/// cost. The whole point of the architecture is that these are small numbers,
+/// so they are worth being able to read on the device rather than inferring
+/// from a log afterwards.
+private struct RoutingDataView: View {
+    @ObservedObject var model: AppModel
+    @State private var summary: AppModel.RoutingDataSummary?
+    @State private var clearing = false
+
+    var body: some View {
+        List {
+            Section {
+                if let summary {
+                    LabeledContent("Areas stored", value: "\(summary.chunkCount)")
+                    LabeledContent("Kept for offline", value: "\(summary.pinnedCount)")
+                    LabeledContent("On this phone", value: summary.formattedBytes)
+                } else {
+                    Text("Reading…").foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Walking paths")
+            } footer: {
+                Text("Downloaded automatically for the areas you ask for loops in, and reused afterwards. Clearing them costs nothing but a download the next time you walk there.")
+            }
+
+            if let diagnostics = model.localDiagnostics {
+                Section("Last on-device search") {
+                    LabeledContent("Graph", value: "\(diagnostics.graphNodes) nodes, \(diagnostics.graphEdges) edges")
+                    LabeledContent("Explored", value: "\(diagnostics.exploration.nodesReached) nodes, \(diagnostics.exploration.edgesReached) edges")
+                    LabeledContent("Snapped", value: String(format: "%.0f m away", diagnostics.exploration.snapDistanceMetres))
+                    LabeledContent("Reduced to", value: "\(diagnostics.searchGraph.superEdges) super-edges")
+                    LabeledContent("Closed walks", value: "\(diagnostics.closedWalks)")
+                    LabeledContent("Offered", value: "\(diagnostics.offered)")
+                    LabeledContent("Search", value: String(format: "%.0f ms", diagnostics.search.searchMs))
+                    LabeledContent("Total", value: String(format: "%.0f ms", diagnostics.totalMs))
+                    if let failure = diagnostics.failure { LabeledContent("Stopped on", value: failure) }
+                }
+            }
+
+            Section {
+                Button("Clear downloaded paths", role: .destructive) {
+                    clearing = true
+                    Task {
+                        await model.clearRoutingData()
+                        summary = await model.routingDataSummary()
+                        clearing = false
+                    }
+                }
+                .disabled(clearing)
+            }
+        }
+        .navigationTitle("Downloaded walking paths")
+        .task { summary = await model.routingDataSummary() }
     }
 }

@@ -38,11 +38,35 @@ final class AppModel: ObservableObject {
     /// which engine draws the walk, not what a walk is. Persisted like every
     /// other preference in here, and defaulting to the current engine until
     /// real-world testing says otherwise.
-    @Published var routingEngine = RoutingEngine(rawValue: UserDefaults.standard.string(forKey: "routing-engine") ?? "") ?? .remote {
+    /// Which engine finds the walk: the existing hosted service, or the new
+    /// on-device one. A tester's choice, not a walker's — both answer the same
+    /// question and return the same kind of route — and it exists so the two
+    /// can be compared on real ground before one of them is chosen.
+    @Published var routingMode = RoutingEngine(rawValue: UserDefaults.standard.string(forKey: "routing-mode") ?? "") ?? .remote {
+        didSet {
+            UserDefaults.standard.set(routingMode.rawValue, forKey: "routing-mode")
+            dataProgress = nil
+        }
+    }
+    /// Which of the *service's own* generators to ask for, when Remote is the
+    /// engine. Unrelated to the choice above and never sent when it isn't.
+    ///
+    /// `onDevice` is coerced away on read: it is not a generator the service
+    /// has, and a stored value from an earlier build — or from a tester who
+    /// has been switching engines — must not leave this picker with no valid
+    /// selection.
+    @Published var routingEngine = (RoutingEngine(rawValue: UserDefaults.standard.string(forKey: "routing-engine") ?? "") ?? .remote).serverValue ?? .remote {
         didSet { UserDefaults.standard.set(routingEngine.rawValue, forKey: "routing-engine") }
     }
     /// What the service said about the answer currently on screen, if it said.
     @Published private(set) var engineReport: RoutingEngineReport?
+    /// What the local engine last reported about how it found the walk.
+    /// Developer-facing, like `engineReport`, and nil whenever Remote answered.
+    @Published private(set) var localDiagnostics: LocalLoopRouter.Diagnostics?
+    /// Set while On-device routing is fetching walking paths for an area it
+    /// has not seen before. Nil at every other moment, including throughout a
+    /// Remote request, which never downloads anything.
+    @Published private(set) var dataProgress: LoopDataProgress?
     @Published var routes: [Route] = []
     @Published var selected: Route?
     @Published var showsRouteOverlay = true
@@ -91,6 +115,15 @@ final class AppModel: ObservableObject {
 
     private let apiBase: String
     private let httpClient: LoopsHTTPClient
+    /// Made on first use, so a build that never selects On-device never opens
+    /// the routing-data store. The store is held alongside the engine because
+    /// Settings reports on it and can clear it — and because the future
+    /// Offline Areas feature will fill this same store, not another one.
+    private lazy var routingChunkStore = RoutingChunkStore.applicationDefault()
+    private lazy var onDeviceEngine = OnDeviceLoopRoutingEngine(
+        store: routingChunkStore,
+        source: OverpassRoutingDataSource()
+    )
     private let locationManager: LocationManager
     private let speechManager: SpeechManager
     private let routeStore: RouteStore
@@ -133,7 +166,7 @@ final class AppModel: ObservableObject {
         self.apiBase = apiBase
         self.locationManager = locationManager
         self.speechManager = speechManager ?? SpeechManager()
-        self.httpClient = httpClient
+        self.httpClient = AuditingLoopsHTTPClient(wrapping: httpClient)
         self.routeStore = routeStore
         self.favoritesStore = favoritesStore
         self.routeTileCache = routeTileCache
@@ -406,26 +439,39 @@ final class AppModel: ObservableObject {
         startFindingStageTimer()
         let requestedWaypoints = waypoints
 
-        let engineForRequest = routingEngine
+        let modeForRequest = routingMode
+        let engineForRequest = modeForRequest == .onDevice ? RoutingEngine.onDevice : routingEngine
         let askedAt = Date()
+        // The two engines are chosen between here and nowhere else. Neither
+        // knows the other exists, and On-device never falls back to Remote:
+        // a comparison in which the engine can silently change is not a
+        // comparison, so a local request that cannot be served says so.
+        let engine: LoopRoutingEngine = modeForRequest == .onDevice
+            ? onDeviceEngine
+            : RemoteLoopRoutingEngine(apiBase: apiBase, client: httpClient, serviceEngine: routingEngine)
+        let loopRequest = LoopRequest(
+            start: start,
+            mode: mode,
+            distanceKm: mode == .distance ? distanceKm : nil,
+            durationMinutes: mode == .time ? Double(amount) : nil,
+            unit: unit,
+            activity: activity,
+            walkingPaceMinutes: activePaceMinutes,
+            walkingPaceUnit: activePaceUnit,
+            variation: variation,
+            waypoints: requestedWaypoints,
+            excludeRoutes: sameSpot ? routes : [],
+            onDataProgress: { [weak self] progress in
+                Task { @MainActor in
+                    guard let self, seq == self.requestSeq else { return }
+                    self.dataProgress = progress
+                }
+            }
+        )
         Task {
+            defer { if seq == requestSeq { dataProgress = nil } }
             do {
-                let result = try await requestLoops(
-                    start: start,
-                    mode: mode,
-                    distanceKm: mode == .distance ? distanceKm : nil,
-                    durationMinutes: mode == .time ? Double(amount) : nil,
-                    unit: unit,
-                    activity: activity,
-                    walkingPaceMinutes: activePaceMinutes,
-                    walkingPaceUnit: activePaceUnit,
-                    variation: variation,
-                    waypoints: requestedWaypoints,
-                    excludeRoutes: sameSpot ? routes : [],
-                    routingEngine: engineForRequest,
-                    apiBase: apiBase,
-                    client: httpClient
-                )
+                let result = try await engine.generateLoops(loopRequest)
                 guard seq == requestSeq else { return } // a later request already started; its result is the one that counts
                 if result.expectationExceeded {
                     let message = result.warning ?? "These waypoints need a longer loop. Increase your distance or time, or remove a waypoint."
@@ -440,10 +486,21 @@ final class AppModel: ObservableObject {
                 routes = result.routes
                 selected = result.routes.first
                 engineReport = result.engine
+                localDiagnostics = result.localDiagnostics
                 // One row per set of walks offered, written the moment they
                 // arrive. Local only — see RoutingTrialLog.
                 currentTrialID = routingTrials.record(
-                    engine: result.engine,
+                    engine: result.engine ?? result.localDiagnostics.map { local in
+                        RoutingEngineReport(
+                            routingEngine: .onDevice,
+                            requestedEngine: .onDevice,
+                            engineReason: local.failure,
+                            generationMs: local.totalMs,
+                            searchClosedWalks: local.closedWalks,
+                            searchStates: local.search.storeSize,
+                            searchMs: local.search.searchMs
+                        )
+                    },
                     selectedEngine: engineForRequest,
                     requestedMetres: distanceKm * 1000,
                     mode: mode,
@@ -459,11 +516,57 @@ final class AppModel: ObservableObject {
                 error = result.warning ?? ""
             } catch {
                 if seq == requestSeq {
-                    self.error = (error as? LooperAPIError)?.errorDescription ?? "Routes are unavailable right now."
+                    // A local failure has its own sentence — "this area isn't
+                    // downloaded yet", "no path near that start" — and those
+                    // are the ones a walker can act on, so they are shown as
+                    // written rather than flattened into the network message.
+                    self.error = (error as? LocalizedError)?.errorDescription ?? "Routes are unavailable right now."
                 }
             }
             if seq == requestSeq { busy = false }
         }
+    }
+
+    /// What the phone is holding, for the Settings screen that reports it.
+    struct RoutingDataSummary: Equatable {
+        var chunkCount: Int
+        var pinnedCount: Int
+        var bytes: Int
+
+        var formattedBytes: String {
+            ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+        }
+    }
+
+    func routingDataSummary() async -> RoutingDataSummary {
+        let entries = await routingChunkStore.allMetadata()
+        return RoutingDataSummary(
+            chunkCount: entries.count,
+            pinnedCount: entries.filter { $0.retention == .pinned }.count,
+            bytes: entries.reduce(0) { $0 + $1.byteSize }
+        )
+    }
+
+    func clearRoutingData() async {
+        await routingChunkStore.removeAll()
+    }
+
+    /// What to say while looking.
+    ///
+    /// Downloading the walking paths for a new area is a genuinely different
+    /// wait from searching one already on the phone — it takes seconds and it
+    /// needs the network — so it says so. It says so in a walker's words: the
+    /// name of the data format and of the provider serving it are our problem,
+    /// not theirs.
+    static let findingMessages = ["Building clean loops around you…", "Checking for overlaps and detours…"]
+
+    var findingMessage: String {
+        if let progress = dataProgress, progress.totalRequests > 0 {
+            return progress.totalRequests > 1
+                ? "Downloading walking paths… \(min(progress.completedRequests + 1, progress.totalRequests)) of \(progress.totalRequests)"
+                : "Downloading walking paths for this area…"
+        }
+        return AppModel.findingMessages[min(findingStage, AppModel.findingMessages.count - 1)]
     }
 
     private func startFindingStageTimer() {

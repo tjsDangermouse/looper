@@ -108,7 +108,7 @@ public struct LoopsResult {
 
 /// Talks HTTP for `requestLoops` — a seam so tests can stand in for the network
 /// exactly as the web tests stand in for `fetch`.
-public protocol LoopsHTTPClient {
+public protocol LoopsHTTPClient: Sendable {
     func post(url: URL, body: Data) async throws -> (data: Data, statusCode: Int)
 }
 

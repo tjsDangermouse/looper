@@ -2,7 +2,7 @@ import Foundation
 
 /// A coordinate in `[lng, lat]` order, matching the GeoJSON convention the
 /// route service and MapLibre both use — encodes/decodes as a 2-element array.
-public struct Point: Equatable, Hashable {
+public struct Point: Equatable, Hashable, Sendable {
     public var lng: Double
     public var lat: Double
 
@@ -58,12 +58,14 @@ public enum Activity: String, Codable, Hashable, Sendable {
 public enum RoutingEngine: String, Codable, Hashable, Sendable, CaseIterable {
     case remote
     case direct
+    case onDevice
 
     /// What to show a tester. Deliberately short enough for a badge.
     public var badge: String {
         switch self {
         case .remote: return "REMOTE"
         case .direct: return "DIRECT"
+        case .onDevice: return "ON-DEVICE"
         }
     }
 
@@ -71,8 +73,24 @@ public enum RoutingEngine: String, Codable, Hashable, Sendable, CaseIterable {
         switch self {
         case .remote: return "Remote / Current"
         case .direct: return "Direct Search / New"
+        case .onDevice: return "On-device / New"
         }
     }
+
+    /// What may be named in a request to the route service.
+    ///
+    /// `onDevice` is not a generator the service has, and asking it for one
+    /// would be both meaningless and a change to a contract this work is not
+    /// allowed to touch. It is a fact about where an answer came from, which
+    /// is why it exists on `Route` but never on a request.
+    public var serverValue: RoutingEngine? {
+        self == .onDevice ? nil : self
+    }
+
+    /// The two engines a tester chooses between: the existing hosted one and
+    /// the new local one. `direct` is the service's own second generator and
+    /// is selected within Remote, not alongside it.
+    public static let selectableOnDevice: [RoutingEngine] = [.remote, .onDevice]
 }
 
 /// What the service said about how an answer was produced. Developer-facing.
@@ -115,7 +133,7 @@ public struct RoutingEngineReport: Codable, Equatable, Sendable {
 /// A step's maneuver comes back as either GraphHopper/ORS's numeric code or
 /// the loop service's own named string — both routers describe the same turn
 /// differently, so this holds either.
-public enum Maneuver: Codable, Equatable {
+public enum Maneuver: Codable, Equatable, Sendable {
     case code(Int)
     case name(String)
 
@@ -137,7 +155,7 @@ public enum Maneuver: Codable, Equatable {
     }
 }
 
-public struct Step: Codable, Equatable {
+public struct Step: Codable, Equatable, Sendable {
     public var instruction: String
     public var distanceMeters: Double
     public var durationSeconds: Double
@@ -165,7 +183,7 @@ public struct Step: Codable, Equatable {
     }
 }
 
-public struct LineGeometry: Codable, Equatable {
+public struct LineGeometry: Codable, Equatable, Sendable {
     public var type: String
     public var coordinates: [Point]
 
@@ -175,7 +193,7 @@ public struct LineGeometry: Codable, Equatable {
     }
 }
 
-public struct Route: Codable, Equatable {
+public struct Route: Codable, Equatable, Sendable {
     public var id: String
     public var name: String
     public var distanceMeters: Double

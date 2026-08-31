@@ -1,0 +1,318 @@
+import Foundation
+
+/// What the app asks for when it wants loops. Engine-neutral by construction:
+/// nothing here names a service, a graph, or a file.
+public struct LoopRequest: Sendable {
+    public var start: Point
+    public var mode: LoopMode
+    public var distanceKm: Double?
+    public var durationMinutes: Double?
+    public var unit: Unit
+    public var activity: Activity?
+    public var walkingPaceMinutes: Double?
+    public var walkingPaceUnit: Unit?
+    public var variation: Int
+    public var waypoints: [Point]
+    public var excludeRoutes: [Route]
+    /// Progress while routing data is being acquired. Only an engine that
+    /// acquires data calls it; the remote engine never does.
+    public var onDataProgress: (@Sendable (LoopDataProgress) -> Void)?
+
+    public init(
+        start: Point, mode: LoopMode, distanceKm: Double? = nil, durationMinutes: Double? = nil,
+        unit: Unit, activity: Activity? = nil, walkingPaceMinutes: Double? = nil,
+        walkingPaceUnit: Unit? = nil, variation: Int = 0, waypoints: [Point] = [],
+        excludeRoutes: [Route] = [], onDataProgress: (@Sendable (LoopDataProgress) -> Void)? = nil
+    ) {
+        self.start = start
+        self.mode = mode
+        self.distanceKm = distanceKm
+        self.durationMinutes = durationMinutes
+        self.unit = unit
+        self.activity = activity
+        self.walkingPaceMinutes = walkingPaceMinutes
+        self.walkingPaceUnit = walkingPaceUnit
+        self.variation = variation
+        self.waypoints = waypoints
+        self.excludeRoutes = excludeRoutes
+        self.onDataProgress = onDataProgress
+    }
+
+    /// The length being asked for, in metres, whichever way it was asked.
+    public func targetMetres(paceMinutesPerKm: Double) -> Double {
+        switch mode {
+        case .distance:
+            let amount = distanceKm ?? 0
+            return unit == .mi ? amount * 1609.344 : amount * 1000
+        case .time:
+            let minutes = durationMinutes ?? 0
+            return paceMinutesPerKm > 0 ? minutes / paceMinutesPerKm * 1000 : 0
+        }
+    }
+}
+
+public struct LoopDataProgress: Sendable, Equatable {
+    public var completedRequests: Int
+    public var totalRequests: Int
+    public var downloadedBytes: Int
+
+    public var fraction: Double {
+        totalRequests > 0 ? Double(completedRequests) / Double(totalRequests) : 0
+    }
+}
+
+public struct LoopResponse {
+    public var routes: [Route]
+    public var warning: String?
+    public var expectationExceeded: Bool
+    /// What the service said, when a service answered. Absent on-device.
+    public var engine: RoutingEngineReport?
+    /// What the local router did, when it was the one that answered.
+    public var localDiagnostics: LocalLoopRouter.Diagnostics?
+    /// Which engine actually produced these routes. Never inferred.
+    public var routingEngine: RoutingEngine
+
+    public init(
+        routes: [Route], warning: String? = nil, expectationExceeded: Bool = false,
+        engine: RoutingEngineReport? = nil, localDiagnostics: LocalLoopRouter.Diagnostics? = nil,
+        routingEngine: RoutingEngine
+    ) {
+        self.routes = routes
+        self.warning = warning
+        self.expectationExceeded = expectationExceeded
+        self.engine = engine
+        self.localDiagnostics = localDiagnostics
+        self.routingEngine = routingEngine
+    }
+}
+
+/// The seam.
+///
+/// Two implementations, and the rest of the app consumes the same route model
+/// from either. This is what makes the comparison honest: the map, the walk
+/// screen, the spoken guidance, the Watch and the saved favourites all behave
+/// identically, so the only thing a field test is comparing is the walk.
+public protocol LoopRoutingEngine: Sendable {
+    func generateLoops(_ request: LoopRequest) async throws -> LoopResponse
+}
+
+// MARK: - Remote
+
+/// The existing hosted engine, wrapped and otherwise untouched.
+///
+/// This calls `requestLoops` exactly as the app has always called it: the same
+/// URL, the same body, the same response handling. Nothing about the remote
+/// path changes because a second engine exists — it is retained so that the
+/// two can be compared on real ground, and a retained baseline that quietly
+/// drifted would be worth nothing.
+public struct RemoteLoopRoutingEngine: LoopRoutingEngine {
+    private let apiBase: String
+    private let client: LoopsHTTPClient
+    /// Which of the *service's own* generators to ask for. Unrelated to the
+    /// on-device engine, and never `.onDevice` — see `RoutingEngine.serverValue`.
+    private let serviceEngine: RoutingEngine?
+
+    public init(apiBase: String, client: LoopsHTTPClient, serviceEngine: RoutingEngine? = nil) {
+        self.apiBase = apiBase
+        self.client = client
+        self.serviceEngine = serviceEngine?.serverValue
+    }
+
+    public func generateLoops(_ request: LoopRequest) async throws -> LoopResponse {
+        let result = try await requestLoops(
+            start: request.start,
+            mode: request.mode,
+            distanceKm: request.mode == .distance ? request.distanceKm : nil,
+            durationMinutes: request.mode == .time ? request.durationMinutes : nil,
+            unit: request.unit,
+            activity: request.activity,
+            walkingPaceMinutes: request.walkingPaceMinutes,
+            walkingPaceUnit: request.walkingPaceUnit,
+            variation: request.variation,
+            waypoints: request.waypoints,
+            excludeRoutes: request.excludeRoutes,
+            routingEngine: serviceEngine,
+            apiBase: apiBase,
+            client: client
+        )
+        return LoopResponse(
+            routes: result.routes,
+            warning: result.warning,
+            expectationExceeded: result.expectationExceeded,
+            engine: result.engine,
+            routingEngine: result.engine?.routingEngine ?? .remote
+        )
+    }
+}
+
+/// Counts every routing call the app makes to Looper's own service.
+///
+/// A decorator rather than a change to `URLSessionLoopsHTTPClient`, so the
+/// remote path's behaviour is identical with it and without it. Its whole
+/// purpose is that "the on-device engine made zero Looper routing calls" can
+/// be a measurement instead of a claim.
+public struct AuditingLoopsHTTPClient: LoopsHTTPClient {
+    private let wrapped: LoopsHTTPClient
+    private let audit: RoutingAudit
+
+    public init(wrapping wrapped: LoopsHTTPClient = URLSessionLoopsHTTPClient(), audit: RoutingAudit = .shared) {
+        self.wrapped = wrapped
+        self.audit = audit
+    }
+
+    public func post(url: URL, body: Data) async throws -> (data: Data, statusCode: Int) {
+        // Logged as well as counted. In On-device mode this line must never
+        // appear, and a silence nobody can see is not evidence of anything.
+        RoutingLog.remote.info("looper routing request \(url.absoluteString, privacy: .public)")
+        await audit.recordLooperRoutingRequest(url: url.absoluteString)
+        return try await wrapped.post(url: url, body: body)
+    }
+}
+
+// MARK: - On device
+
+/// The new engine: raw OSM path data straight from an external provider,
+/// cached on the phone, and every routing decision made here.
+///
+/// Note what this type cannot do, by construction rather than by discipline:
+/// it holds no `LoopsHTTPClient`, no API base, and no reference to
+/// `RemoteLoopRoutingEngine`. There is no code path from here to Looper's
+/// routing service, which is why the "did it secretly fall back" question has
+/// a structural answer and not just a test.
+public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
+    private let data: RoutingDataManager
+    private let store: RoutingChunkStore
+    private let router: LocalLoopRouter
+    private let policy: PedestrianAccessPolicy
+
+    /// One built graph, kept between requests. Asking for a second set of
+    /// loops from the same doorstep is the common case, and rebuilding a
+    /// town's graph to answer it is the single largest avoidable cost.
+    private var cachedKey: String?
+    private var cachedGraph: LocalWalkingGraph?
+    private var cachedIndex: LocalEdgeIndex?
+
+    public init(
+        store: RoutingChunkStore,
+        source: RoutingDataSource,
+        grid: RoutingChunkGrid = .standard,
+        audit: RoutingAudit? = .shared,
+        policy: PedestrianAccessPolicy = .standard
+    ) {
+        self.store = store
+        self.data = RoutingDataManager(store: store, source: source, grid: grid, audit: audit)
+        self.router = LocalLoopRouter()
+        self.policy = policy
+    }
+
+    /// The app's ordinary configuration: the on-device store, and the public
+    /// Overpass endpoint as the OSM data source.
+    public static func standard(
+        endpoint: URL = OverpassRoutingDataSource.Configuration.publicOverpass
+    ) -> OnDeviceLoopRoutingEngine {
+        OnDeviceLoopRoutingEngine(
+            store: .applicationDefault(),
+            source: OverpassRoutingDataSource(configuration: .init(endpoint: endpoint))
+        )
+    }
+
+    public func generateLoops(_ request: LoopRequest) async throws -> LoopResponse {
+        let pace = request.walkingPaceMinutes ?? 12
+        let paceMinutesPerKm = request.walkingPaceUnit == .mi ? pace / 1.609344 : pace
+        let targetMetres = request.targetMetres(paceMinutesPerKm: paceMinutesPerKm)
+        guard targetMetres > 0 else { throw LocalLoopRouter.Failure.noLoopFound }
+
+        // Ordered waypoints are not something a closed-walk search answers,
+        // and quietly answering a different question would be worse than
+        // saying so. The app keeps those on the remote engine.
+        guard request.waypoints.isEmpty else {
+            throw LooperAPIError.message("Loops with waypoints need Remote routing. Switch engines in Settings, or clear the waypoints.")
+        }
+
+        let progress = request.onDataProgress
+        do {
+            _ = try await data.ensureCoverage(
+                lat: request.start.lat, lon: request.start.lng, targetMetres: targetMetres,
+                onProgress: progress.map { handler in
+                    { @Sendable update in
+                        handler(LoopDataProgress(
+                            completedRequests: update.completedRequests,
+                            totalRequests: update.totalRequests,
+                            downloadedBytes: update.downloadedBytes
+                        ))
+                    }
+                }
+            )
+        } catch RoutingDataManager.AcquisitionError.source(.offline) {
+            // The device has no network and the data is not here. Say so; do
+            // not reach for the remote router, which would make a comparison
+            // test meaningless.
+            //
+            // Note what is *not* caught: `providerUnavailable`. A walker with
+            // a working connection whose OSM provider is down has a different
+            // problem, and telling them to connect would send them looking for
+            // a fault they do not have.
+            throw RoutingDataManager.AcquisitionError.dataUnavailableOffline
+        }
+
+        let (graph, index) = try await graphFor(lat: request.start.lat, lon: request.start.lng, targetMetres: targetMetres)
+        let result = try router.findLoops(
+            .init(lat: request.start.lat, lon: request.start.lng, targetMetres: targetMetres),
+            in: graph, index: index
+        )
+        let d = result.diagnostics
+        RoutingLog.search.info("local search graph=\(d.graphNodes)n/\(d.graphEdges)e explored=\(d.exploration.nodesReached)n snap=\(Int(d.exploration.snapDistanceMetres))m super=\(d.searchGraph.superEdges) closed=\(d.closedWalks) passedGate=\(d.passedGate) offered=\(d.offered) searchMs=\(Int(d.search.searchMs)) totalMs=\(Int(d.totalMs)) failure=\(d.failure ?? "-", privacy: .public)")
+        guard !result.routes.isEmpty else {
+            throw LocalLoopRouter.Failure.noLoopFound
+        }
+        // A walk already offered from this doorstep is not a new choice.
+        let fresh = request.excludeRoutes.isEmpty ? result.routes : result.routes.filter { route in
+            request.excludeRoutes.allSatisfy { previous in
+                RouteQuality.sharedCorridorMetres(route.geometry.coordinates, previous.geometry.coordinates).fraction
+                    <= RouteQuality.maxSharedFraction
+            }
+        }
+        return LoopResponse(
+            routes: fresh.isEmpty ? result.routes : fresh,
+            localDiagnostics: result.diagnostics,
+            routingEngine: .onDevice
+        )
+    }
+
+    /// Build the graph, or reuse the one already built for this ground.
+    private func graphFor(lat: Double, lon: Double, targetMetres: Double) async throws -> (LocalWalkingGraph, LocalEdgeIndex) {
+        let chunks = RoutingCoverage.requiredChunks(lat: lat, lon: lon, targetMetres: targetMetres)
+        let key = chunks.map(\.key).joined(separator: ",")
+        if key == cachedKey, let graph = cachedGraph, let index = cachedIndex { return (graph, index) }
+        let merged = await store.merged(chunks)
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: merged, policy: policy)
+        let index = LocalEdgeIndex(graph: graph)
+        cachedKey = key
+        cachedGraph = graph
+        cachedIndex = index
+        return (graph, index)
+    }
+
+    /// Fill and pin an area, for the Offline Areas feature this store already
+    /// supports. Exposed here so the app has one door to the routing data.
+    @discardableResult
+    public func downloadOfflineArea(
+        _ bounds: GeographicBounds,
+        onProgress: (@Sendable (LoopDataProgress) -> Void)? = nil
+    ) async throws -> RoutingDataManager.AcquisitionReport {
+        try await data.downloadOfflineArea(bounds, onProgress: onProgress.map { handler in
+            { @Sendable update in
+                handler(LoopDataProgress(
+                    completedRequests: update.completedRequests,
+                    totalRequests: update.totalRequests,
+                    downloadedBytes: update.downloadedBytes
+                ))
+            }
+        })
+    }
+
+    /// What the phone already holds for this walk, without fetching anything.
+    public func coverage(lat: Double, lon: Double, targetMetres: Double) async -> RoutingDataManager.Coverage {
+        await data.coverage(lat: lat, lon: lon, targetMetres: targetMetres)
+    }
+}

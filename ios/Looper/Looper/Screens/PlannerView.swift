@@ -1,8 +1,6 @@
 import LooperKit
 import SwiftUI
 
-private let findingMessages = ["Building clean loops around you…", "Checking for overlaps and detours…"]
-
 struct PlannerView: View {
     @ObservedObject var model: AppModel
     @FocusState private var amountFocused: Bool
@@ -77,7 +75,7 @@ struct PlannerView: View {
                     amountFocused = false
                     model.findRoutes()
                 } label: {
-                    Label(model.busy ? findingMessages[model.findingStage] : "Find my loops", systemImage: "arrow.triangle.2.circlepath")
+                    Label(model.busy ? model.findingMessage : "Find my loops", systemImage: "arrow.triangle.2.circlepath")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(PrimaryButtonStyle(height: 44, cornerRadius: 12, fontSize: 15))
