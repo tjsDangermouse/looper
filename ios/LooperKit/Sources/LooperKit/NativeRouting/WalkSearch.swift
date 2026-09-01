@@ -37,6 +37,34 @@ public enum WalkSearch {
     public static let beam = 300
     public static let bandMetres: Double = 100
     public static let perNode = 3
+
+    /// How wide to search for a given target, and how many partial walks one
+    /// junction may hold.
+    ///
+    /// The reference's 300 and 3 were chosen for a server answering once, and
+    /// on the device they leave the search starving in the middle of a budget
+    /// it never touches: at Douglas 3 km the beam discarded seventy thousand
+    /// partial walks and the per-node cap twenty-three thousand more, to close
+    /// two hundred and sixteen walks, with `stoppedEarly` false throughout.
+    ///
+    /// The two have to move together. Raising `perNode` alone is actively
+    /// worse — states pile up on a few junctions and crowd the fixed beam, so
+    /// fewer distinct nodes are ever expanded. Measured at 8 km, perNode 6
+    /// against a beam of 300 closed 39 walks where perNode 3 closed 174.
+    ///
+    /// Work goes roughly as the beam times the number of bands, and bands go
+    /// as the target — so holding their product near constant keeps the wall
+    /// clock flat while spending far more of it where walkers actually ask.
+    /// A long target spends its whole width on bands and lands back on the
+    /// reference pair, which is the right answer there: at 8 km a wider
+    /// per-node cap against a floor-width beam closed 31 walks where the
+    /// reference closed 174. So the cap only lifts once the beam has room to
+    /// carry it.
+    public static func widthFor(targetMetres: Double) -> (beam: Int, perNode: Int) {
+        let scaled = targetMetres > 0 ? 2_250_000 / targetMetres : Double(beam)
+        let width = Int(Swift.min(750, Swift.max(300, scaled)))
+        return (width, width <= beam ? perNode : Swift.max(perNode, width / 56))
+    }
     /// The gate's own compactness floor; a closure below it is not a walk.
     public static let minCompactness = 0.20
     /// The gate's own turn allowance.
@@ -51,6 +79,11 @@ public enum WalkSearch {
     public static let tightTurnDegrees: Double = 150
     /// How far a variation may nudge a partial walk's promise.
     ///
+    /// Swept: 0.02 gave 20/17/15 distinct walks over ten refreshes at Douglas
+    /// 3/4/5 km, 0.06 gave 28/24/22, and 0.15 fell back to 25/14/17. Wide
+    /// enough to reshuffle a beam that has stopped being selective, narrow
+    /// enough not to drown the shape term it perturbs.
+    ///
     /// The beam is deterministic, so the same doorstep and the same target
     /// close the same walks forever — which makes "show me some others" a
     /// question it cannot answer, however many walks it found. A variation
@@ -59,19 +92,29 @@ public enum WalkSearch {
     /// shape term it perturbs runs 0 to 1. Nothing downstream is relaxed — the
     /// gate judges whatever comes out exactly as before, so a variation
     /// changes which good walks are found and never how good they must be.
-    public static let variationAmplitude = 0.02
+    public static let variationAmplitude = 0.06
+    /// What a beam at the reference width needs instead. Such a beam is still
+    /// doing hard selection, so it reshuffles under a much smaller nudge and
+    /// is actively harmed by a large one: at 8 km, which searches at the floor
+    /// width, the wide amplitude cost more variety than it bought.
+    public static let narrowVariationAmplitude = 0.02
 
-    /// A stable, uniform nudge in ±`variationAmplitude` for one state under
-    /// one variation. Variation 0 nudges nothing, so the default search is
+    /// How far to nudge, given how selective the beam being nudged is.
+    public static func variationAmplitude(beam: Int) -> Double {
+        beam <= WalkSearch.beam ? narrowVariationAmplitude : variationAmplitude
+    }
+
+    /// A stable, uniform nudge in ±`amplitude` for one state under one
+    /// variation. Variation 0 nudges nothing, so the default search is
     /// bit-for-bit what it was.
     @inline(__always)
-    static func jitter(variation: Int, node: Int32, arc: Int32) -> Double {
+    static func jitter(variation: Int, node: Int32, arc: Int32, amplitude: Double) -> Double {
         guard variation != 0 else { return 0 }
         var hash = UInt64(bitPattern: Int64(variation)) &* 0x9E37_79B9_7F4A_7C15
         hash ^= UInt64(bitPattern: Int64(node)) &* 0xBF58_476D_1CE4_E5B9
         hash ^= UInt64(bitPattern: Int64(arc) &+ 1) &* 0x94D0_49BB_1331_11EB
         hash ^= hash >> 31
-        return (Double(hash % 10_000) / 10_000 - 0.5) * 2 * variationAmplitude
+        return (Double(hash % 10_000) / 10_000 - 0.5) * 2 * amplitude
     }
 
     public struct Options: Sendable {
@@ -93,16 +136,17 @@ public enum WalkSearch {
 
         public init(
             targetMetres: Double, tolerance: Double = RoutingCoverage.maxDistanceError,
-            beam: Int = WalkSearch.beam, band: Double = WalkSearch.bandMetres, perNode: Int = WalkSearch.perNode,
+            beam: Int? = nil, band: Double = WalkSearch.bandMetres, perNode: Int? = nil,
             diversityQuota: Bool = true, turnAware: Bool = true, turnPenalty: Double = 0.05,
             minCompactness: Double = WalkSearch.minCompactness, budget: Int = 4_000_000, wanted: Int = .max,
             variation: Int = 0
         ) {
             self.targetMetres = targetMetres
             self.tolerance = tolerance
-            self.beam = beam
+            let width = WalkSearch.widthFor(targetMetres: targetMetres)
+            self.beam = beam ?? width.beam
             self.band = band
-            self.perNode = perNode
+            self.perNode = perNode ?? width.perNode
             self.diversityQuota = diversityQuota
             self.turnAware = turnAware
             self.turnPenalty = turnPenalty
@@ -133,6 +177,15 @@ public enum WalkSearch {
         public var prunedDominated = 0
         public var peakBand = 0
         public var completed = 0
+        /// Every time the search arrived back at the root, however the walk
+        /// that got there was then judged. The three counters below account
+        /// for the difference between this and `completed`, which is where to
+        /// look when the engine is short of walks to offer.
+        public var closures = 0
+        /// Reached the root, but too short or too long to be the walk asked for.
+        public var closuresOutsideBand = 0
+        /// The right length, but not round enough to be offered as a loop.
+        public var closuresTooShapeless = 0
         public var searchMs: Double = 0
         public var storeSize = 0
         public var chunksReleased = 0
@@ -152,6 +205,7 @@ public enum WalkSearch {
     public static func run(_ graph: WalkSearchGraph, options: Options) -> Result {
         let began = Date()
         var stats = Stats()
+        let amplitude = variationAmplitude(beam: options.beam)
         let minMetres = options.targetMetres * (1 - options.tolerance)
         let maxMetres = options.targetMetres * (1 + options.tolerance)
         let root = graph.root()
@@ -217,7 +271,10 @@ public enum WalkSearch {
             var score = [Double](repeating: 0, count: members.count)
             for i in 0..<members.count {
                 score[i] = promise(graph, store, members[i], root: root, minMetres: minMetres, options: options)
-                    + jitter(variation: options.variation, node: store.nodeOf(members[i]), arc: store.arcOf(members[i]))
+                    + jitter(
+                        variation: options.variation, node: store.nodeOf(members[i]),
+                        arc: store.arcOf(members[i]), amplitude: amplitude
+                    )
             }
             var ordered = Array(0..<members.count)
             ordered.sort { score[$0] > score[$1] }
@@ -287,6 +344,7 @@ public enum WalkSearch {
                     let child = extend(graph, store, parent: index, arc: Int32(a), distance: distance,
                                        commitAt: commitAt, options: options, parentDepth: depth, tightTurns: turns)
                     if to == root {
+                        stats.closures += 1
                         let total = distance + stemMetres
                         if total >= minMetres && total <= maxMetres {
                             if let walk = walkOf(graph, store, child, stemMetres: stemMetres, root: root,
@@ -294,7 +352,11 @@ public enum WalkSearch {
                                walk.compactness >= options.minCompactness {
                                 walks.append(walk)
                                 stats.completed += 1
+                            } else {
+                                stats.closuresTooShapeless += 1
                             }
+                        } else {
+                            stats.closuresOutsideBand += 1
                         }
                         continue
                     }

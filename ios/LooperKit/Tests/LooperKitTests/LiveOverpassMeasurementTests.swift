@@ -60,7 +60,7 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                 walkable=\(build.waysWalkable)/\(build.waysConsidered) \
                 explored=\(result.diagnostics.exploration.nodesReached)n \
                 super=\(result.diagnostics.searchGraph.superEdges) \
-                closed=\(result.diagnostics.closedWalks) shape-]=\(result.diagnostics.rejectedShape) turns-]=\(result.diagnostics.rejectedTurns) gate-]=\(result.diagnostics.gateRejected) passed=\(result.diagnostics.passedGate) \
+                closures=\(result.diagnostics.search.closures) band-]=\(result.diagnostics.search.closuresOutsideBand) shape-]=\(result.diagnostics.search.closuresTooShapeless) beam-]=\(result.diagnostics.search.prunedBeam) dom-]=\(result.diagnostics.search.prunedDominated) early=\(result.diagnostics.search.stoppedEarly) closed=\(result.diagnostics.closedWalks) shape-]=\(result.diagnostics.rejectedShape) turns-]=\(result.diagnostics.rejectedTurns) gate-]=\(result.diagnostics.gateRejected) passed=\(result.diagnostics.passedGate) \
                 diverse-]=\(result.diagnostics.diversityRejected) noroom=\(result.diagnostics.diversityNoRoom) \
                 stem=\(Int(result.diagnostics.stemMetres))m oct=\(result.diagnostics.shortlistOctants) offered=\(result.routes.count) \
                 searchMs=\(Int(result.diagnostics.search.searchMs)) totalMs=\(Int(ms)) \
@@ -75,6 +75,25 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                 }
                 for route in result.routes {
                     print("   -> \(route.name) \(Int(route.distanceMeters))m steps=\(route.steps.count)")
+                }
+
+                if ProcessInfo.processInfo.environment["LOOPER_BEAM_SWEEP"] == "1" {
+                    for (beam, perNode) in [(300, 3), WalkSearch.widthFor(targetMetres: target)] {
+                        let sweepBegan = Date()
+                        let search = WalkSearch.run(
+                            WalkSearchGraph(
+                                try LocalExploration.explore(
+                                    graph: graph, index: index, lat: point.lat, lon: point.lng,
+                                    limitMetres: RoutingCoverage.explorationRadiusMetres(targetMetres: target)
+                                ).0
+                            ),
+                            options: .init(targetMetres: target, beam: beam, perNode: perNode)
+                        )
+                        let families = Set(search.walks.map(\.family)).count
+                        print("   sweep beam=\(beam) perNode=\(perNode): closed=\(search.walks.count) "
+                            + "octants=\(families) closures=\(search.stats.closures) "
+                            + "early=\(search.stats.stoppedEarly) ms=\(Int(Date().timeIntervalSince(sweepBegan) * 1000))")
+                    }
                 }
 
                 // A fresh ask at the same doorstep, the way a different walker

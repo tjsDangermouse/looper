@@ -41,12 +41,16 @@ public struct LocalLoopRouter: Sendable {
     ///
     /// The service caps this at 24 because every candidate it hands back
     /// crosses a wire carrying its full geometry, instructions and path
-    /// details. On the device there is no wire, and measurement showed the
-    /// selector starving at 24: at Douglas 5 km all 24 passed the gate and 22
-    /// were then refused as too like one already taken. The cost of raising it
-    /// is assembly time for walks that may not be offered; the gain is walks
-    /// that are actually different from each other.
-    public static let defaultCandidateWalks = 64
+    /// details. On the device there is no wire, and the cap is simply the
+    /// pool a refresh draws from: what is not shortlisted can never be
+    /// offered, however many walks the search closed.
+    ///
+    /// It has been the binding constraint twice. At 24 the selector starved.
+    /// At 64, widening the beam raised Douglas 4 km from 80 closed walks to
+    /// 274 and the walker saw *fewer* of them, because a refresh exhausted the
+    /// same 64 either way. So it now sits above what the search closes, and
+    /// costs about two milliseconds a candidate against a search of seconds.
+    public static let defaultCandidateWalks = 256
 
     public struct Request: Sendable {
         public var lat: Double
