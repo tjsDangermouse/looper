@@ -55,10 +55,26 @@ public struct LocalLoopRouter: Sendable {
         public var wanted: Int
         public var candidateWalks: Int
         public var searchBudget: Int
+        /// Which of the equally-good walks to prefer, advanced by the app on
+        /// every refresh. The search is deterministic, so without this a
+        /// refresh re-runs the identical search; exclusion can then only hand
+        /// back what is left of one fixed pool, and a walker leaning on the
+        /// button exhausts it. See `WalkSearch.variationAmplitude`.
+        public var variation: Int
+        /// Walks already offered from this doorstep, as lines.
+        ///
+        /// The search is deterministic: the same start and the same target
+        /// close the same walks in the same order every time. So "show me
+        /// different ones" cannot be answered by searching again — it is
+        /// answered by choosing again, from the same pool, without the walks
+        /// already seen. That is why this has to reach the selector rather
+        /// than filtering what the selector returned.
+        public var exclude: [[Point]]
 
         public init(
             lat: Double, lon: Double, targetMetres: Double, wanted: Int = 3,
-            candidateWalks: Int = LocalLoopRouter.defaultCandidateWalks, searchBudget: Int = 4_000_000
+            candidateWalks: Int = LocalLoopRouter.defaultCandidateWalks, searchBudget: Int = 4_000_000,
+            variation: Int = 0, exclude: [[Point]] = []
         ) {
             self.lat = lat
             self.lon = lon
@@ -66,6 +82,8 @@ public struct LocalLoopRouter: Sendable {
             self.wanted = wanted
             self.candidateWalks = candidateWalks
             self.searchBudget = searchBudget
+            self.variation = variation
+            self.exclude = exclude
         }
     }
 
@@ -91,6 +109,11 @@ public struct LocalLoopRouter: Sendable {
         public var diversityRejected = 0
         /// Passed the gate, were different enough, and simply did not fit.
         public var diversityNoRoom = 0
+        /// Gate-passing walks set aside because they had already been offered.
+        public var excludedAsAlreadySeen = 0
+        /// Every gate-passing walk had already been offered, so the request
+        /// was answered from the full pool rather than with nothing.
+        public var excludeExhausted = false
         /// The out-and-back to the nearest node the circuit search could root
         /// at. Zero when the start is already in the 2-core. Every walk in the
         /// answer carries it, at both ends, and is charged for it by the
@@ -182,7 +205,7 @@ public struct LocalLoopRouter: Sendable {
         }
 
         let result = WalkSearch.run(searchGraph, options: .init(
-            targetMetres: request.targetMetres, budget: request.searchBudget
+            targetMetres: request.targetMetres, budget: request.searchBudget, variation: request.variation
         ))
         diagnostics.search = result.stats
         diagnostics.closedWalks = result.walks.count
@@ -256,8 +279,32 @@ public struct LocalLoopRouter: Sendable {
         }
 
         diagnostics.passedGate = candidates.count
-        let selection = RouteDiversity.selecting(candidates, limit: request.wanted)
-        let chosen = selection.chosen
+
+        // Exclusion belongs here, on the pool, and not to the walks that come
+        // back — which is where the service applies it too. Filtering the
+        // answer instead of the pool means a refresh re-offers the same walks
+        // or nothing at all, because the selector had already narrowed sixty
+        // candidates down to the same three it chose last time.
+        var eligible = Array(candidates.indices)
+        if !request.exclude.isEmpty {
+            let unseen = eligible.filter { index in
+                request.exclude.allSatisfy { previous in
+                    RouteQuality.sharedCorridorMetres(candidates[index].coordinates, previous).fraction
+                        <= RouteQuality.maxSharedFraction
+                }
+            }
+            diagnostics.excludedAsAlreadySeen = eligible.count - unseen.count
+            // A walker who has seen everything this doorstep has is better
+            // served by the best of it again than by an error.
+            if unseen.isEmpty {
+                diagnostics.excludeExhausted = true
+            } else {
+                eligible = unseen
+            }
+        }
+
+        let selection = RouteDiversity.selecting(eligible.map { candidates[$0] }, limit: request.wanted)
+        let chosen = selection.chosen.map { eligible[$0] }
         diagnostics.diversityRejected = selection.rejectedShared
         diagnostics.diversityNoRoom = selection.noRoom
         let labels = RouteDiversity.labels(for: chosen.map {

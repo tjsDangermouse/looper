@@ -517,6 +517,14 @@ private struct RoutingDataView: View {
                     // gate means the search found plenty of good walks and
                     // they were all the same walk.
                     LabeledContent("Too alike to offer", value: "\(diagnostics.diversityRejected)")
+                    if diagnostics.excludedAsAlreadySeen > 0 || diagnostics.excludeExhausted {
+                        LabeledContent(
+                            "Already seen",
+                            value: diagnostics.excludeExhausted
+                                ? "\(diagnostics.excludedAsAlreadySeen) — all of them"
+                                : "\(diagnostics.excludedAsAlreadySeen)"
+                        )
+                    }
                     LabeledContent("Compass spread", value: "\(diagnostics.shortlistOctants) of 8 octants")
                     LabeledContent("Offered", value: "\(diagnostics.offered)")
                     LabeledContent("Search", value: String(format: "%.0f ms", diagnostics.search.searchMs))

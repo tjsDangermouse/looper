@@ -18,6 +18,154 @@ final class LocalRoutingSearchTests: XCTestCase {
         return (WalkSearchGraph(subgraph), graph, subgraph)
     }
 
+    // MARK: - Asking again
+
+    /// Refreshing offers walks that were not offered before.
+    ///
+    /// The search is deterministic, so asking again runs the identical search
+    /// and closes the identical walks. That means exclusion is the *only*
+    /// thing that can make a refresh produce anything new, and it only works
+    /// if it reaches the pool the selector chooses from. Applied to the walks
+    /// the selector already returned — which is where it used to sit — it can
+    /// do nothing but empty the answer, because those are the same three walks
+    /// the same selector picked from the same pool a moment ago.
+    func testRefreshingOffersWalksThatWereNotOfferedBefore() throws {
+        let data = SyntheticOSM.grid(size: 9, spacingMetres: 200)
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: data)
+        let index = LocalEdgeIndex(graph: graph)
+        let router = LocalLoopRouter()
+        let target = 2000.0
+
+        let first = try router.findLoops(
+            .init(lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng, targetMetres: target),
+            in: graph, index: index
+        )
+        XCTAssertGreaterThan(first.routes.count, 0)
+
+        // The same request again, unchanged, closes the same walks: that is
+        // the property the exclusion has to work around.
+        let repeated = try router.findLoops(
+            .init(lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng, targetMetres: target),
+            in: graph, index: index
+        )
+        XCTAssertEqual(
+            repeated.routes.map(\.distanceMeters), first.routes.map(\.distanceMeters),
+            "the search is expected to be deterministic"
+        )
+
+        let again = try router.findLoops(
+            .init(
+                lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng, targetMetres: target,
+                exclude: first.routes.map(\.geometry.coordinates)
+            ),
+            in: graph, index: index
+        )
+        XCTAssertGreaterThan(again.routes.count, 0, "a refresh offered nothing at all")
+        XCTAssertFalse(again.diagnostics.excludeExhausted, "the pool ran out on the first refresh")
+        XCTAssertGreaterThan(
+            again.diagnostics.excludedAsAlreadySeen, 0,
+            "the walks already offered were not taken out of the pool"
+        )
+
+        // Every walk that comes back is a genuinely different walk.
+        for route in again.routes {
+            for previous in first.routes {
+                let shared = RouteQuality.sharedCorridorMetres(
+                    route.geometry.coordinates, previous.geometry.coordinates
+                ).fraction
+                XCTAssertLessThanOrEqual(
+                    shared, RouteQuality.maxSharedFraction,
+                    "refresh re-offered a walk the walker had already seen"
+                )
+            }
+        }
+    }
+
+    /// Having seen everything is answered with the best of it, not an error.
+    func testAWalkerWhoHasSeenEverythingIsNotHandedNothing() throws {
+        let data = SyntheticOSM.grid(size: 9, spacingMetres: 200)
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: data)
+        let index = LocalEdgeIndex(graph: graph)
+        let router = LocalLoopRouter()
+
+        let first = try router.findLoops(
+            .init(lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng, targetMetres: 2000),
+            in: graph, index: index
+        )
+        // Exclude the whole pool by handing back every walk the gate passes.
+        let everything = try router.findLoops(
+            .init(
+                lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng, targetMetres: 2000,
+                wanted: .max, candidateWalks: LocalLoopRouter.defaultCandidateWalks
+            ),
+            in: graph, index: index
+        )
+        let exhausted = try router.findLoops(
+            .init(
+                lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng, targetMetres: 2000,
+                exclude: everything.routes.map(\.geometry.coordinates)
+            ),
+            in: graph, index: index
+        )
+        XCTAssertTrue(exhausted.diagnostics.excludeExhausted)
+        XCTAssertEqual(exhausted.routes.map(\.distanceMeters), first.routes.map(\.distanceMeters))
+    }
+
+    /// A variation finds different walks, and variation 0 changes nothing.
+    ///
+    /// Exclusion alone cannot keep a refresh honest: it narrows one fixed pool
+    /// and eventually empties it. A variation is what makes the pool itself
+    /// different, and it has to do that without touching what the gate asks
+    /// for — so the walks it finds are judged by exactly the same rules.
+    func testAVariationFindsDifferentWalksWithoutRelaxingAnything() throws {
+        let data = SyntheticOSM.grid(size: 9, spacingMetres: 200)
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: data)
+        let index = LocalEdgeIndex(graph: graph)
+        let router = LocalLoopRouter()
+
+        func loops(variation: Int) throws -> LocalLoopRouter.Result {
+            try router.findLoops(
+                .init(
+                    lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng,
+                    targetMetres: 2000, variation: variation
+                ),
+                in: graph, index: index
+            )
+        }
+
+        // Compared as ground rather than as lengths: this fixture is a regular
+        // lattice, where two quite different walks routinely measure the same.
+        func ground(_ result: LocalLoopRouter.Result) -> [[Point]] {
+            result.routes.map(\.geometry.coordinates)
+        }
+
+        let base = try loops(variation: 0)
+        XCTAssertEqual(
+            ground(try loops(variation: 0)), ground(base),
+            "variation 0 must leave the search exactly as it was"
+        )
+
+        // Some variation finds a set the default search does not.
+        let varied = try (1...6).map { try loops(variation: $0 * 3) }
+        XCTAssertTrue(
+            varied.contains { ground($0) != ground(base) },
+            "no variation produced a different set of walks"
+        )
+
+        // And everything any of them offers still passes the gate untouched.
+        for result in varied + [base] {
+            for route in result.routes {
+                let report = RouteQuality.analyse(
+                    coordinates: route.geometry.coordinates,
+                    start: route.geometry.coordinates[0],
+                    distanceMetres: route.distanceMeters,
+                    targetMetres: 2000
+                )
+                XCTAssertTrue(report.pass, "a variation offered a walk the gate refuses: \(report.rejections)")
+            }
+        }
+    }
+
     // MARK: - Graph reductions
 
     /// A cul-de-sac cannot be part of a circuit without being retraced, and

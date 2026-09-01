@@ -257,23 +257,23 @@ public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
 
         let (graph, index) = try await graphFor(lat: request.start.lat, lon: request.start.lng, targetMetres: targetMetres)
         let result = try router.findLoops(
-            .init(lat: request.start.lat, lon: request.start.lng, targetMetres: targetMetres),
+            .init(
+                lat: request.start.lat, lon: request.start.lng, targetMetres: targetMetres,
+                variation: request.variation,
+                exclude: request.excludeRoutes.map(\.geometry.coordinates)
+            ),
             in: graph, index: index
         )
         let d = result.diagnostics
-        RoutingLog.search.info("local search graph=\(d.graphNodes)n/\(d.graphEdges)e explored=\(d.exploration.nodesReached)n snap=\(Int(d.exploration.snapDistanceMetres))m super=\(d.searchGraph.superEdges) closed=\(d.closedWalks) passedGate=\(d.passedGate) offered=\(d.offered) searchMs=\(Int(d.search.searchMs)) totalMs=\(Int(d.totalMs)) failure=\(d.failure ?? "-", privacy: .public)")
+        RoutingLog.search.info("local search graph=\(d.graphNodes)n/\(d.graphEdges)e explored=\(d.exploration.nodesReached)n snap=\(Int(d.exploration.snapDistanceMetres))m super=\(d.searchGraph.superEdges) closed=\(d.closedWalks) passedGate=\(d.passedGate) seen-]=\(d.excludedAsAlreadySeen)\(d.excludeExhausted ? "!" : "") alike-]=\(d.diversityRejected) oct=\(d.shortlistOctants) offered=\(d.offered) searchMs=\(Int(d.search.searchMs)) totalMs=\(Int(d.totalMs)) failure=\(d.failure ?? "-", privacy: .public)")
         guard !result.routes.isEmpty else {
             throw LocalLoopRouter.Failure.noLoopFound
         }
-        // A walk already offered from this doorstep is not a new choice.
-        let fresh = request.excludeRoutes.isEmpty ? result.routes : result.routes.filter { route in
-            request.excludeRoutes.allSatisfy { previous in
-                RouteQuality.sharedCorridorMetres(route.geometry.coordinates, previous.geometry.coordinates).fraction
-                    <= RouteQuality.maxSharedFraction
-            }
-        }
+        // Nothing to filter here: a walk already offered from this doorstep was
+        // taken out of the pool before the selector saw it, which is the only
+        // place removing it can actually produce a different walk.
         return LoopResponse(
-            routes: fresh.isEmpty ? result.routes : fresh,
+            routes: result.routes,
             localDiagnostics: result.diagnostics,
             routingEngine: .onDevice
         )

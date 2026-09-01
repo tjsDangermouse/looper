@@ -49,6 +49,30 @@ public enum WalkSearch {
     /// other, which needs the whole walk and is therefore checked once,
     /// exactly, at closure. This is only a ranking discouragement.
     public static let tightTurnDegrees: Double = 150
+    /// How far a variation may nudge a partial walk's promise.
+    ///
+    /// The beam is deterministic, so the same doorstep and the same target
+    /// close the same walks forever — which makes "show me some others" a
+    /// question it cannot answer, however many walks it found. A variation
+    /// perturbs the ranking just enough to reshuffle walks the beam considered
+    /// near enough to equal, and not nearly enough to promote a bad one: the
+    /// shape term it perturbs runs 0 to 1. Nothing downstream is relaxed — the
+    /// gate judges whatever comes out exactly as before, so a variation
+    /// changes which good walks are found and never how good they must be.
+    public static let variationAmplitude = 0.02
+
+    /// A stable, uniform nudge in ±`variationAmplitude` for one state under
+    /// one variation. Variation 0 nudges nothing, so the default search is
+    /// bit-for-bit what it was.
+    @inline(__always)
+    static func jitter(variation: Int, node: Int32, arc: Int32) -> Double {
+        guard variation != 0 else { return 0 }
+        var hash = UInt64(bitPattern: Int64(variation)) &* 0x9E37_79B9_7F4A_7C15
+        hash ^= UInt64(bitPattern: Int64(node)) &* 0xBF58_476D_1CE4_E5B9
+        hash ^= UInt64(bitPattern: Int64(arc) &+ 1) &* 0x94D0_49BB_1331_11EB
+        hash ^= hash >> 31
+        return (Double(hash % 10_000) / 10_000 - 0.5) * 2 * variationAmplitude
+    }
 
     public struct Options: Sendable {
         public var targetMetres: Double
@@ -60,6 +84,8 @@ public enum WalkSearch {
         public var turnAware: Bool
         public var turnPenalty: Double
         public var minCompactness: Double
+        /// Which of the equally-good walks to prefer. See `variationAmplitude`.
+        public var variation: Int
         /// A ceiling on expansions. On a phone this is also the thing that
         /// keeps a pathological network from spending a walker's battery.
         public var budget: Int
@@ -69,7 +95,8 @@ public enum WalkSearch {
             targetMetres: Double, tolerance: Double = RoutingCoverage.maxDistanceError,
             beam: Int = WalkSearch.beam, band: Double = WalkSearch.bandMetres, perNode: Int = WalkSearch.perNode,
             diversityQuota: Bool = true, turnAware: Bool = true, turnPenalty: Double = 0.05,
-            minCompactness: Double = WalkSearch.minCompactness, budget: Int = 4_000_000, wanted: Int = .max
+            minCompactness: Double = WalkSearch.minCompactness, budget: Int = 4_000_000, wanted: Int = .max,
+            variation: Int = 0
         ) {
             self.targetMetres = targetMetres
             self.tolerance = tolerance
@@ -80,6 +107,7 @@ public enum WalkSearch {
             self.turnAware = turnAware
             self.turnPenalty = turnPenalty
             self.minCompactness = minCompactness
+            self.variation = variation
             self.budget = budget
             self.wanted = wanted
         }
@@ -189,6 +217,7 @@ public enum WalkSearch {
             var score = [Double](repeating: 0, count: members.count)
             for i in 0..<members.count {
                 score[i] = promise(graph, store, members[i], root: root, minMetres: minMetres, options: options)
+                    + jitter(variation: options.variation, node: store.nodeOf(members[i]), arc: store.arcOf(members[i]))
             }
             var ordered = Array(0..<members.count)
             ordered.sort { score[$0] > score[$1] }

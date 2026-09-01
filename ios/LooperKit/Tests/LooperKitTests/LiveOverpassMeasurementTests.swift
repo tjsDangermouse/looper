@@ -77,6 +77,31 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                     print("   -> \(route.name) \(Int(route.distanceMeters))m steps=\(route.steps.count)")
                 }
 
+                // Refresh, three times over, the way a walker leaning on the
+                // button does it. Each round excludes everything seen so far.
+                var seen = result.routes
+                for round in 1...5 {
+                    let next = try router.findLoops(
+                        .init(
+                            lat: point.lat, lon: point.lng, targetMetres: target,
+                            variation: round * 3,
+                            exclude: seen.map(\.geometry.coordinates)
+                        ),
+                        in: graph, index: index
+                    )
+                    let repeats = next.routes.filter { route in
+                        seen.contains { RouteQuality.sharedCorridorMetres(
+                            route.geometry.coordinates, $0.geometry.coordinates
+                        ).fraction > RouteQuality.maxSharedFraction }
+                    }
+                    print("   refresh \(round): offered=\(next.routes.count) new=\(next.routes.count - repeats.count) "
+                        + "seen-]=\(next.diagnostics.excludedAsAlreadySeen)"
+                        + "\(next.diagnostics.excludeExhausted ? " EXHAUSTED" : "") "
+                        + "total-distinct=\(seen.count + next.routes.count - repeats.count)")
+                    if next.diagnostics.excludeExhausted { break }
+                    seen.append(contentsOf: next.routes)
+                }
+
                 let silent = RoutingDataManager(
                     store: RoutingChunkStore(directory: directory),
                     source: OverpassRoutingDataSource(
