@@ -154,6 +154,39 @@ public enum RoutingCoverage {
         )
     }
 
+    /// The same question for a walk that must also pass through places.
+    ///
+    /// The start-centred box is sized for a *ring*: no point of an admissible
+    /// loop is further than half its length from the door. Ordered pins break
+    /// that assumption in two ways. A pin may sit near the edge of the box, in
+    /// which case the leg reaching it needs ground beyond the pin to get round
+    /// whatever is in the way; and a shaping point placed perpendicular from a
+    /// gap's midpoint can step outside the box entirely. Both show up as a leg
+    /// that cannot be routed rather than as an error, which is the failure
+    /// mode worth spending a tile or two to avoid.
+    ///
+    /// So the area is the union of a box round the start and one round every
+    /// pin. A pin outside all of them cannot be on any walk of this length,
+    /// and the walk is refused on the backbone — with a number the walker can
+    /// act on — rather than on missing data.
+    public static func requiredBounds(
+        start: Point,
+        waypoints: [Point],
+        targetMetres: Double
+    ) -> GeographicBounds {
+        var bounds = requiredBounds(lat: start.lat, lon: start.lng, targetMetres: targetMetres)
+        guard !waypoints.isEmpty else { return bounds }
+        // Each pin needs its own working room, but only as much as the slack
+        // could plausibly spend there: a shaping point for one gap is placed
+        // from that gap's midpoint, so half the walk is more than generous and
+        // the whole walk would fetch a county.
+        let perPin = explorationRadiusMetres(targetMetres: targetMetres) / 2 + boundaryMarginMetres
+        for pin in waypoints {
+            bounds = bounds.union(LocalGeo.boundsAround(lat: pin.lat, lon: pin.lng, metres: perPin))
+        }
+        return bounds
+    }
+
     public static func requiredChunks(
         lat: Double,
         lon: Double,
@@ -161,5 +194,14 @@ public enum RoutingCoverage {
         grid: RoutingChunkGrid = .standard
     ) -> [RoutingChunkID] {
         grid.chunks(covering: requiredBounds(lat: lat, lon: lon, targetMetres: targetMetres))
+    }
+
+    public static func requiredChunks(
+        start: Point,
+        waypoints: [Point],
+        targetMetres: Double,
+        grid: RoutingChunkGrid = .standard
+    ) -> [RoutingChunkID] {
+        grid.chunks(covering: requiredBounds(start: start, waypoints: waypoints, targetMetres: targetMetres))
     }
 }

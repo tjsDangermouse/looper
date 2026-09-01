@@ -649,9 +649,14 @@ Three independent mechanisms:
    appear until the chunk is evicted or the data version is bumped.
 5. **No Offline Areas UI.** The store, retention and download method exist and
    are tested; the screen does not.
-6. **Ordered waypoints are declined** and must use Remote. The closed-walk
-   search has no answer to them; the remote engine's own direct path declines
-   them too.
+6. **Ordered waypoints take a separate path.** The closed-walk search has no
+   answer to them, so they are not asked to: `LocalWaypointRouter` routes the
+   backbone gap by gap on the raw graph with `LocalLegRouter` and spreads the
+   slack with `LocalWaypointPlanner`, a port of the service's `waypoints.ts`.
+   Judged by the same gate, one tolerance apart, and that tolerance is the
+   service's own. (The route service's own `direct` generator still declines
+   them and falls back to `remote`; it has GraphHopper locally, so the
+   fallback is invisible and cheap.)
 7. **No turn restrictions.** OSM turn-restriction relations are not read.
    Little practical effect on foot, but it is a real omission.
 8. **Instructions are basic** by choice — no roundabout counting, no exit

@@ -53,8 +53,10 @@ public enum Activity: String, Codable, Hashable, Sendable {
 /// - `direct`: the closed-walk search, which searches the walk itself over the
 ///   routing graph and returns the exact edges it walked.
 ///
-/// Ordered waypoints always use `remote`; the service decides that, and says so
-/// in the answer.
+/// Ordered waypoints are answered by `remote` and by `onDevice`, each in its
+/// own way. The service's `direct` generator has no representation for them and
+/// falls back to `remote`, which it says so in the answer; the on-device engine
+/// builds them itself, from the backbone out — see `LocalWaypointRouter`.
 public enum RoutingEngine: String, Codable, Hashable, Sendable, CaseIterable {
     case remote
     case direct

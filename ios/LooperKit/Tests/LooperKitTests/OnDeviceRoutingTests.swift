@@ -212,20 +212,118 @@ final class OnDeviceRoutingTests: XCTestCase {
         XCTAssertTrue(mixed.looperRoutingRequests[0].url.hasPrefix("https://routes.test/v1/loops"))
     }
 
-    /// Waypoints are the remote engine's job. Answering a different question
-    /// quietly would be worse than declining, so the local engine declines.
-    func testWaypointLoopsAreDeclinedRatherThanQuietlyReinterpreted() async throws {
+    // MARK: - Ordered waypoints
+
+    /// A place `metres` east and `north` of the town's centre.
+    private func place(east: Double, north: Double) -> Point {
+        let moved = LocalGeo.destination(
+            lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng, metres: north, bearing: 0
+        )
+        let placed = LocalGeo.destination(lat: moved.lat, lon: moved.lon, metres: east, bearing: 90)
+        return Point(placed.lon, placed.lat)
+    }
+
+    /// The walk goes where it was asked to go, in the order it was asked, and
+    /// it is still built entirely on the phone.
+    ///
+    /// This replaces the test that used to pin the opposite behaviour. The old
+    /// one asserted that the local engine declined waypoints and sent the
+    /// walker to Remote; that was a scope decision rather than a limit of the
+    /// device, and it is no longer true.
+    func testWaypointLoopsAreBuiltOnTheDeviceAndPassEveryPinInOrder() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let client = ForbiddenLoopsClient()
+        let engine = engine(directory: directory, transport: StubOverpassTransport { [data = town()] _ in data })
+
+        var request = request(distanceKm: 3)
+        let pins = [place(east: 600, north: 200), place(east: 200, north: -600)]
+        request.waypoints = pins
+        let result = try await engine.generateLoops(request)
+
+        XCTAssertFalse(result.routes.isEmpty, "the device found no walk through two ordinary pins")
+        XCTAssertEqual(result.routingEngine, .onDevice)
+        XCTAssertFalse(client.wasCalled)
+        for route in result.routes {
+            XCTAssertTrue(
+                LocalLoopRouter.route(route.geometry.coordinates, hits: pins),
+                "a waypoint walk that does not pass its pins in order is not the walk that was asked for"
+            )
+            XCTAssertEqual(route.routingEngine, .onDevice)
+            // The same tolerance the service judges a waypoint walk by.
+            XCTAssertLessThanOrEqual(
+                abs(route.distanceMeters - 3000) / 3000,
+                LocalLoopRouter.waypointDistanceTolerance
+            )
+        }
+    }
+
+    /// Pins that need more ground than the plan allows are refused with the
+    /// number the walker needs, not with a shrug — and in the same words the
+    /// service uses, because two engines refusing the same request differently
+    /// is a difference a field test would misread.
+    func testPinsThatNeedMoreThanThePlanAllowsAreRefusedWithTheDistanceNeeded() async throws {
         let directory = makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let engine = engine(directory: directory, transport: StubOverpassTransport { [data = town()] _ in data })
-        var request = request(distanceKm: 3)
-        request.waypoints = [Point(-4.47, 54.16)]
-        do {
-            _ = try await engine.generateLoops(request)
-            XCTFail("the local engine has no answer to an ordered-waypoint loop")
-        } catch {
-            XCTAssertTrue(error.localizedDescription.contains("Remote routing"))
+
+        // A pin 1.5 km out and back is 3 km of unavoidable walking, asked for
+        // inside a 1 km plan.
+        var request = request(distanceKm: 1)
+        request.waypoints = [place(east: 1500, north: 0)]
+        let result = try await engine.generateLoops(request)
+
+        XCTAssertTrue(result.routes.isEmpty)
+        XCTAssertTrue(result.expectationExceeded)
+        let warning = try XCTUnwrap(result.warning)
+        XCTAssertTrue(warning.contains("need at least"), warning)
+        XCTAssertTrue(warning.contains("km"), warning)
+        XCTAssertEqual(result.localDiagnostics?.failure, "waypoint-over-plan")
+    }
+
+    /// A pin the walker could hit by accident does not turn the request into a
+    /// backbone problem: the ring search answers it, and the pins do the
+    /// filtering. This is the service's `doorstep-pin` hand-over.
+    func testAPinOnTheDoorstepIsAnsweredByTheOrdinarySearch() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let engine = engine(directory: directory, transport: StubOverpassTransport { [data = town()] _ in data })
+
+        var request = request(distanceKm: 5)
+        request.waypoints = [place(east: 150, north: 0)]
+        let result = try await engine.generateLoops(request)
+
+        XCTAssertEqual(result.localDiagnostics?.waypointStage, "doorstep-pin")
+        XCTAssertFalse(result.routes.isEmpty)
+        for route in result.routes {
+            XCTAssertTrue(LocalLoopRouter.route(route.geometry.coordinates, hits: request.waypoints))
         }
+    }
+
+    /// The pins widen the area the phone has to hold. A walk through a place
+    /// two kilometres away needs that place, and the coverage calculation has
+    /// to know it before anything is fetched.
+    func testTheAreaFetchedTakesInThePinsAndNotJustTheStart() {
+        let start = SyntheticOSM.douglas
+        let far = place(east: 2500, north: 0)
+        let ring = RoutingCoverage.requiredBounds(start: start, waypoints: [], targetMetres: 3000)
+        let withPin = RoutingCoverage.requiredBounds(start: start, waypoints: [far], targetMetres: 3000)
+
+        XCTAssertFalse(ring.contains(lat: far.lat, lon: far.lng), "the premise: the pin is outside the ring's own box")
+        XCTAssertTrue(withPin.contains(lat: far.lat, lon: far.lng))
+        XCTAssertTrue(withPin.contains(lat: start.lat, lon: start.lng), "and the start is still in it")
+        XCTAssertGreaterThan(
+            RoutingCoverage.requiredChunks(start: start, waypoints: [far], targetMetres: 3000).count,
+            RoutingCoverage.requiredChunks(start: start, waypoints: [], targetMetres: 3000).count
+        )
+    }
+
+    /// Order is what makes a waypoint list more than a set of places.
+    func testAWalkThatVisitsThePinsInTheWrongOrderIsNotAHit() {
+        let line = (0...20).map { place(east: Double($0) * 100, north: 0) }
+        let first = place(east: 400, north: 0), second = place(east: 1200, north: 0)
+        XCTAssertTrue(LocalLoopRouter.route(line, hits: [first, second]))
+        XCTAssertFalse(LocalLoopRouter.route(line, hits: [second, first]))
     }
 
     // MARK: - Measurements

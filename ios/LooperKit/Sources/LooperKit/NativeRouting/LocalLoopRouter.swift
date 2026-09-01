@@ -140,6 +140,38 @@ public struct LocalLoopRouter: Sendable {
         public var snappedLon: Double = 0
         public var failure: String?
 
+        // --- Ordered waypoints. Zero on every plain loop. ------------------
+        /// Pins the walker dropped.
+        public var waypointCount = 0
+        /// Which way the waypoint path answered: the backbone generator, or
+        /// the ring search filtered by pins that constrained almost nothing.
+        public var waypointStage: String?
+        /// The floor: the shortest walk visiting the pins in order. Whether a
+        /// request is possible at all is decided against this and nothing else.
+        public var waypointBackboneMetres: Double = 0
+        /// Ways of crossing a gap that were routed and measured, over all gaps.
+        public var waypointOptions = 0
+        /// Combinations the slack allocation handed back to be assembled.
+        public var waypointAllocations = 0
+        /// How many of those enclosed enough ground to be worth preferring. If
+        /// this is zero the shape preference had nothing to prefer, and the
+        /// problem is where the shaping points are put rather than which
+        /// combination is chosen.
+        public var waypointEnclosing = 0
+        /// Joins at which the departing gap had to be routed again to stop it
+        /// turning round on the edge the arriving gap came in on. Each gap is
+        /// routed independently, so without this every anchor costs the walk a
+        /// U-turn — which on real ground refused every candidate.
+        public var waypointJoinsRepaired = 0
+        /// Assembled walks that had a short backtrack cut out of them before
+        /// they were judged. Without this the gate refuses a whole walk for a
+        /// forty-metre duck into a driveway — see `LocalSpikeTrim`.
+        public var waypointSpikesTrimmed = 0
+        /// Gate-passing walks that still pass every pin in order. Walks that
+        /// do not are still offered when there is nothing better, but never
+        /// ahead of one that does.
+        public var waypointOfferedHittingPins = 0
+
         public init() {}
     }
 

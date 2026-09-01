@@ -74,7 +74,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Temporary testing")
                     } footer: {
-                        Text("On-device finds the walk on this phone, using walking paths it downloads for the area and keeps. Loops with waypoints need Remote. A route screen says which engine actually answered.")
+                        Text("On-device finds the walk on this phone, using walking paths it downloads for the area and keeps. Waypoints work on both. A route screen says which engine actually answered.")
                     }
                 }
 

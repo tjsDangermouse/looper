@@ -91,8 +91,15 @@ public actor RoutingDataManager {
 
     // MARK: - Coverage
 
-    public func coverage(lat: Double, lon: Double, targetMetres: Double) async -> Coverage {
-        let bounds = RoutingCoverage.requiredBounds(lat: lat, lon: lon, targetMetres: targetMetres)
+    /// `waypoints` widen the area to take in the pins and the room a leg
+    /// needs to get round things near them. Empty — the ordinary loop case —
+    /// leaves the start-centred box exactly as it was.
+    public func coverage(
+        lat: Double, lon: Double, targetMetres: Double, waypoints: [Point] = []
+    ) async -> Coverage {
+        let bounds = RoutingCoverage.requiredBounds(
+            start: Point(lon, lat), waypoints: waypoints, targetMetres: targetMetres
+        )
         let required = grid.chunks(covering: bounds)
         let missing = await store.missing(from: required)
         let missingSet = Set(missing)
@@ -116,12 +123,13 @@ public actor RoutingDataManager {
         lat: Double,
         lon: Double,
         targetMetres: Double,
+        waypoints: [Point] = [],
         retention: RoutingChunkStore.Retention = .automatic,
         allowDownload: Bool = true,
         onProgress: (@Sendable (Progress) -> Void)? = nil
     ) async throws -> AcquisitionReport {
         let began = Date()
-        var coverage = await coverage(lat: lat, lon: lon, targetMetres: targetMetres)
+        var coverage = await coverage(lat: lat, lon: lon, targetMetres: targetMetres, waypoints: waypoints)
         guard !coverage.isComplete else {
             return AcquisitionReport(
                 coverage: coverage, overpassRequests: 0, downloadedBytes: 0, waysReceived: 0,
@@ -167,7 +175,7 @@ public actor RoutingDataManager {
         RoutingLog.data.info("coverage done requests=\(requests) ways=\(ways) nodes=\(nodes) chunksPopulated=\(populated) storedBytes=\(storedBytes) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
         await audit?.recordChunksPopulated(populated)
         await store.evictIfNeeded()
-        coverage = await self.coverage(lat: lat, lon: lon, targetMetres: targetMetres)
+        coverage = await self.coverage(lat: lat, lon: lon, targetMetres: targetMetres, waypoints: waypoints)
         return AcquisitionReport(
             coverage: coverage,
             overpassRequests: requests,
@@ -183,8 +191,12 @@ public actor RoutingDataManager {
     /// The graph data for a walk, read from the store. No network, ever: by
     /// the time this is called the data is either present or the request has
     /// already failed with `dataUnavailableOffline`.
-    public func storedData(lat: Double, lon: Double, targetMetres: Double) async -> OSMData {
-        let bounds = RoutingCoverage.requiredBounds(lat: lat, lon: lon, targetMetres: targetMetres)
+    public func storedData(
+        lat: Double, lon: Double, targetMetres: Double, waypoints: [Point] = []
+    ) async -> OSMData {
+        let bounds = RoutingCoverage.requiredBounds(
+            start: Point(lon, lat), waypoints: waypoints, targetMetres: targetMetres
+        )
         return await store.merged(grid.chunks(covering: bounds))
     }
 

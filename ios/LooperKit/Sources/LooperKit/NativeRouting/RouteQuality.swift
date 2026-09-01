@@ -524,19 +524,45 @@ public enum RouteQuality {
     ///     network rather than from the line — see `edgeRepeatReport`. The
     ///     remote engine does exactly this whenever GraphHopper gives it
     ///     traversals, so supplying them is parity, not leniency.
+    ///   - excusedRetraceMetres: retracing the walker asked for, rather than
+    ///     retracing the engine chose.
+    ///
+    ///     A pin dropped at the end of a lane, on a pier, at a viewpoint, can
+    ///     only be visited by walking in and walking out again. That is not a
+    ///     routing defect and it is not noise: it is the walk that was
+    ///     requested, and the ground offers no other way to honour it. Judged
+    ///     without this the gate refuses the walk for doing exactly what it
+    ///     was told, and the only escape is to delete the visit — which is the
+    ///     escape the remote engine takes, and why more than half its waypoint
+    ///     walks no longer pass their own pins.
+    ///
+    ///     Measured, never assumed: the caller supplies only ground it can
+    ///     show is the mirrored approach to and retreat from a pin. Every
+    ///     other metre of retracing is still charged in full.
     ///   - stemMetres: an out-and-back at the door that the *engine* imposed
     ///     rather than the walk choosing it. The on-device search must root a
     ///     circuit at a node inside the 2-core, so a walk from a cul-de-sac
     ///     address carries the same stem out and back whatever it does in
     ///     between. It is not a spur the walker would recognise as one, and no
     ///     remote route has one, so it is not charged as one.
+    ///   - maxDistanceError: how far off the requested length a walk may be.
+    ///     Only ever passed by the waypoint path, and it is the service's own
+    ///     waypoint tolerance rather than a relaxation invented here: a walk
+    ///     through fixed pins cannot choose its own length as freely as a ring
+    ///     can, so both engines judge it in a wider band. Note that it moves
+    ///     the *verdict* and not the score — closeness is still scored against
+    ///     the standard threshold, so a waypoint walk's quality number stays
+    ///     on one scale with every other walk's.
     public static func analyse(
         coordinates: [Point],
         start: Point,
         distanceMetres: Double,
         targetMetres: Double,
         traversals: [EdgeTraversal]? = nil,
-        stemMetres: Double = 0
+        stemMetres: Double = 0,
+        maxDistanceError: Double = RouteQuality.maxDistanceError,
+        excusedRetraceMetres: Double = 0,
+        excusedUTurns: Int = 0
     ) -> Report {
         var rejections: [String] = []
         // The stem is the same edges out and back, so on the network it reads
@@ -558,16 +584,26 @@ public enum RouteQuality {
 
         /// Long enough that it can only be a real feature, not an accident.
         let longEnoughBacktrack = repeats.longestReverseRunMetres >= minBacktrackMetres
+        /// What is left of the longest backtrack once the ground a pin forced
+        /// the walk to cover twice is taken off it. A walk whose only
+        /// backtracking is the lane to the viewpoint the walker chose has
+        /// nothing here to answer for.
+        let unaskedReverseRun = Swift.max(0, repeats.longestReverseRunMetres - excusedRetraceMetres)
         /// Some ground retraced, but not enough of it to be the walk's own
         /// feature rather than a corner that turned out to be a dead end.
-        let shortBacktrack = repeats.longestReverseRunMetres > 0 && !longEnoughBacktrack
+        let shortBacktrack = unaskedReverseRun > 0 && !longEnoughBacktrack
         /// A walk that is essentially there-and-back — a promenade, a pier, a
         /// headland with one road in — legitimately encloses almost no area
         /// and runs long and thin. That is what the walk is, not a failure.
         let wholeWalkOutAndBack = longEnoughBacktrack
             && repeats.longestReverseRunMetres > distanceMetres * outAndBackShareThreshold
         /// Ground repeated beyond the one long crossing already excused above.
-        let scribbleMetres = Swift.max(0, repeats.repeatedMetres - (longEnoughBacktrack ? repeats.longestReverseRunMetres : 0))
+        let scribbleMetres = Swift.max(
+            0,
+            repeats.repeatedMetres
+                - (longEnoughBacktrack ? repeats.longestReverseRunMetres : 0)
+                - excusedRetraceMetres
+        )
         /// A walk that genuinely goes somewhere. It may be long and thin and
         /// enclose little area, and that is a shape a walker asked for as much
         /// as a circle is — a river out and a street back, a ridge, a
@@ -588,7 +624,13 @@ public enum RouteQuality {
         if distanceErrorFraction > maxDistanceError { rejections.append("distance") }
         if scribbleMetres > distanceMetres * maxRepeatedFraction { rejections.append("repeated-corridor") }
         if shortBacktrack { rejections.append("out-and-back-spur") }
-        if uTurnCount > maxUTurns { rejections.append("u-turns") }
+        // Turning round at the tip of a lane a pin sits on is the same fact as
+        // the retracing excused above, counted a second way: the walk went in
+        // and came out, so it turned. Charging it once is right and charging it
+        // twice refuses the walk outright, because two pins on lanes exhaust
+        // the allowance on their own. Only pins whose mirrored ground was
+        // actually measured buy an excuse here.
+        if uTurnCount > maxUTurns + excusedUTurns { rejections.append("u-turns") }
         if !wholeWalkOutAndBack
             && boundingBoxRatio > (reaches ? elongatedBoundingBoxRatio : maxBoundingBoxRatio) {
             rejections.append("elongated")

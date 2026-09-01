@@ -222,17 +222,13 @@ public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
         let targetMetres = request.targetMetres(paceMinutesPerKm: paceMinutesPerKm)
         guard targetMetres > 0 else { throw LocalLoopRouter.Failure.noLoopFound }
 
-        // Ordered waypoints are not something a closed-walk search answers,
-        // and quietly answering a different question would be worse than
-        // saying so. The app keeps those on the remote engine.
-        guard request.waypoints.isEmpty else {
-            throw LooperAPIError.message("Loops with waypoints need Remote routing. Switch engines in Settings, or clear the waypoints.")
-        }
-
         let progress = request.onDataProgress
         do {
             _ = try await data.ensureCoverage(
                 lat: request.start.lat, lon: request.start.lng, targetMetres: targetMetres,
+                // The pins widen the area that has to be on the phone. A walk
+                // through a place two kilometres away needs that place.
+                waypoints: request.waypoints,
                 onProgress: progress.map { handler in
                     { @Sendable update in
                         handler(LoopDataProgress(
@@ -255,7 +251,18 @@ public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
             throw RoutingDataManager.AcquisitionError.dataUnavailableOffline
         }
 
-        let (graph, index) = try await graphFor(lat: request.start.lat, lon: request.start.lng, targetMetres: targetMetres)
+        let (graph, index) = try await graphFor(
+            lat: request.start.lat, lon: request.start.lng,
+            targetMetres: targetMetres, waypoints: request.waypoints
+        )
+
+        // Ordered pins are a different question from a ring, and they get a
+        // different search — but the same graph, the same gate and the same
+        // guarantee: no routing call leaves this device either way.
+        if !request.waypoints.isEmpty {
+            return try waypointLoops(request, targetMetres: targetMetres, graph: graph, index: index)
+        }
+
         let result = try router.findLoops(
             .init(
                 lat: request.start.lat, lon: request.start.lng, targetMetres: targetMetres,
@@ -279,9 +286,84 @@ public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
         )
     }
 
+    /// Walks through ordered pins.
+    ///
+    /// Separated from the ring case only so that each reads as the one thing
+    /// it is. Note what this does *not* do: reach for the remote engine. A
+    /// waypoint walk the device cannot build is reported as such, in the same
+    /// words the service would use, because an engine that quietly changes
+    /// under a comparison is not a comparison.
+    private func waypointLoops(
+        _ request: LoopRequest, targetMetres: Double,
+        graph: LocalWalkingGraph, index: LocalEdgeIndex
+    ) throws -> LoopResponse {
+        let result = try router.findWaypointLoops(
+            .init(
+                start: request.start, waypoints: request.waypoints, targetMetres: targetMetres,
+                variation: request.variation,
+                exclude: request.excludeRoutes.map(\.geometry.coordinates)
+            ),
+            in: graph, index: index
+        )
+        let d = result.diagnostics
+        RoutingLog.search.info("local waypoints pins=\(d.waypointCount) stage=\(d.waypointStage ?? "backbone", privacy: .public) backbone=\(Int(d.waypointBackboneMetres))m options=\(d.waypointOptions) allocations=\(d.waypointAllocations) enclosing=\(d.waypointEnclosing) passedGate=\(d.passedGate) offered=\(d.offered) totalMs=\(Int(d.totalMs)) failure=\(d.failure ?? "-", privacy: .public)")
+
+        // The pins alone need more ground than the plan allows. Say how much
+        // more: a walker can act on "at least 8.2 km" and cannot act on "no".
+        if let minimum = result.minimumMetres {
+            return LoopResponse(
+                routes: [],
+                warning: Self.tooFarForPlan(minimum, request: request, targetMetres: targetMetres),
+                expectationExceeded: true,
+                localDiagnostics: result.diagnostics,
+                routingEngine: .onDevice
+            )
+        }
+        guard !result.routes.isEmpty else {
+            // The router reports rather than throws, so the diagnostics that
+            // say *which* gate refused every walk survive to the log line
+            // above. Turning that into an error is this layer's job.
+            throw LooperAPIError.message(result.warning
+                ?? "We couldn’t find a clean loop of that length through those waypoints. Try a different distance, or move a waypoint.")
+        }
+        return LoopResponse(
+            routes: result.routes,
+            warning: result.warning,
+            localDiagnostics: result.diagnostics,
+            routingEngine: .onDevice
+        )
+    }
+
+    /// The service's own refusal, worded the same way and in the walker's own
+    /// units. Parity here is not cosmetic: the two engines refusing the same
+    /// request differently is exactly the kind of difference a field test
+    /// would misread as a routing difference.
+    static func tooFarForPlan(_ minimumMetres: Double, request: LoopRequest, targetMetres: Double) -> String {
+        let overBy = Int((LocalLoopRouter.waypointDistanceTolerance * 100).rounded())
+        let needed: String
+        let asked: String
+        switch request.mode {
+        case .distance where request.unit == .mi:
+            needed = String(format: "%.1f miles", minimumMetres / 1609.344)
+            asked = String(format: "%.1f miles", (request.distanceKm ?? 0))
+        case .distance:
+            needed = String(format: "%.1f km", minimumMetres / 1000)
+            asked = String(format: "%.1f km", request.distanceKm ?? 0)
+        case .time:
+            let pace = targetMetres > 0 ? (request.durationMinutes ?? 0) / targetMetres : 0
+            needed = "\(Int((minimumMetres * pace).rounded(.up))) minutes"
+            asked = "\(Int((request.durationMinutes ?? 0).rounded())) minutes"
+        }
+        return "These waypoints need at least \(needed), which is more than \(overBy)% over your \(asked) plan. Increase your plan or remove a waypoint."
+    }
+
     /// Build the graph, or reuse the one already built for this ground.
-    private func graphFor(lat: Double, lon: Double, targetMetres: Double) async throws -> (LocalWalkingGraph, LocalEdgeIndex) {
-        let chunks = RoutingCoverage.requiredChunks(lat: lat, lon: lon, targetMetres: targetMetres)
+    private func graphFor(
+        lat: Double, lon: Double, targetMetres: Double, waypoints: [Point] = []
+    ) async throws -> (LocalWalkingGraph, LocalEdgeIndex) {
+        let chunks = RoutingCoverage.requiredChunks(
+            start: Point(lon, lat), waypoints: waypoints, targetMetres: targetMetres
+        )
         let key = chunks.map(\.key).joined(separator: ",")
         if key == cachedKey, let graph = cachedGraph, let index = cachedIndex { return (graph, index) }
         let merged = await store.merged(chunks)

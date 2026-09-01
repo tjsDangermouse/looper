@@ -201,4 +201,230 @@ final class LiveOverpassMeasurementTests: XCTestCase {
             }
         }
     }
+
+    /// The same ground, asked to go somewhere.
+    ///
+    /// The measurement that matters for waypoints is not whether a walk comes
+    /// back — a backbone always does — but whether it comes back the right
+    /// length and the right shape. On real ground the service's own waypoint
+    /// mode misses the requested distance by four times what its ring mode
+    /// does, and `shapeless` was killing 18 of every 24 walks it assembled.
+    /// Those are the numbers this run exists to put a figure on here.
+    func testMeasureRealWaypointWalks() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["LOOPER_LIVE_OVERPASS"] == "1")
+        let douglas = Point(-4.4816, 54.1506)
+        let target = 5000.0
+
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("looper-live-chunks", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let store = RoutingChunkStore(directory: directory)
+        let manager = RoutingDataManager(
+            store: store,
+            source: OverpassRoutingDataSource(
+                configuration: .init(serverTimeoutSeconds: 120, maxAttempts: 5, retryDelaySeconds: 15)
+            )
+        )
+        // The pins are chosen from this graph below, so the area is fetched
+        // for the ring alone. That is sound here and only here: a 5 km ring's
+        // box reaches 3.1 km from the door and the pins are picked at one, so
+        // nothing is outside it. The app passes its pins in — see
+        // `RoutingCoverage.requiredBounds(start:waypoints:targetMetres:)`.
+        _ = try await manager.ensureCoverage(lat: douglas.lat, lon: douglas.lng, targetMetres: target)
+        let data = await manager.storedData(lat: douglas.lat, lon: douglas.lng, targetMetres: target)
+        let (graph, build) = LocalWalkingGraphBuilder.build(from: data)
+        let index = LocalEdgeIndex(graph: graph)
+
+        // Two pins about a kilometre out on different bearings: a walk that
+        // genuinely goes somewhere and comes back another way.
+        //
+        // Chosen from ground the door can actually reach rather than from a
+        // bearing and a distance. Douglas is a coastal town and a bearing
+        // taken blind lands in the bay or on a severed fragment — which the
+        // engine correctly refuses, and which would make this a test of the
+        // fixture rather than of the router.
+        let (reachable, _) = try LocalExploration.explore(
+            graph: graph, index: index, lat: douglas.lat, lon: douglas.lng, limitMetres: 3000
+        )
+        func pin(towards bearing: Double) throws -> Point {
+            let aim = LocalGeo.destination(lat: douglas.lat, lon: douglas.lng, metres: 1000, bearing: bearing)
+            let best = reachable.nodes
+                .filter { $0.networkMetres > 600 && $0.networkMetres < 1600 }
+                .min { LocalGeo.distance(lat1: $0.lat, lon1: $0.lon, lat2: aim.lat, lon2: aim.lon)
+                     < LocalGeo.distance(lat1: $1.lat, lon1: $1.lon, lat2: aim.lat, lon2: aim.lon) }
+            let node = try XCTUnwrap(best, "no reachable ground about a kilometre out towards \(Int(bearing))°")
+            return Point(node.lon, node.lat)
+        }
+        let pins = [try pin(towards: 0), try pin(towards: 90)]
+        for (which, place) in pins.enumerated() {
+            print(String(format: "   pin %d: %.0fm from the door as the crow flies", which, haversine(douglas, place)))
+        }
+
+        let began = Date()
+        let result = try LocalLoopRouter().findWaypointLoops(
+            .init(start: douglas, waypoints: pins, targetMetres: target),
+            in: graph, index: index
+        )
+        let ms = Date().timeIntervalSince(began) * 1000
+        let d = result.diagnostics
+
+        print("""
+        [live] Douglas 5km via 2 pins \
+        graph=\(build.graphNodes)n/\(build.graphEdges)e \
+        stage=\(d.waypointStage ?? "backbone") backbone=\(Int(d.waypointBackboneMetres))m \
+        joins-repaired=\(d.waypointJoinsRepaired) \
+        options=\(d.waypointOptions) allocations=\(d.waypointAllocations) enclosing=\(d.waypointEnclosing) \
+        assembled=\(d.closedWalks) gate-]=\(d.gateRejected) passed=\(d.passedGate) \
+        offered=\(result.routes.count) totalMs=\(Int(ms)) \
+        failure=\(d.failure ?? "-") warning=\(result.warning ?? "-")
+        """)
+        if !d.gateRejectionsByReason.isEmpty {
+            print("   gate: " + d.gateRejectionsByReason.sorted { $0.value > $1.value }
+                .map { "\($0.key)=\($0.value)" }.joined(separator: " "))
+        }
+        for route in result.routes {
+            let line = route.geometry.coordinates
+            print(String(
+                format: "   -> %@ %dm err=%+.1f%% compact=%.2f steps=%d",
+                route.name, Int(route.distanceMeters),
+                route.distanceMeters / target * 100 - 100,
+                RouteQuality.compactness(line), route.steps.count
+            ))
+            XCTAssertTrue(
+                LocalLoopRouter.route(line, hits: pins),
+                "a waypoint walk that misses its pins is not the walk that was asked for"
+            )
+        }
+        XCTAssertNil(result.minimumMetres, "two pins a kilometre out fit comfortably in a 5 km plan")
+        XCTAssertGreaterThan(result.routes.count, 0, "no waypoint walk was offered on real ground")
+    }
+
+    /// How often a waypoint request actually produces a walk.
+    ///
+    /// One favourable pin pair proves nothing. This sweeps many of them and
+    /// reports the offer rate and what refused the rest, which is the only
+    /// number that says whether the feature works.
+    func testMeasureWaypointOfferRate() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["LOOPER_LIVE_OVERPASS"] == "1")
+        let douglas = Point(-4.4816, 54.1506)
+        let target = 5000.0
+
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("looper-live-chunks", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let manager = RoutingDataManager(
+            store: RoutingChunkStore(directory: directory),
+            source: OverpassRoutingDataSource(configuration: .init(serverTimeoutSeconds: 120, maxAttempts: 5, retryDelaySeconds: 15))
+        )
+        _ = try await manager.ensureCoverage(lat: douglas.lat, lon: douglas.lng, targetMetres: target)
+        let data = await manager.storedData(lat: douglas.lat, lon: douglas.lng, targetMetres: target)
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: data)
+        let index = LocalEdgeIndex(graph: graph)
+        let (reachable, _) = try LocalExploration.explore(
+            graph: graph, index: index, lat: douglas.lat, lon: douglas.lng, limitMetres: 3000
+        )
+        func pin(towards bearing: Double, metres: Double) -> Point? {
+            let aim = LocalGeo.destination(lat: douglas.lat, lon: douglas.lng, metres: metres, bearing: bearing)
+            let best = reachable.nodes
+                .filter { $0.networkMetres > metres * 0.5 && $0.networkMetres < metres * 1.8 }
+                .min { LocalGeo.distance(lat1: $0.lat, lon1: $0.lon, lat2: aim.lat, lon2: aim.lon)
+                     < LocalGeo.distance(lat1: $1.lat, lon1: $1.lon, lat2: aim.lat, lon2: aim.lon) }
+            return best.map { Point($0.lon, $0.lat) }
+        }
+
+        var asked = 0, offered = 0, empty = 0, hits = 0, misses = 0
+        var errors: [Double] = [], shapes: [Double] = [], millis: [Double] = []
+        var reasons: [String: Int] = [:]
+        var failures: [String: Int] = [:]
+        let router = LocalLoopRouter()
+        for first in stride(from: 0.0, to: 360, by: 45) {
+            for spread in [60.0, 120.0, 180.0] {
+                for distance in [700.0, 1200.0] {
+                    guard let a = pin(towards: first, metres: distance),
+                          let b = pin(towards: first + spread, metres: distance) else { continue }
+                    asked += 1
+                    // Emitted so the very same questions can be put to the
+                    // route service. A comparison against the remote engine is
+                    // only worth anything if both are asked about the same
+                    // ground.
+                    print(String(format: "[case] %.6f,%.6f %.6f,%.6f", a.lng, a.lat, b.lng, b.lat))
+                    let result = try router.findWaypointLoops(
+                        .init(start: douglas, waypoints: [a, b], targetMetres: target),
+                        in: graph, index: index
+                    )
+                    if result.routes.isEmpty {
+                        empty += 1
+                        failures[result.diagnostics.failure ?? "-", default: 0] += 1
+                        for (reason, count) in result.diagnostics.gateRejectionsByReason { reasons[reason, default: 0] += count }
+                    } else {
+                        offered += result.routes.count
+                        // Offer rate alone can be bought by relaxing what
+                        // "through these places" means, so it is measured
+                        // rather than assumed: does the walk still pass every
+                        // pin, in order, within the tolerance the service uses?
+                        for route in result.routes {
+                            if LocalLoopRouter.route(route.geometry.coordinates, hits: [a, b]) { hits += 1 } else { misses += 1 }
+                            errors.append(abs(route.distanceMeters - target) / target)
+                            shapes.append(RouteQuality.compactness(route.geometry.coordinates))
+                        }
+                        millis.append(result.diagnostics.totalMs)
+                    }
+                }
+            }
+        }
+        print("[rate] asked=\(asked) produced=\(asked - empty) empty=\(empty) "
+            + "offerRate=\(asked > 0 ? (asked - empty) * 100 / asked : 0)% routes=\(offered)")
+        func median(_ xs: [Double]) -> Double { xs.isEmpty ? 0 : xs.sorted()[xs.count / 2] }
+        print(String(format: "   quality: medianDistanceError=%.1f%% worst=%.1f%% medianCompactness=%.2f medianMs=%d",
+            median(errors) * 100, (errors.max() ?? 0) * 100, median(shapes), Int(median(millis))))
+        print("   pins: hit=\(hits) missed=\(misses) "
+            + "hitRate=\(hits + misses > 0 ? hits * 100 / (hits + misses) : 0)%")
+        print("   failures: " + failures.sorted { $0.value > $1.value }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))
+        print("   gate: " + reasons.sorted { $0.value > $1.value }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))
+    }
+
+    /// Does a walk routed straight through the pins actually pass them?
+    ///
+    /// Isolates the hit test from everything built on top of it. If the plain
+    /// backbone — legs that literally run pin to pin, untrimmed — does not
+    /// register as passing its own pins, the measurement is wrong rather than
+    /// the walks.
+    func testMeasureBackboneHitsItsOwnPins() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["LOOPER_LIVE_OVERPASS"] == "1")
+        let douglas = Point(-4.4816, 54.1506)
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("looper-live-chunks", isDirectory: true)
+        let manager = RoutingDataManager(
+            store: RoutingChunkStore(directory: directory),
+            source: OverpassRoutingDataSource(configuration: .init(serverTimeoutSeconds: 120))
+        )
+        let data = await manager.storedData(lat: douglas.lat, lon: douglas.lng, targetMetres: 5000)
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: data)
+        let index = LocalEdgeIndex(graph: graph)
+        let (reachable, _) = try LocalExploration.explore(
+            graph: graph, index: index, lat: douglas.lat, lon: douglas.lng, limitMetres: 3000
+        )
+        func pin(towards bearing: Double) -> Point? {
+            let aim = LocalGeo.destination(lat: douglas.lat, lon: douglas.lng, metres: 1000, bearing: bearing)
+            return reachable.nodes
+                .filter { $0.networkMetres > 500 && $0.networkMetres < 1800 }
+                .min { LocalGeo.distance(lat1: $0.lat, lon1: $0.lon, lat2: aim.lat, lon2: aim.lon)
+                     < LocalGeo.distance(lat1: $1.lat, lon1: $1.lon, lat2: aim.lat, lon2: aim.lon) }
+                .map { Point($0.lon, $0.lat) }
+        }
+        var raw = 0, trimmed = 0, protectedTrim = 0, total = 0
+        for bearing in stride(from: 0.0, to: 360, by: 45) {
+            guard let a = pin(towards: bearing), let b = pin(towards: bearing + 120) else { continue }
+            guard let leg = try? LocalLegRouter.route(
+                graph: graph, index: index, through: [douglas, a, b, douglas], protecting: [a, b]
+            ) else { continue }
+            total += 1
+            if LocalLoopRouter.route(leg.coordinates, hits: [a, b]) { raw += 1 }
+            let cut = LocalSpikeTrim.trimming(leg.legs, protecting: [])
+            if LocalLoopRouter.route(LocalLegRouter.line(of: cut), hits: [a, b]) { trimmed += 1 }
+            let kept = LocalSpikeTrim.trimming(leg.legs, protecting: [a, b])
+            if LocalLoopRouter.route(LocalLegRouter.line(of: kept), hits: [a, b]) { protectedTrim += 1 }
+        }
+        print("[hits] backbones=\(total) untrimmed=\(raw) afterUnprotectedTrim=\(trimmed) afterProtectedTrim=\(protectedTrim)")
+    }
 }
