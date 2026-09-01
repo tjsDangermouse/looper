@@ -250,6 +250,94 @@ public enum RouteQuality {
         return report
     }
 
+    // MARK: - Retracing, from the network
+
+    /// One pass over one physical edge, in walking order.
+    public struct EdgeTraversal: Sendable {
+        /// The physical (base graph) edge, so the two halves of a split edge
+        /// are the same street and are charged as such.
+        public var id: Int32
+        public var metres: Double
+        /// Distance from the walk's start to where this pass began.
+        public var along: Double
+        /// Unit vector of the pass, in any consistent metric frame. Only its
+        /// sign against another pass of the same edge is ever used.
+        public var dirX: Double
+        public var dirY: Double
+
+        public init(id: Int32, metres: Double, along: Double, dirX: Double, dirY: Double) {
+            self.id = id
+            self.metres = metres
+            self.along = along
+            self.dirX = dirX
+            self.dirY = dirY
+        }
+    }
+
+    /// The same question as `findRepeatedCorridors`, asked of the network
+    /// instead of the line. A port of the route service's `edgeRepeatReport`.
+    ///
+    /// This is the measure to prefer wherever the walk knows its edges, and a
+    /// searched walk always does. The geometric measure calls two stretches the
+    /// same ground when they run within 17.5 m of each other at under 35°,
+    /// which is true of a road and its own pavement, of a footway beside a
+    /// river, and of the two sides of a dual carriageway — none of which a
+    /// walker experiences as covering the same ground twice. Asking the network
+    /// removes those, and only those: a street genuinely walked twice has the
+    /// same edge id twice and is still charged for it.
+    ///
+    /// The doorstep is skipped at both ends for the same reason as the
+    /// geometric measure — every loop shares the way out and the way back.
+    public static func edgeRepeatReport(
+        _ traversals: [EdgeTraversal], totalMetres: Double, ignoreStartMetres: Double = startIgnoreMetres
+    ) -> RepeatReport {
+        guard !traversals.isEmpty, totalMetres > 0 else { return RepeatReport() }
+        /// The most of an edge covered in one pass so far, and which way it ran.
+        var covered: [Int32: (metres: Double, dirX: Double, dirY: Double)] = [:]
+        var report = RepeatReport()
+        var repeatedRun = 0.0
+        var reverseRun = 0.0
+        var longestRepeatedRun = 0.0
+
+        for traversal in traversals {
+            // Symmetric on purpose, where the reference tests only where a
+            // pass *starts*. A pass is at the doorstep if any part of it lies
+            // in the opening or closing window — otherwise the leg that walks
+            // back up to the door is excused only when it happens to begin
+            // past the boundary, which the returning half of a stem never
+            // does: it begins exactly on it.
+            let atDoorstep = traversal.along < ignoreStartMetres
+                || traversal.along + traversal.metres > totalMetres - ignoreStartMetres
+            let seen = covered[traversal.id]
+            // A pass repeats only as much of the edge as an earlier pass
+            // already covered, so the second full traversal of a street counts
+            // once and the third counts twice.
+            let overlap = atDoorstep ? 0 : Swift.min(traversal.metres, seen?.metres ?? 0)
+
+            if overlap > 0 {
+                let reversed = seen.map { traversal.dirX * $0.dirX + traversal.dirY * $0.dirY < 0 } ?? false
+                report.repeatedMetres += overlap
+                report.weightedRepeatedMetres += overlap * (reversed ? reverseOverlapWeight : 1)
+                repeatedRun += overlap
+                reverseRun = reversed ? reverseRun + overlap : 0
+                longestRepeatedRun = Swift.max(longestRepeatedRun, repeatedRun)
+                report.longestReverseRunMetres = Swift.max(report.longestReverseRunMetres, reverseRun)
+            } else {
+                repeatedRun = 0
+                reverseRun = 0
+            }
+
+            if seen == nil || traversal.metres > seen!.metres {
+                covered[traversal.id] = (traversal.metres, traversal.dirX, traversal.dirY)
+            }
+        }
+
+        // `runs` stays empty: nothing downstream reads it, and an edge report
+        // has no notion of a contiguous stretch of line to populate it with.
+        report.repeatedPercent = report.repeatedMetres / totalMetres * 100
+        return report
+    }
+
     /// The out-and-back stub at the start: walk outwards from the beginning
     /// and inwards from the end at the same pace, and while the two are on the
     /// same ground the walk has not started its loop yet.
@@ -360,19 +448,42 @@ public enum RouteQuality {
     /// other rejection is about the *shape* of the walk.
     public static let essentialRejections: Set<String> = ["distance", "duration", "open-ended"]
 
+    /// - Parameters:
+    ///   - traversals: the physical edges the walk spent, in walking order,
+    ///     where the engine knows them. Retracing is then measured on the
+    ///     network rather than from the line — see `edgeRepeatReport`. The
+    ///     remote engine does exactly this whenever GraphHopper gives it
+    ///     traversals, so supplying them is parity, not leniency.
+    ///   - stemMetres: an out-and-back at the door that the *engine* imposed
+    ///     rather than the walk choosing it. The on-device search must root a
+    ///     circuit at a node inside the 2-core, so a walk from a cul-de-sac
+    ///     address carries the same stem out and back whatever it does in
+    ///     between. It is not a spur the walker would recognise as one, and no
+    ///     remote route has one, so it is not charged as one.
     public static func analyse(
         coordinates: [Point],
         start: Point,
         distanceMetres: Double,
-        targetMetres: Double
+        targetMetres: Double,
+        traversals: [EdgeTraversal]? = nil,
+        stemMetres: Double = 0
     ) -> Report {
         var rejections: [String] = []
-        let repeats = findRepeatedCorridors(coordinates)
+        // The stem is the same edges out and back, so on the network it reads
+        // as retracing — which is exactly what it is, and exactly what the
+        // walker did not choose. It is excused the same way the doorstep is,
+        // by widening the window rather than by discounting afterwards: the
+        // doorstep simply reaches as far as the circuit does.
+        let doorstep = Swift.max(startIgnoreMetres, stemMetres)
+        let repeats = traversals.map { edgeRepeatReport($0, totalMetres: distanceMetres, ignoreStartMetres: doorstep) }
+            ?? findRepeatedCorridors(coordinates)
         let uTurnCount = countUTurns(coordinates)
         let shape = compactness(coordinates)
         let sides = boundingBoxSides(coordinates)
         let boundingBoxRatio = sides.shortMetres > 0 ? sides.longMetres / sides.shortMetres : .infinity
-        let stub = startStubMetres(coordinates)
+        // The stem is walked at both ends and is measured as part of the stub,
+        // so it comes off the measurement rather than being added to the limit.
+        let stub = Swift.max(0, startStubMetres(coordinates) - stemMetres)
         let startStubLimit = spurLimitMetres(routeMetres: distanceMetres)
 
         /// Long enough that it can only be a real feature, not an accident.

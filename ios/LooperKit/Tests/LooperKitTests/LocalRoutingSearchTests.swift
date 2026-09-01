@@ -143,6 +143,163 @@ final class LocalRoutingSearchTests: XCTestCase {
 
     }
 
+    /// A road and its own pavement are one street, not two passes over one.
+    ///
+    /// The geometric measure cannot tell the difference: two lines 10 m apart
+    /// running the same way for 200 m are "the same ground" to it, which is
+    /// true of a carriageway and its footway, of a path beside a river, and of
+    /// the two sides of a dual carriageway. The remote engine avoids this by
+    /// asking the network whenever GraphHopper hands it traversals, and a
+    /// searched walk always knows its edges — so the on-device gate asks the
+    /// network too. This pins the difference, because it is the one place the
+    /// port was accidentally *stricter* than the engine it was copied from.
+    func testParallelPavementIsNotRetracingWhenTheWalkKnowsItsEdges() {
+        // Out along one side of a street and back along the other: distinct
+        // edges, 12 m apart, which is inside `corridorMatchMetres`.
+        var line: [Point] = []
+        for step in 0...40 {
+            let placed = LocalGeo.destination(
+                lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng,
+                metres: Double(step) * 15, bearing: 90
+            )
+            line.append(Point(placed.lon, placed.lat))
+        }
+        for step in stride(from: 40, through: 0, by: -1) {
+            let along = LocalGeo.destination(
+                lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng,
+                metres: Double(step) * 15, bearing: 90
+            )
+            let across = LocalGeo.destination(lat: along.lat, lon: along.lon, metres: 12, bearing: 0)
+            line.append(Point(across.lon, across.lat))
+        }
+
+        let geometric = RouteQuality.findRepeatedCorridors(line)
+        XCTAssertGreaterThan(
+            geometric.repeatedMetres, 100,
+            "the geometric measure is expected to call the two sides of a street the same ground"
+        )
+
+        // The same walk, described as the network sees it: two different edges,
+        // each walked once.
+        let metres = 40 * 15.0
+        let traversals = [
+            RouteQuality.EdgeTraversal(id: 1, metres: metres, along: 0, dirX: 1, dirY: 0),
+            RouteQuality.EdgeTraversal(id: 2, metres: metres, along: metres, dirX: -1, dirY: 0),
+        ]
+        let network = RouteQuality.edgeRepeatReport(traversals, totalMetres: metres * 2)
+        XCTAssertEqual(network.repeatedMetres, 0, "two distinct edges are not a repeat")
+    }
+
+    /// The network measure still charges a street genuinely walked twice.
+    ///
+    /// The point of the previous test is not that retracing stopped counting.
+    func testTheSameEdgeWalkedTwiceIsStillRetracing() {
+        let metres = 400.0
+        let traversals = [
+            RouteQuality.EdgeTraversal(id: 1, metres: metres, along: 200, dirX: 1, dirY: 0),
+            RouteQuality.EdgeTraversal(id: 1, metres: metres, along: 900, dirX: -1, dirY: 0),
+        ]
+        let report = RouteQuality.edgeRepeatReport(traversals, totalMetres: 1600)
+        XCTAssertEqual(report.repeatedMetres, metres)
+        // Reversed, so charged at the premium the score applies to going back
+        // the way you came.
+        XCTAssertEqual(report.weightedRepeatedMetres, metres * RouteQuality.reverseOverlapWeight)
+        XCTAssertEqual(report.longestReverseRunMetres, metres)
+    }
+
+    /// The doorstep is not retracing, at either end.
+    func testTheSharedDoorstepIsNotChargedAsRepeatedGround() {
+        let traversals = [
+            RouteQuality.EdgeTraversal(id: 1, metres: 40, along: 0, dirX: 1, dirY: 0),
+            RouteQuality.EdgeTraversal(id: 1, metres: 40, along: 960, dirX: -1, dirY: 0),
+        ]
+        let report = RouteQuality.edgeRepeatReport(traversals, totalMetres: 1000)
+        XCTAssertEqual(report.repeatedMetres, 0)
+    }
+
+    /// A stem the engine imposed is not a spur the walker chose.
+    ///
+    /// The on-device search must root a circuit at a node inside the 2-core, so
+    /// a walk from a cul-de-sac address carries the same out-and-back at both
+    /// ends whatever it does in between. No remote route has one — the remote
+    /// engine routes from the door — so charging it under `start-spur` failed
+    /// walks for an artefact of graph reduction. Measured at the default start
+    /// this was rejecting every walk under about 3.75 km.
+    func testTheTwoCoreStemIsNotChargedAsAStartSpur() {
+        // 200 m out to the circuit, a loop, and 200 m back.
+        var line: [Point] = []
+        for step in 0...13 {
+            let placed = LocalGeo.destination(
+                lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng,
+                metres: Double(step) * 15, bearing: 90
+            )
+            line.append(Point(placed.lon, placed.lat))
+        }
+        let hinge = line.last!
+        for step in 0...72 {
+            let centre = LocalGeo.destination(lat: hinge.lat, lon: hinge.lng, metres: 380, bearing: 90)
+            let placed = LocalGeo.destination(
+                lat: centre.lat, lon: centre.lon, metres: 380, bearing: Double(step) * 5 + 270
+            )
+            line.append(Point(placed.lon, placed.lat))
+        }
+        for step in stride(from: 13, through: 0, by: -1) {
+            let placed = LocalGeo.destination(
+                lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng,
+                metres: Double(step) * 15, bearing: 90
+            )
+            line.append(Point(placed.lon, placed.lat))
+        }
+
+        let metres = 2800.0
+        let charged = RouteQuality.analyse(
+            coordinates: line, start: line[0], distanceMetres: metres, targetMetres: metres
+        )
+        XCTAssertTrue(
+            charged.rejections.contains("start-spur"),
+            "expected the uncorrected gate to see a spur here: \(charged.rejections)"
+        )
+
+        let excused = RouteQuality.analyse(
+            coordinates: line, start: line[0], distanceMetres: metres, targetMetres: metres,
+            stemMetres: 195
+        )
+        XCTAssertFalse(
+            excused.rejections.contains("start-spur"),
+            "the stem the engine imposed was still charged: \(excused.rejections)"
+        )
+    }
+
+    /// The stem is retracing on the network, and must not be charged as it.
+    ///
+    /// The companion to the start-spur case: a stem is literally the same
+    /// physical edges walked out and walked back, so the edge measure sees it
+    /// as reversed repeated ground. Left uncorrected that turns the stem into
+    /// an `out-and-back-spur` rejection instead of a `start-spur` one, and the
+    /// cul-de-sac start is no better off than before.
+    func testTheStemIsNotChargedAsRetracingOnTheNetwork() {
+        let stem = 200.0
+        // Out along edges 1 and 2, a circuit on 3 and 4, then back down 2 and 1.
+        let traversals = [
+            RouteQuality.EdgeTraversal(id: 1, metres: 100, along: 0, dirX: 1, dirY: 0),
+            RouteQuality.EdgeTraversal(id: 2, metres: 100, along: 100, dirX: 1, dirY: 0),
+            RouteQuality.EdgeTraversal(id: 3, metres: 1300, along: 200, dirX: 0, dirY: 1),
+            RouteQuality.EdgeTraversal(id: 4, metres: 1300, along: 1500, dirX: 0, dirY: -1),
+            RouteQuality.EdgeTraversal(id: 2, metres: 100, along: 2800, dirX: -1, dirY: 0),
+            RouteQuality.EdgeTraversal(id: 1, metres: 100, along: 2900, dirX: -1, dirY: 0),
+        ]
+        let total = 3000.0
+
+        // The default doorstep of 75 m does not reach the far end of the stem,
+        // so the outer 25 m of edge 2 is charged both ways.
+        let charged = RouteQuality.edgeRepeatReport(traversals, totalMetres: total)
+        XCTAssertGreaterThan(charged.longestReverseRunMetres, 0)
+
+        let excused = RouteQuality.edgeRepeatReport(traversals, totalMetres: total, ignoreStartMetres: stem)
+        XCTAssertEqual(excused.repeatedMetres, 0, "the stem was charged as retracing")
+        XCTAssertEqual(excused.longestReverseRunMetres, 0)
+    }
+
     /// Backtracking is judged by length, not by principle, and the port keeps
     /// that exactly.
     ///

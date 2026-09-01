@@ -69,7 +69,7 @@ public enum WalkSearch {
             targetMetres: Double, tolerance: Double = RoutingCoverage.maxDistanceError,
             beam: Int = WalkSearch.beam, band: Double = WalkSearch.bandMetres, perNode: Int = WalkSearch.perNode,
             diversityQuota: Bool = true, turnAware: Bool = true, turnPenalty: Double = 0.05,
-            minCompactness: Double = WalkSearch.minCompactness, budget: Int = 2_000_000, wanted: Int = .max
+            minCompactness: Double = WalkSearch.minCompactness, budget: Int = 4_000_000, wanted: Int = .max
         ) {
             self.targetMetres = targetMetres
             self.tolerance = tolerance

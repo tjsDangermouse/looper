@@ -38,7 +38,15 @@ public struct LocalLoopRouter: Sendable {
     /// How many walks the search hands the gate to judge. The search closes
     /// far more than this; what the number buys is the selector's room to
     /// separate three genuinely different ones.
-    public static let defaultCandidateWalks = 24
+    ///
+    /// The service caps this at 24 because every candidate it hands back
+    /// crosses a wire carrying its full geometry, instructions and path
+    /// details. On the device there is no wire, and measurement showed the
+    /// selector starving at 24: at Douglas 5 km all 24 passed the gate and 22
+    /// were then refused as too like one already taken. The cost of raising it
+    /// is assembly time for walks that may not be offered; the gain is walks
+    /// that are actually different from each other.
+    public static let defaultCandidateWalks = 64
 
     public struct Request: Sendable {
         public var lat: Double
@@ -50,7 +58,7 @@ public struct LocalLoopRouter: Sendable {
 
         public init(
             lat: Double, lon: Double, targetMetres: Double, wanted: Int = 3,
-            candidateWalks: Int = LocalLoopRouter.defaultCandidateWalks, searchBudget: Int = 2_000_000
+            candidateWalks: Int = LocalLoopRouter.defaultCandidateWalks, searchBudget: Int = 4_000_000
         ) {
             self.lat = lat
             self.lon = lon
@@ -73,8 +81,26 @@ public struct LocalLoopRouter: Sendable {
         public var rejectedShape = 0
         public var rejectedTurns = 0
         public var gateRejected = 0
-        /// Walks that passed the gate but were too like one already chosen.
+        /// Which of the gate's rules did the refusing, by `RouteQuality`'s own
+        /// rejection names. A walk failing three rules is counted under all
+        /// three: the question this answers is "which rule is costing us
+        /// walks", not "how were the walks distributed".
+        public var gateRejectionsByReason: [String: Int] = [:]
         public var passedGate = 0
+        /// Walks that passed the gate but were too like one already chosen.
+        public var diversityRejected = 0
+        /// Passed the gate, were different enough, and simply did not fit.
+        public var diversityNoRoom = 0
+        /// The out-and-back to the nearest node the circuit search could root
+        /// at. Zero when the start is already in the 2-core. Every walk in the
+        /// answer carries it, at both ends, and is charged for it by the
+        /// gate's start-spur rule.
+        public var stemMetres: Double = 0
+        /// How many compass octants the shortlist handed to the gate spans.
+        /// The selector's first pass insists on a new octant per walk, so a
+        /// shortlist sitting in two octants cannot yield three separable
+        /// walks however long it is.
+        public var shortlistOctants = 0
         public var offered = 0
         public var buildMs: Double = 0
         public var judgeMs: Double = 0
@@ -166,6 +192,7 @@ public struct LocalLoopRouter: Sendable {
         let root = result.stats.root
         let stem = root == searchGraph.start ? nil : searchGraph.stem(to: root)
         let stemMetric = stem?.metric ?? []
+        diagnostics.stemMetres = stem?.metres ?? 0
 
         struct Scored {
             var walk: WalkSearch.Walk
@@ -184,6 +211,7 @@ public struct LocalLoopRouter: Sendable {
         }
         let shortlist = withOctantQuota(scored.map { ($0.walk.family, $0.rank) }, wanted: request.candidateWalks)
             .map { scored[$0] }
+        diagnostics.shortlistOctants = Set(shortlist.map(\.walk.family)).count
         diagnostics.judgeMs = Date().timeIntervalSince(judgeBegan) * 1000
 
         // ------------------------------------------------------- materialise
@@ -208,9 +236,15 @@ public struct LocalLoopRouter: Sendable {
             }
             guard coordinates.count >= 4 else { continue }
             let report = RouteQuality.analyse(
-                coordinates: coordinates, start: start, distanceMetres: metres, targetMetres: request.targetMetres
+                coordinates: coordinates, start: start, distanceMetres: metres, targetMetres: request.targetMetres,
+                traversals: traversals(of: legs, origin: start),
+                stemMetres: stem?.metres ?? 0
             )
-            guard report.pass else { diagnostics.gateRejected += 1; continue }
+            guard report.pass else {
+                diagnostics.gateRejected += 1
+                for reason in report.rejections { diagnostics.gateRejectionsByReason[reason, default: 0] += 1 }
+                continue
+            }
             assembled.append((legs, coordinates, metres, report))
             candidates.append(RouteDiversity.Candidate(
                 coordinates: coordinates,
@@ -222,7 +256,10 @@ public struct LocalLoopRouter: Sendable {
         }
 
         diagnostics.passedGate = candidates.count
-        let chosen = RouteDiversity.select(candidates, limit: request.wanted)
+        let selection = RouteDiversity.selecting(candidates, limit: request.wanted)
+        let chosen = selection.chosen
+        diagnostics.diversityRejected = selection.rejectedShared
+        diagnostics.diversityNoRoom = selection.noRoom
         let labels = RouteDiversity.labels(for: chosen.map {
             (bearing: candidates[$0].bearing, distanceMetres: assembled[$0].metres)
         })
@@ -294,6 +331,32 @@ public struct LocalLoopRouter: Sendable {
     }
 
     // MARK: - Assembly
+
+    /// The walk as a sequence of passes over physical edges, which is what the
+    /// gate needs to measure retracing on the network rather than from the
+    /// line. One leg is one pass, already oriented the way it was walked.
+    func traversals(of legs: [WalkLeg], origin: Point) -> [RouteQuality.EdgeTraversal] {
+        let frame = MetricFrame(originLon: origin.lng, originLat: origin.lat)
+        var out: [RouteQuality.EdgeTraversal] = []
+        out.reserveCapacity(legs.count)
+        var along = 0.0
+        for leg in legs {
+            defer { along += leg.metres }
+            guard leg.physical >= 0, let first = leg.coordinates.first, let last = leg.coordinates.last else { continue }
+            let a = frame.project(lon: first.lng, lat: first.lat)
+            let b = frame.project(lon: last.lng, lat: last.lat)
+            let dx = b.x - a.x, dy = b.y - a.y
+            let length = (dx * dx + dy * dy).squareRoot()
+            // A leg whose ends coincide has no direction to compare; without
+            // one, a second pass over it cannot be called a reversal, so it is
+            // counted as forward rather than guessed at.
+            let (ux, uy) = length > 1e-9 ? (dx / length, dy / length) : (0.0, 0.0)
+            out.append(RouteQuality.EdgeTraversal(
+                id: leg.physical, metres: leg.metres, along: along, dirX: ux, dirY: uy
+            ))
+        }
+        return out
+    }
 
     /// The whole walk as flat x/y pairs in the start's metric frame: stem,
     /// circuit, stem back.
@@ -369,7 +432,8 @@ public struct LocalLoopRouter: Sendable {
                 coordinates: coordinates,
                 metres: edge.metres,
                 name: base.name(ofEdge: physical),
-                roadClass: base.roadClass(ofEdge: physical)
+                roadClass: base.roadClass(ofEdge: physical),
+                physical: edge.physical
             ))
         }
 

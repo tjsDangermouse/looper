@@ -14,7 +14,7 @@ final class LiveOverpassMeasurementTests: XCTestCase {
     func testMeasureRealAreas() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["LOOPER_LIVE_OVERPASS"] == "1")
         for (name, point) in places {
-            for targetKm in [3.0, 5.0, 8.0] where name == "Douglas" || targetKm == 5 {
+            for targetKm in [3.0, 4.0, 5.0, 8.0] where name == "Douglas" || targetKm == 5 {
                 // A cache that survives between runs, so re-measuring costs
                 // the public endpoint nothing. Being able to re-run this
                 // without re-downloading is the same property the app relies
@@ -60,10 +60,19 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                 walkable=\(build.waysWalkable)/\(build.waysConsidered) \
                 explored=\(result.diagnostics.exploration.nodesReached)n \
                 super=\(result.diagnostics.searchGraph.superEdges) \
-                closed=\(result.diagnostics.closedWalks) shape-]=\(result.diagnostics.rejectedShape) turns-]=\(result.diagnostics.rejectedTurns) gate-]=\(result.diagnostics.gateRejected) passed=\(result.diagnostics.passedGate) offered=\(result.routes.count) \
+                closed=\(result.diagnostics.closedWalks) shape-]=\(result.diagnostics.rejectedShape) turns-]=\(result.diagnostics.rejectedTurns) gate-]=\(result.diagnostics.gateRejected) passed=\(result.diagnostics.passedGate) \
+                diverse-]=\(result.diagnostics.diversityRejected) noroom=\(result.diagnostics.diversityNoRoom) \
+                stem=\(Int(result.diagnostics.stemMetres))m oct=\(result.diagnostics.shortlistOctants) offered=\(result.routes.count) \
                 searchMs=\(Int(result.diagnostics.search.searchMs)) totalMs=\(Int(ms)) \
                 peakKB=\(result.diagnostics.search.peakStoreBytes / 1024)
                 """)
+                if !result.diagnostics.gateRejectionsByReason.isEmpty {
+                    let byReason = result.diagnostics.gateRejectionsByReason
+                        .sorted { $0.value > $1.value }
+                        .map { "\($0.key)=\($0.value)" }
+                        .joined(separator: " ")
+                    print("   gate: \(byReason)")
+                }
                 for route in result.routes {
                     print("   -> \(route.name) \(Int(route.distanceMeters))m steps=\(route.steps.count)")
                 }

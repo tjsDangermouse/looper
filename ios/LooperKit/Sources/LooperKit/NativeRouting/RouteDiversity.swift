@@ -97,11 +97,41 @@ public enum RouteDiversity {
         Swift.max(sharedFraction(a, b), sharedFraction(b, a))
     }
 
+    /// What the picker took, and what the ground it had to work with cost it.
+    ///
+    /// The counts exist because "fewer routes than the remote engine" has two
+    /// very different causes that look identical from outside: a gate that
+    /// refused everything, and a gate that passed plenty of walks which were
+    /// all the same walk. Only the second shows up here.
+    public struct Selection: Sendable, Equatable {
+        public var chosen: [Int]
+        /// Gate-passing candidates left out because they shared more than
+        /// `maxShared` of their ground with one that was taken. This is the
+        /// number that says diversity, not quality, is the constraint.
+        public var rejectedShared: Int
+        /// Left out only because the limit was already full. Not a loss.
+        public var noRoom: Int
+
+        public init(chosen: [Int], rejectedShared: Int, noRoom: Int) {
+            self.chosen = chosen
+            self.rejectedShared = rejectedShared
+            self.noRoom = noRoom
+        }
+    }
+
     /// Best first, then the best that is a different walk from the ones
     /// already taken. Two passes: the first insists on a different way out of
     /// the door, the second accepts a same-bearing loop that is nonetheless
     /// different ground, because two good loops beat one good loop and a rule.
     public static func select(_ candidates: [Candidate], limit: Int = 3, maxShared: Double = maxSharedFraction) -> [Int] {
+        selecting(candidates, limit: limit, maxShared: maxShared).chosen
+    }
+
+    /// `select`, with the reasons. The choosing is identical — this is the
+    /// implementation and `select` is the view of it that only wants the walks.
+    public static func selecting(
+        _ candidates: [Candidate], limit: Int = 3, maxShared: Double = maxSharedFraction
+    ) -> Selection {
         let ranked = candidates.indices.sorted { candidates[$0].score > candidates[$1].score }
         var chosen: [Int] = []
         var octants: Set<Int> = []
@@ -118,7 +148,21 @@ public enum RouteDiversity {
             }
             if chosen.count >= limit { break }
         }
-        return chosen
+
+        // Counted against the final set rather than tallied during the passes:
+        // a walk the first pass skipped on octant is usually taken by the
+        // second, so a running tally would report losses that never happened.
+        var rejectedShared = 0
+        for index in candidates.indices where !chosen.contains(index) {
+            if chosen.contains(where: { mutualSharedFraction(candidates[index], candidates[$0]) > maxShared }) {
+                rejectedShared += 1
+            }
+        }
+        return Selection(
+            chosen: chosen,
+            rejectedShared: rejectedShared,
+            noRoom: candidates.count - chosen.count - rejectedShared
+        )
     }
 
     /// Two loops that both head north-east would otherwise arrive with the

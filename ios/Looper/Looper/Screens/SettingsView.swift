@@ -502,6 +502,22 @@ private struct RoutingDataView: View {
                     LabeledContent("Snapped", value: String(format: "%.0f m away", diagnostics.exploration.snapDistanceMetres))
                     LabeledContent("Reduced to", value: "\(diagnostics.searchGraph.superEdges) super-edges")
                     LabeledContent("Closed walks", value: "\(diagnostics.closedWalks)")
+                    if diagnostics.stemMetres > 0 {
+                        LabeledContent("Stem to the circuit", value: String(format: "%.0f m", diagnostics.stemMetres))
+                    }
+                    LabeledContent("Passed the gate", value: "\(diagnostics.passedGate) of \(diagnostics.passedGate + diagnostics.gateRejected)")
+                    if !diagnostics.gateRejectionsByReason.isEmpty {
+                        LabeledContent("Refused for", value: diagnostics.gateRejectionsByReason
+                            .sorted { $0.value > $1.value }
+                            .map { "\($0.key) \($0.value)" }
+                            .joined(separator: ", "))
+                    }
+                    // The number that says whether the shortage is quality or
+                    // sameness. A large count here with nothing refused by the
+                    // gate means the search found plenty of good walks and
+                    // they were all the same walk.
+                    LabeledContent("Too alike to offer", value: "\(diagnostics.diversityRejected)")
+                    LabeledContent("Compass spread", value: "\(diagnostics.shortlistOctants) of 8 octants")
                     LabeledContent("Offered", value: "\(diagnostics.offered)")
                     LabeledContent("Search", value: String(format: "%.0f ms", diagnostics.search.searchMs))
                     LabeledContent("Total", value: String(format: "%.0f ms", diagnostics.totalMs))

@@ -7,12 +7,19 @@ public struct WalkLeg {
     public var metres: Double
     public var name: String?
     public var roadClass: PedestrianAccessPolicy.RoadClass
+    /// The base-graph edge this leg ran along, so retracing can be asked of the
+    /// network. `-1` where the caller does not track it.
+    public var physical: Int32
 
-    public init(coordinates: [Point], metres: Double, name: String?, roadClass: PedestrianAccessPolicy.RoadClass) {
+    public init(
+        coordinates: [Point], metres: Double, name: String?,
+        roadClass: PedestrianAccessPolicy.RoadClass, physical: Int32 = -1
+    ) {
         self.coordinates = coordinates
         self.metres = metres
         self.name = name
         self.roadClass = roadClass
+        self.physical = physical
     }
 }
 
