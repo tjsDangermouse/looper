@@ -61,6 +61,11 @@ public final class WalkSearchGraph {
     public let home: [Double]
     /// Compass octant of each node as seen from the start; the diversity axis.
     public let octant: [Int8]
+    /// Each node in the start's metric frame, so a straight-line distance is a
+    /// subtraction rather than a geodesic. The frame's origin is the start, so
+    /// `hypot(nodeX, nodeY)` is already the node's radius from the door.
+    public let nodeX: [Double]
+    public let nodeY: [Double]
     /// The routing start, in compacted node space.
     public let start: Int
 
@@ -144,6 +149,15 @@ public final class WalkSearchGraph {
             ))
         }
         octant = octants
+        var xs = [Double](repeating: 0, count: n)
+        var ys = [Double](repeating: 0, count: n)
+        for i in 0..<n {
+            let point = frame.project(lon: lonValues[i], lat: latValues[i])
+            xs[i] = point.x
+            ys[i] = point.y
+        }
+        nodeX = xs
+        nodeY = ys
 
         // Undirected adjacency over the raw edges. Parallel edges and self
         // loops are kept: a pair of parallel ways between the same junctions

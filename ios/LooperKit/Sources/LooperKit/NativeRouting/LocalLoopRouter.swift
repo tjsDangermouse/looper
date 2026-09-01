@@ -231,7 +231,12 @@ public struct LocalLoopRouter: Sendable {
         }
         var scored: [Scored] = []
         for walk in result.walks {
-            if walk.bboxRatio > LocalLoopRouter.maxBoundingBoxRatio { diagnostics.rejectedShape += 1; continue }
+            // The gate's own aspect rule, applied here on the gate's own terms
+            // — a walk that reaches is allowed to be long and thin — so that
+            // this stage never drops a walk the gate would have passed.
+            let aspectLimit = walk.reachRatio >= RouteQuality.elongationReachRatio
+                ? RouteQuality.elongatedBoundingBoxRatio : LocalLoopRouter.maxBoundingBoxRatio
+            if walk.bboxRatio > aspectLimit { diagnostics.rejectedShape += 1; continue }
             let uTurns = WalkUTurns.count(metricLine(searchGraph, arcs: walk.arcs, stem: stemMetric))
             // The gate's own rule, applied here rather than only afterwards,
             // so a walk it is certain to reject does not take one of the
@@ -281,7 +286,8 @@ public struct LocalLoopRouter: Sendable {
                 score: report.quality.score,
                 bearing: RouteDiversity.initialBearing(coordinates, from: start),
                 edges: physical,
-                totalMetres: metres
+                totalMetres: metres,
+                reachRatio: entry.walk.reachRatio
             ))
         }
 
@@ -295,9 +301,15 @@ public struct LocalLoopRouter: Sendable {
         var unseen = Array(candidates.indices)
         var seen: [Int] = []
         if !request.exclude.isEmpty {
+            // Every candidate against every excluded walk, which is the one
+            // place in the request where the work is a product rather than a
+            // sum. Both sides are resampled once, in the doorstep's frame, so
+            // that the product is only the comparing.
+            let excluded = request.exclude.map { RouteQuality.corridor($0, origin: start, indexed: true) }
+            let sampled = candidates.map { RouteQuality.corridor($0.coordinates, origin: start) }
             let split = partition(unseen) { index in
-                request.exclude.allSatisfy { previous in
-                    RouteQuality.sharedCorridorMetres(candidates[index].coordinates, previous).fraction
+                excluded.allSatisfy { previous in
+                    RouteQuality.sharedCorridorMetres(sampled[index], previous).fraction
                         <= RouteQuality.maxSharedFraction
                 }
             }
@@ -360,12 +372,22 @@ public struct LocalLoopRouter: Sendable {
 
     /// How well a closed walk answers the request, on the terms the quality
     /// score already uses and this stage already knows exactly: how close it
-    /// is to the asked-for length, how round it is, and whether it turns back
-    /// on itself. Retracing is not among them because an edge-simple circuit
-    /// has none, and leg balance is not because a searched walk has no legs.
+    /// is to the asked-for length, how good a shape it is, and whether it
+    /// turns back on itself. Retracing is not among them because an
+    /// edge-simple circuit has none, and leg balance is not because a searched
+    /// walk has no legs.
     func rank(_ walk: WalkSearch.Walk, uTurns: Int, targetMetres: Double) -> Double {
         let closeness = 1 - Swift.min(1, abs(walk.metres - targetMetres) / (targetMetres * RoutingCoverage.maxDistanceError))
-        let shape = Swift.min(1, walk.compactness / 0.5)
+        // A good shape, not a round one. Scoring roundness alone puts every
+        // long thin walk below every circle whatever else is true of it, which
+        // is a claim about geometry and not about walking: a river out and a
+        // street back is not a worse walk than a lap of the same estate. So a
+        // walk may earn this either way, by being round or by going somewhere,
+        // and only a walk that does neither — the knot of little loops — is
+        // marked down.
+        let round = Swift.min(1, walk.compactness / 0.5)
+        let reaching = Swift.min(1, walk.reachRatio / RouteQuality.elongationReachRatio)
+        let shape = Swift.max(round, reaching)
         let simplicity = 1 - Double(uTurns) / Double(WalkSearch.maxUTurns + 1)
         return 0.5 * closeness + 0.35 * shape + 0.15 * simplicity
     }

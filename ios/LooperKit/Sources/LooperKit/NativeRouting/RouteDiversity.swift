@@ -2,11 +2,18 @@ import Foundation
 
 /// Choosing what to offer.
 ///
-/// A port of the route service's `diversity.ts`. Three loops that all leave by
-/// the same street and differ by a block are one choice wearing three hats. A
-/// candidate is dropped if it walks more than `maxSharedFraction` of the same
-/// ground as one already chosen, and the picker looks for a different way out
-/// of the door before it settles for a second loop heading the same way.
+/// Ported from the route service's `diversity.ts`. Three loops that all leave
+/// by the same street and differ by a block are one choice wearing three hats.
+/// A candidate is dropped if it walks more than `maxSharedFraction` of the
+/// same ground as one already chosen, and the picker looks for a different way
+/// out of the door before it settles for a second loop heading the same way.
+///
+/// It diverges from the reference in one place, `selecting`, which takes three
+/// passes where `diversity.ts` takes two. Direction is not the only thing a
+/// walker is choosing between — a lap of the park and a walk out along the
+/// river are different offers however close their bearings — so the first
+/// pass now asks for a different kind of walk as well as a different way out.
+/// See `isElongated`.
 public enum RouteDiversity {
     /// In a town with a natural bottleneck — a harbour, a single bridge, a
     /// headland — every clean loop leaves and returns the same way, whatever
@@ -64,13 +71,22 @@ public enum RouteDiversity {
         /// being a question about proximity and becomes one about the network.
         public var edges: [Int32: Double]
         public var totalMetres: Double
+        /// What kind of walk this is, as against which way it goes. See
+        /// `RouteQuality.elongationReachRatio`. Zero where the caller has not
+        /// measured it, which reads as "the round kind" and leaves the picker
+        /// behaving exactly as it did before.
+        public var reachRatio: Double
 
-        public init(coordinates: [Point], score: Double, bearing: Double, edges: [Int32: Double], totalMetres: Double) {
+        public init(
+            coordinates: [Point], score: Double, bearing: Double, edges: [Int32: Double],
+            totalMetres: Double, reachRatio: Double = 0
+        ) {
             self.coordinates = coordinates
             self.score = score
             self.bearing = bearing
             self.edges = edges
             self.totalMetres = totalMetres
+            self.reachRatio = reachRatio
         }
     }
 
@@ -119,6 +135,13 @@ public enum RouteDiversity {
         }
     }
 
+    /// Which of the two kinds of walk this is: the round kind or the one that
+    /// goes out and comes back. A walker choosing between three loops is
+    /// choosing on this as much as on direction.
+    public static func isElongated(_ candidate: Candidate) -> Bool {
+        candidate.reachRatio >= RouteQuality.elongationReachRatio
+    }
+
     /// Best first, then the best that is a different walk from the ones
     /// already taken. Two passes: the first insists on a different way out of
     /// the door, the second accepts a same-bearing loop that is nonetheless
@@ -142,17 +165,31 @@ public enum RouteDiversity {
         var chosen: [Int] = []
         var taken = alreadyTaken
         var octants = Set(alreadyTaken.map { LocalGeo.bearingOctant($0.bearing) })
-        for requireNewOctant in [true, false] {
+        var shapes = Set(alreadyTaken.map(isElongated))
+        // Three passes rather than the reference's two, because a walker
+        // choosing between loops is choosing on two things and the reference
+        // only offered one of them. The first pass asks for a walk that is
+        // both a different way out of the door and a different kind of walk;
+        // the second drops the kind, which is what the reference's first pass
+        // did; the third drops the direction too. Each is a preference and
+        // none is a rule — three good loops still beat two good loops and a
+        // principle.
+        for pass in 0..<3 {
+            let requireNewOctant = pass < 2
+            let requireNewShape = pass < 1
             for index in ranked {
                 if chosen.count >= limit { break }
                 if chosen.contains(index) { continue }
                 let octant = LocalGeo.bearingOctant(candidates[index].bearing)
                 if requireNewOctant && octants.contains(octant) { continue }
+                let shape = isElongated(candidates[index])
+                if requireNewShape && shapes.contains(shape) { continue }
                 let tooSimilar = taken.contains { mutualSharedFraction(candidates[index], $0) > maxShared }
                 if tooSimilar { continue }
                 chosen.append(index)
                 taken.append(candidates[index])
                 octants.insert(octant)
+                shapes.insert(shape)
             }
             if chosen.count >= limit { break }
         }

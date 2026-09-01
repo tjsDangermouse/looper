@@ -63,7 +63,7 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                 closures=\(result.diagnostics.search.closures) band-]=\(result.diagnostics.search.closuresOutsideBand) shape-]=\(result.diagnostics.search.closuresTooShapeless) beam-]=\(result.diagnostics.search.prunedBeam) dom-]=\(result.diagnostics.search.prunedDominated) early=\(result.diagnostics.search.stoppedEarly) closed=\(result.diagnostics.closedWalks) shape-]=\(result.diagnostics.rejectedShape) turns-]=\(result.diagnostics.rejectedTurns) gate-]=\(result.diagnostics.gateRejected) passed=\(result.diagnostics.passedGate) \
                 diverse-]=\(result.diagnostics.diversityRejected) noroom=\(result.diagnostics.diversityNoRoom) \
                 stem=\(Int(result.diagnostics.stemMetres))m oct=\(result.diagnostics.shortlistOctants) offered=\(result.routes.count) \
-                searchMs=\(Int(result.diagnostics.search.searchMs)) totalMs=\(Int(ms)) \
+                searchMs=\(Int(result.diagnostics.search.searchMs)) judgeMs=\(Int(result.diagnostics.judgeMs)) assembleMs=\(Int(result.diagnostics.assembleMs)) totalMs=\(Int(ms)) \
                 peakKB=\(result.diagnostics.search.peakStoreBytes / 1024)
                 """)
                 if !result.diagnostics.gateRejectionsByReason.isEmpty {
@@ -74,8 +74,51 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                     print("   gate: \(byReason)")
                 }
                 for route in result.routes {
-                    print("   -> \(route.name) \(Int(route.distanceMeters))m steps=\(route.steps.count)")
+                    // Shape, not just length. `reach` is the number this run is
+                    // actually about: how far the walk gets from the door
+                    // against a circle of its own length, so 1.0 is a circle
+                    // and anything well under it is a walk that never left.
+                    // What we want to see across three offers is a spread,
+                    // not a cluster.
+                    let line = route.geometry.coordinates
+                    // Measured here rather than called for, so that this run
+                    // means the same thing against a tree that predates the
+                    // reach work as against one that has it.
+                    let frame = MetricFrame(
+                        originLon: result.diagnostics.snappedLon, originLat: result.diagnostics.snappedLat
+                    )
+                    var radius = 0.0
+                    for p in line {
+                        let xy = frame.project(lon: p.lng, lat: p.lat)
+                        radius = Swift.max(radius, (xy.x * xy.x + xy.y * xy.y).squareRoot())
+                    }
+                    let reach = route.distanceMeters > 0 ? radius / (route.distanceMeters / (2 * .pi)) : 0
+                    let sides = RouteQuality.boundingBoxSides(line)
+                    let bbox = sides.shortMetres > 0 ? sides.longMetres / sides.shortMetres : .infinity
+                    print(String(
+                        format: "   -> %@ %dm steps=%d compact=%.2f reach=%.2f bbox=%.1f",
+                        route.name, Int(route.distanceMeters), route.steps.count,
+                        RouteQuality.compactness(line), reach, bbox
+                    ))
                 }
+
+                // The second press, which is the one a walker actually waits
+                // on: everything already offered is handed back as `exclude`,
+                // and every candidate in the pool is compared against every
+                // one of them on the ground before the selector runs.
+                let refreshBegan = Date()
+                let refreshed = try router.findLoops(
+                    .init(
+                        lat: point.lat, lon: point.lng, targetMetres: target, variation: 7,
+                        exclude: result.routes.map { $0.geometry.coordinates }
+                    ),
+                    in: graph, index: index
+                )
+                print("   refresh: offered=\(refreshed.routes.count) "
+                    + "pool=\(refreshed.diagnostics.passedGate) seen-]=\(refreshed.diagnostics.excludedAsAlreadySeen) "
+                    + "searchMs=\(Int(refreshed.diagnostics.search.searchMs)) "
+                    + "totalMs=\(Int(refreshed.diagnostics.totalMs)) "
+                    + "wallMs=\(Int(Date().timeIntervalSince(refreshBegan) * 1000))")
 
                 if ProcessInfo.processInfo.environment["LOOPER_BEAM_SWEEP"] == "1" {
                     for (beam, perNode) in [(300, 3), WalkSearch.widthFor(targetMetres: target)] {

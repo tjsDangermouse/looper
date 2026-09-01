@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { ESSENTIAL_REJECTIONS, MAX_BOUNDING_BOX_RATIO, MAX_START_STUB_METRES, MIN_BACKTRACK_METRES, MIN_COMPACTNESS, spurLimitMetres, startStubMetres, MAX_DISTANCE_ERROR, MAX_U_TURNS, analyseRouteQuality, countUTurns, findRepeatedCorridors, sharedCorridorMetres } from '../src/loops/quality.js'
-import { pathLength, type LngLat } from '../src/loops/geo.js'
-import { FIXTURE_ORIGIN, cleanLoop, longOutAndBack, narrowElongated, polyline, repeatedBridge, sharedStartLoop, simpleCrossing, twinA, twinB } from './fixtures/routes.js'
+import { ELONGATED_BOUNDING_BOX_RATIO, ELONGATION_REACH_RATIO, ESSENTIAL_REJECTIONS, MAX_BOUNDING_BOX_RATIO, MAX_START_STUB_METRES, MIN_BACKTRACK_METRES, MIN_COMPACTNESS, spurLimitMetres, startStubMetres, MAX_DISTANCE_ERROR, MAX_U_TURNS, analyseRouteQuality, countUTurns, findRepeatedCorridors, sharedCorridorMetres } from '../src/loops/quality.js'
+import { maxRadiusMetres, pathLength, type LngLat } from '../src/loops/geo.js'
+import { FIXTURE_ORIGIN, cleanLoop, hairlineElongated, longOutAndBack, narrowElongated, polyline, repeatedBridge, sharedStartLoop, simpleCrossing, twinA, twinB } from './fixtures/routes.js'
 
 const START: LngLat = FIXTURE_ORIGIN
 
@@ -119,7 +119,7 @@ describe('hard rejections', () => {
   })
   it('says when the time is the only thing wrong, so one retry can fix it', () => {
     expect(judge(cleanLoop, { targetSeconds: 600 }).durationOnly).toBe(true)
-    expect(judge(narrowElongated, { targetSeconds: 600 }).durationOnly).toBe(false)
+    expect(judge(hairlineElongated, { targetSeconds: 600 }).durationOnly).toBe(false)
   })
   it('refuses more than one genuine U-turn', () => {
     const report = judge(cleanLoop, { maneuverSigns: [-8, 8, -98] })
@@ -151,10 +151,31 @@ describe('hard rejections', () => {
     const report = judge(cleanLoop, { legDistances: [total * .03, total * .4, total * .37, total * .2] })
     expect(report.rejections).not.toContain('leg-too-short')
   })
-  it('refuses a long thin route', () => {
-    const report = judge(narrowElongated)
+  it('refuses a route too thin to be a walk at all', () => {
+    const report = judge(hairlineElongated)
     expect(report.rejections).toContain('elongated')
+    expect(report.boundingBoxRatio).toBeGreaterThan(ELONGATED_BOUNDING_BOX_RATIO)
+  })
+  it('offers a long thin route that actually goes somewhere', () => {
+    // Out along one side and back along the other. It is nothing like a
+    // circle, and it is a walk a walker asked for: a river, a ridge, a
+    // seafront. Reach is what tells it apart from a tangle of the same
+    // roundness, so the aspect and compactness bars both give way to it.
+    const report = judge(narrowElongated)
     expect(report.boundingBoxRatio).toBeGreaterThan(MAX_BOUNDING_BOX_RATIO)
+    expect(report.rejections).not.toContain('elongated')
+    expect(report.rejections).not.toContain('shapeless')
+  })
+  it('refuses a low-roundness walk that never got far from the door', () => {
+    // The other half of the same rule. Reach is what buys the generous
+    // thresholds, so a walk threaded back and forth through the same few
+    // blocks — round enough to be nothing, far enough to be nowhere — cannot
+    // buy them and is still refused.
+    const start = FIXTURE_ORIGIN
+    const distanceMeters = pathLength(simpleCrossing)
+    expect(maxRadiusMetres(simpleCrossing, start) / (distanceMeters / (2 * Math.PI)))
+      .toBeLessThan(ELONGATION_REACH_RATIO)
+    expect(judge(simpleCrossing).rejections).toContain('shapeless')
   })
   it('refuses a route that never comes back', () => {
     const open = polyline([[0, 0], [900, 0], [900, 900]])

@@ -2,13 +2,20 @@ import Foundation
 
 /// A beam over distance bands, searching for the walk itself.
 ///
-/// A faithful port of the route service's `WalkSearch.java`, which is itself
-/// Phase 9's `search.mts`. The formulation, the two exact prunes, the ranking
-/// proxy, the per-node cap, the compass-octant quota and the turn-angle term
-/// are all Phase 9's, at Phase 9's measured operating point. Nothing has been
-/// re-tuned for the phone: the whole value of porting rather than reinventing
-/// is that a walk found on the device is the walk the reference implementation
-/// would have found on the same graph.
+/// Ported from the route service's `WalkSearch.java`, which is itself Phase
+/// 9's `search.mts`. The formulation, the two exact prunes, the ranking proxy,
+/// the per-node cap, the compass-octant quota and the turn-angle term are all
+/// Phase 9's.
+///
+/// It is no longer a faithful port, and the divergence is deliberate. Phase
+/// 9's ranking has one positive term, compactness, which is dimensionless: a
+/// 200 m circle and a 3 km circle both score exactly 1. So the reference asks
+/// a walk to be round and never asks it to be anywhere or to be any size, and
+/// on a real street network the answer is a knot of little loops by the door —
+/// every one of them a legal edge-simple circuit that the gate has no grounds
+/// to refuse. `reachShortfall` in `promise` supplies the missing size term and
+/// the shape quota in the beam supplies the missing variety, and neither is in
+/// the Java or the TypeScript. See `Options.reachWeight`.
 ///
 /// ## What bounds the search
 ///
@@ -67,6 +74,35 @@ public enum WalkSearch {
     }
     /// The gate's own compactness floor; a closure below it is not a walk.
     public static let minCompactness = 0.20
+    /// The gate's own allowance for a walk that goes somewhere. A closure that
+    /// reaches this far is judged on `RouteQuality.elongatedMinCompactness`
+    /// instead, because at closure the search knows both numbers exactly and
+    /// there is no sense in it discarding a walk the gate would have passed.
+    public static let elongationReachRatio = RouteQuality.elongationReachRatio
+    public static let elongatedMinCompactness = RouteQuality.elongatedMinCompactness
+    /// Where a partial walk stops counting as compact for the beam's shape
+    /// quota. Not a threshold anything is judged on — only the line the two
+    /// halves of the beam are drawn along, so it sits well below the gate's
+    /// own 4.5 and simply asks whether this state is the rounder kind or the
+    /// longer kind of the walks currently in hand.
+    public static let elongatedAspect = 2.0
+    /// How hard to push a partial walk away from the door.
+    ///
+    /// The other negative term, `shortfall`, stops the moment the walk can
+    /// reach the band — which happens early, and after it nothing in the score
+    /// asks for distance at all. This one never stops: a walk coiling by the
+    /// door carries it to the last band.
+    ///
+    /// Swept against live data at Douglas 3/4/5/8 km, Peel 5 km and Onchan
+    /// 5 km, on how many of those six handed back a full three walks: 0.2 gave
+    /// four, 0.3 and 0.6 gave five, and 0.4 gave all six. The failures are at
+    /// both ends and for opposite reasons — too little and the beam still
+    /// fills with walks by the door that the offer selector then finds
+    /// indistinguishable, too much and it chases reach past the point of
+    /// closing anything, which showed up first at 8 km where there are most
+    /// bands to survive. The middle is not a compromise between them so much
+    /// as the only setting that is neither.
+    public static let reachWeight = 0.4
     /// The gate's own turn allowance.
     public static let maxUTurns = 1
     /// `INITIAL_BEARING_METRES` and `INITIAL_BEARING_FRACTION` from diversity.ts.
@@ -127,6 +163,9 @@ public enum WalkSearch {
         public var turnAware: Bool
         public var turnPenalty: Double
         public var minCompactness: Double
+        /// How much a partial walk is penalised for not having gone anywhere.
+        /// See `WalkSearch.reachWeight`.
+        public var reachWeight: Double
         /// Which of the equally-good walks to prefer. See `variationAmplitude`.
         public var variation: Int
         /// A ceiling on expansions. On a phone this is also the thing that
@@ -139,7 +178,7 @@ public enum WalkSearch {
             beam: Int? = nil, band: Double = WalkSearch.bandMetres, perNode: Int? = nil,
             diversityQuota: Bool = true, turnAware: Bool = true, turnPenalty: Double = 0.05,
             minCompactness: Double = WalkSearch.minCompactness, budget: Int = 4_000_000, wanted: Int = .max,
-            variation: Int = 0
+            variation: Int = 0, reachWeight: Double = WalkSearch.reachWeight
         ) {
             self.targetMetres = targetMetres
             self.tolerance = tolerance
@@ -151,6 +190,7 @@ public enum WalkSearch {
             self.turnAware = turnAware
             self.turnPenalty = turnPenalty
             self.minCompactness = minCompactness
+            self.reachWeight = reachWeight
             self.variation = variation
             self.budget = budget
             self.wanted = wanted
@@ -164,6 +204,8 @@ public enum WalkSearch {
         public var compactness: Double
         public var bboxRatio: Double
         public var maxRadius: Double
+        /// See `RouteQuality.elongationReachRatio`.
+        public var reachRatio: Double
         public var family: Int
         public var promise: Double
     }
@@ -225,7 +267,7 @@ public enum WalkSearch {
         var nodeCount = [Int32](repeating: 0, count: nodeSlots)
         var nodeStamp = [Int32](repeating: 0, count: nodeSlots)
         var stamp: Int32 = 0
-        var familyCount = [Int](repeating: 0, count: 9)
+        var familyCount = [Int](repeating: 0, count: quotaSlots)
 
         // Bands are drained in increasing order and a state's band is never
         // below the one it was generated in, so a flat array with a forward
@@ -284,12 +326,22 @@ public enum WalkSearch {
             // at Douglas 5 km sitting in one compass octant and overlapping
             // the best of them by 89%, so the offer selector could only ever
             // take one. Diversity has to be a property of the search.
+            //
+            // Direction is not the only axis a walker sees, though, and the
+            // reference only quotas on direction. `shape` is the beam's one
+            // positive term, so an elongated partial walk is behind a round
+            // one in every band it is scored in and is culled long before the
+            // band where it would have closed into a perfectly good long thin
+            // loop. Splitting each octant into a round half and a long half
+            // costs nothing — the bounding box is already on the state — and
+            // it does not demote roundness, which still wins inside its own
+            // half. It only stops round being the only thing that survives.
             stamp += 1
-            for i in 0..<9 { familyCount[i] = 0 }
-            var seen = [Bool](repeating: false, count: 9)
+            for i in 0..<quotaSlots { familyCount[i] = 0 }
+            var seen = [Bool](repeating: false, count: quotaSlots)
             var present = 0
             for index in members {
-                let slot = store.familyOf(index) + 1
+                let slot = quotaSlot(store, index)
                 if !seen[slot] { seen[slot] = true; present += 1 }
             }
             let quota = options.diversityQuota ? Swift.max(1, options.beam / Swift.max(1, present)) : Int.max
@@ -303,7 +355,7 @@ public enum WalkSearch {
                     if kept.count >= Swift.min(options.beam, members.count) { break }
                     if pass == 1 && taken[position] { continue }
                     let index = members[position]
-                    let slot = store.familyOf(index) + 1
+                    let slot = quotaSlot(store, index)
                     if familyCount[slot] >= limit { continue }
                     let node = Int(store.nodeOf(index))
                     let onNode = nodeStamp[node] == stamp ? Int(nodeCount[node]) : 0
@@ -349,7 +401,7 @@ public enum WalkSearch {
                         if total >= minMetres && total <= maxMetres {
                             if let walk = walkOf(graph, store, child, stemMetres: stemMetres, root: root,
                                                  minMetres: minMetres, options: options),
-                               walk.compactness >= options.minCompactness {
+                               walk.compactness >= compactnessFloor(for: walk, options: options) {
                                 walks.append(walk)
                                 stats.completed += 1
                             } else {
@@ -406,23 +458,73 @@ public enum WalkSearch {
     }
 
     /// How promising a partial walk is: close it with a straight line home and
-    /// ask how round the result would be. The cheapest honest proxy for the
-    /// gate's own compactness, needing only the running shoelace and the drawn
-    /// length — and the quantity the anchor-based generators could not see,
-    /// because they never held a walk.
+    /// ask how round the result would be, then ask whether it has been
+    /// anywhere. The cheapest honest proxy for the gate's own compactness,
+    /// needing only the running shoelace and the drawn length — and the
+    /// quantity the anchor-based generators could not see, because they never
+    /// held a walk.
     private static func promise(
         _ graph: WalkSearchGraph, _ store: WalkStateStore, _ index: Int32,
         root: Int, minMetres: Double, options: Options
     ) -> Double {
         let node = Int(store.nodeOf(index))
-        let closing = graph.home[node] - graph.home[root]
-        let perimeter = store.drawnOf(index) + Swift.max(0, closing)
+        // Closed with the straight line the comment above promises, and not
+        // with `home`. Bands are drained in order, so every state scored
+        // together has walked the same distance and this term alone decides
+        // between them — and `home` is a network distance, which charges a
+        // state out at the edge of the search the street grid's detour factor
+        // on a leg it has not walked and may never walk. The prune that has to
+        // be exact still uses `home`; this one only has to be fair.
+        let dx = graph.nodeX[node] - graph.nodeX[root]
+        let dy = graph.nodeY[node] - graph.nodeY[root]
+        let closing = (dx * dx + dy * dy).squareRoot()
+        let perimeter = store.drawnOf(index) + closing
         let area = abs(store.twiceAreaOf(index) / 2)
         let shape = perimeter > 0 ? Swift.min(1, 4 * .pi * area / (perimeter * perimeter)) : 0
         // A walk that can no longer reach the band is worthless however round.
         let shortfall = Swift.max(0, minMetres - (store.distanceOf(index) + graph.home[node])) / options.targetMetres
+        // And a walk that has not left the doorstep is worthless however round,
+        // which is the thing `shape` cannot say: it is a ratio, so it scores a
+        // 200 m circle and a 3 km circle identically. Measured against the
+        // radius a circle of the asked-for length would have, so a state is
+        // being asked to be the size of the walk requested rather than to be
+        // large in the abstract.
+        let idealRadius = options.targetMetres / (2 * .pi)
+        let reach = idealRadius > 0
+            ? Swift.max(0, idealRadius - Double(store.maxRadiusOf(index))) / idealRadius
+            : 0
         let turns = options.turnAware ? options.turnPenalty * Double(store.tightTurnsOf(index)) : 0
-        return shape - shortfall - turns
+        return shape - shortfall - options.reachWeight * reach - turns
+    }
+
+    /// What roundness this closure has to clear. A walk that has genuinely
+    /// gone somewhere is held to the gate's generous floor rather than its
+    /// ordinary one, because the ordinary floor cannot tell a long thin walk
+    /// from a tangle and this one can. See `RouteQuality.elongationReachRatio`.
+    private static func compactnessFloor(for walk: Walk, options: Options) -> Double {
+        walk.reachRatio >= elongationReachRatio ? elongatedMinCompactness : options.minCompactness
+    }
+
+    /// Nine compass families — the eight octants plus the one for a walk still
+    /// too close to the door to have committed — each split in two by shape.
+    static let quotaSlots = 18
+
+    /// The beam slot a partial walk competes in: where it is going, and what
+    /// shape it is making on the way.
+    @inline(__always)
+    private static func quotaSlot(_ store: WalkStateStore, _ index: Int32) -> Int {
+        (Int(store.familyOf(index)) + 1) * 2 + (elongated(store, index) ? 1 : 0)
+    }
+
+    /// Which half of the shape quota a partial walk belongs to: the rounder
+    /// kind, or the longer kind. Read off the running bounding box, which the
+    /// state already carries. See `elongatedAspect`.
+    @inline(__always)
+    private static func elongated(_ store: WalkStateStore, _ index: Int32) -> Bool {
+        let width = Double(store.maxXOf(index) - store.minXOf(index))
+        let height = Double(store.maxYOf(index) - store.minYOf(index))
+        let short = Swift.min(width, height), long = Swift.max(width, height)
+        return short > 0 ? long / short >= elongatedAspect : true
     }
 
     /// The junction half of the gate's u-turn rule: did the walk turn back on
@@ -486,9 +588,13 @@ public enum WalkSearch {
         let height = Double(store.maxYOf(index) - store.minYOf(index))
         let compactness = drawn > 0 ? Swift.min(1, 4 * .pi * abs(store.twiceAreaOf(index) / 2) / (drawn * drawn)) : 0
         let bbox = Swift.min(width, height) > 0 ? Swift.max(width, height) / Swift.min(width, height) : Double.infinity
+        let metres = store.distanceOf(index) + stemMetres
+        let maxRadius = Double(store.maxRadiusOf(index))
         return Walk(
-            arcs: path, metres: store.distanceOf(index) + stemMetres, compactness: compactness,
-            bboxRatio: bbox, maxRadius: Double(store.maxRadiusOf(index)), family: store.familyOf(index),
+            arcs: path, metres: metres, compactness: compactness,
+            bboxRatio: bbox, maxRadius: maxRadius,
+            reachRatio: RouteQuality.reachRatio(maxRadiusMetres: maxRadius, distanceMetres: metres),
+            family: store.familyOf(index),
             promise: promise(graph, store, index, root: root, minMetres: minMetres, options: options)
         )
     }

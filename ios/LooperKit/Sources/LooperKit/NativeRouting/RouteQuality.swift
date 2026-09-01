@@ -32,6 +32,25 @@ public enum RouteQuality {
     /// tangle line rather than a margin above it, because 0.21–0.25 was being
     /// spent rejecting real neighbourhood loops in tightly-streeted suburbs.
     public static let minCompactness = 0.2
+    /// How far the walk's furthest point is from the door, over the radius a
+    /// circle of the same length would have. Dimensionless, and it reads off
+    /// the shape directly: a lobed rosette sits well under 1, a circle at 1,
+    /// a 2:1 oval at about 1.3, a there-and-back at about π.
+    ///
+    /// This is the measurement compactness cannot make. Compactness says how
+    /// round a walk is, and answers "elongated loop" and "tangle of little
+    /// loops" identically — both are far from round. Reach separates them,
+    /// because a tangle by construction never gets far from where it started.
+    /// So a walk clearing this bar is judged on the generous thresholds
+    /// below: it is long and thin because that is the walk, not because it
+    /// is scribble.
+    public static let elongationReachRatio = 1.3
+    /// What compactness has to clear once reach has vouched for the walk.
+    /// Still a floor — an elongated walk may wander, but not fold up.
+    public static let elongatedMinCompactness = 0.1
+    /// And what aspect ratio, which is the whole point: a walk earns the
+    /// right to be long and thin by actually going somewhere.
+    public static let elongatedBoundingBoxRatio = 12.0
     public static let maxStartStubMetres: Double = 150
     public static let endpointToleranceMetres: Double = 40
 
@@ -129,6 +148,24 @@ public enum RouteQuality {
         return Swift.min(1, 4 * .pi * abs(twiceArea / 2) / (perimeter * perimeter))
     }
 
+    /// How far the walk gets from the door, against the radius a circle of its
+    /// length would have. See `elongationReachRatio`.
+    public static func reachRatio(maxRadiusMetres: Double, distanceMetres: Double) -> Double {
+        let idealRadius = distanceMetres / (2 * Double.pi)
+        return idealRadius > 0 ? maxRadiusMetres / idealRadius : 0
+    }
+
+    /// The furthest any point of the walk gets from the start, in metres.
+    public static func maxRadiusMetres(_ coordinates: [Point], start: Point) -> Double {
+        let frame = MetricFrame(originLon: start.lng, originLat: start.lat)
+        var radius = 0.0
+        for point in coordinates {
+            let projected = frame.project(lon: point.lng, lat: point.lat)
+            radius = Swift.max(radius, (projected.x * projected.x + projected.y * projected.y).squareRoot())
+        }
+        return radius
+    }
+
     public static func boundingBoxSides(_ coordinates: [Point]) -> (longMetres: Double, shortMetres: Double) {
         guard coordinates.count >= 2 else { return (0, 0) }
         let frame = MetricFrame(originLon: coordinates[0].lng, originLat: coordinates[0].lat)
@@ -161,7 +198,7 @@ public enum RouteQuality {
 
     /// A grid over sample midpoints, so "what else is near here" is a handful
     /// of cell lookups rather than a scan of the whole walk.
-    private struct SampleIndex {
+    fileprivate struct SampleIndex {
         let samples: [Sample]
         let cell: Double
         var grid: [Int64: [Int]] = [:]
@@ -387,14 +424,47 @@ public enum RouteQuality {
     /// one-directional: a two-kilometre walk entirely contained in a
     /// six-kilometre one shares all of itself and only a third of the other.
     /// Every caller needing a symmetric answer asks twice and takes the worse.
+    /// One side of a corridor comparison, resampled ready to be measured
+    /// against many others.
+    ///
+    /// Comparing one walk against a handful of others — which is what excluding
+    /// the already-offered walks from a refresh is — resampled both sides of
+    /// every pair, so the same three excluded walks were rebuilt once for each
+    /// of a couple of hundred candidates. Hoisting that out turns the work from
+    /// candidates times excluded into candidates plus excluded. The frame is
+    /// the reason it was not already hoisted: both sides of a comparison have
+    /// to be measured in one, or two loops three kilometres apart come out
+    /// overlapping. Passing the doorstep as that frame satisfies it for every
+    /// pair at once, which the left-hand walk's own first point could not.
+    public struct Corridor {
+        let samples: [Sample]
+        let totalMetres: Double
+        fileprivate let index: SampleIndex?
+    }
+
+    /// - Parameter indexed: whether this side will be searched against, rather
+    ///   than walked along. Only the right-hand side of a comparison needs it.
+    public static func corridor(_ coordinates: [Point], origin: Point, indexed: Bool = false) -> Corridor {
+        let sampled = resample(coordinates, spacingMetres: sampleMetres, origin: origin)
+        return Corridor(
+            samples: sampled.samples, totalMetres: sampled.totalMetres,
+            index: indexed && !sampled.samples.isEmpty
+                ? SampleIndex(sampled.samples, cell: corridorMatchMetres) : nil
+        )
+    }
+
     public static func sharedCorridorMetres(_ a: [Point], _ b: [Point], ignoreStartMetres: Double = startIgnoreMetres) -> (metres: Double, fraction: Double) {
         guard let origin = a.first else { return (0, 0) }
         // Both routes must be measured in the *same* frame, or two loops three
         // kilometres apart come out overlapping.
-        let left = resample(a, spacingMetres: sampleMetres, origin: origin)
-        let right = resample(b, spacingMetres: sampleMetres, origin: origin)
-        guard !left.samples.isEmpty, !right.samples.isEmpty else { return (0, 0) }
-        let index = SampleIndex(right.samples, cell: corridorMatchMetres)
+        return sharedCorridorMetres(
+            corridor(a, origin: origin), corridor(b, origin: origin, indexed: true),
+            ignoreStartMetres: ignoreStartMetres
+        )
+    }
+
+    public static func sharedCorridorMetres(_ left: Corridor, _ right: Corridor, ignoreStartMetres: Double = startIgnoreMetres) -> (metres: Double, fraction: Double) {
+        guard !left.samples.isEmpty, let index = right.index else { return (0, 0) }
 
         var runMetres = 0.0, shared = 0.0
         func closeRun() {
@@ -407,7 +477,7 @@ public enum RouteQuality {
                 continue
             }
             let hit = index.near(x: sample.midX, y: sample.midY).contains { j in
-                let other = right.samples[j]
+                let other = index.samples[j]
                 let dx = sample.midX - other.midX, dy = sample.midY - other.midY
                 guard (dx * dx + dy * dy).squareRoot() <= corridorMatchMetres else { return false }
                 return abs(sample.dirX * other.dirX + sample.dirY * other.dirY) >= parallelCosine
@@ -498,6 +568,20 @@ public enum RouteQuality {
             && repeats.longestReverseRunMetres > distanceMetres * outAndBackShareThreshold
         /// Ground repeated beyond the one long crossing already excused above.
         let scribbleMetres = Swift.max(0, repeats.repeatedMetres - (longEnoughBacktrack ? repeats.longestReverseRunMetres : 0))
+        /// A walk that genuinely goes somewhere. It may be long and thin and
+        /// enclose little area, and that is a shape a walker asked for as much
+        /// as a circle is — a river out and a street back, a ridge, a
+        /// seafront. What it may not be is a knot of little loops near the
+        /// door, and reach is exactly the measurement that tells the two
+        /// apart. See `elongationReachRatio`.
+        /// Measured only when it can change the verdict. It is a pass over
+        /// every vertex of the walk, and the walks it would change the verdict
+        /// for are the minority that one of the two shape rules is about to
+        /// refuse.
+        let shapeInDoubt = boundingBoxRatio > maxBoundingBoxRatio || shape < minCompactness
+        let reaches = !wholeWalkOutAndBack && shapeInDoubt && reachRatio(
+            maxRadiusMetres: maxRadiusMetres(coordinates, start: start), distanceMetres: distanceMetres
+        ) >= elongationReachRatio
 
         let distanceErrorFraction = targetMetres > 0 ? abs(distanceMetres - targetMetres) / targetMetres : 0
 
@@ -505,8 +589,14 @@ public enum RouteQuality {
         if scribbleMetres > distanceMetres * maxRepeatedFraction { rejections.append("repeated-corridor") }
         if shortBacktrack { rejections.append("out-and-back-spur") }
         if uTurnCount > maxUTurns { rejections.append("u-turns") }
-        if !wholeWalkOutAndBack && boundingBoxRatio > maxBoundingBoxRatio { rejections.append("elongated") }
-        if !wholeWalkOutAndBack && shape < minCompactness { rejections.append("shapeless") }
+        if !wholeWalkOutAndBack
+            && boundingBoxRatio > (reaches ? elongatedBoundingBoxRatio : maxBoundingBoxRatio) {
+            rejections.append("elongated")
+        }
+        if !wholeWalkOutAndBack
+            && shape < (reaches ? elongatedMinCompactness : minCompactness) {
+            rejections.append("shapeless")
+        }
         // The doorstep stub is judged in the same band as the mid-route
         // backtrack: fine as the ordinary shared pavement every loop has, fine
         // again once it is long enough to be a real feature in its own right,
