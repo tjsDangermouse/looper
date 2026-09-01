@@ -77,10 +77,27 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                     print("   -> \(route.name) \(Int(route.distanceMeters))m steps=\(route.steps.count)")
                 }
 
+                // A fresh ask at the same doorstep, the way a different walker
+                // (or the same one tomorrow) arrives: a random variation and
+                // nothing excluded. This is the question "do two people
+                // standing in the same place get the same three walks".
+                var distinctFirstOffers = Set<String>()
+                for variation in [0, 51, 132, 264, 411, 663, 807] {
+                    let fresh = try router.findLoops(
+                        .init(lat: point.lat, lon: point.lng, targetMetres: target, variation: variation),
+                        in: graph, index: index
+                    )
+                    distinctFirstOffers.insert(
+                        fresh.routes.map { $0.geometry.coordinates.map { p in "\(p.lng),\(p.lat)" }.joined() }
+                            .sorted().joined(separator: "|")
+                    )
+                }
+                print("   fresh asks: 7 variations -> \(distinctFirstOffers.count) distinct offers")
+
                 // Refresh, three times over, the way a walker leaning on the
                 // button does it. Each round excludes everything seen so far.
                 var seen = result.routes
-                for round in 1...5 {
+                for round in 1...10 {
                     let next = try router.findLoops(
                         .init(
                             lat: point.lat, lon: point.lng, targetMetres: target,
@@ -97,9 +114,12 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                     print("   refresh \(round): offered=\(next.routes.count) new=\(next.routes.count - repeats.count) "
                         + "seen-]=\(next.diagnostics.excludedAsAlreadySeen)"
                         + "\(next.diagnostics.excludeExhausted ? " EXHAUSTED" : "") "
-                        + "total-distinct=\(seen.count + next.routes.count - repeats.count)")
-                    if next.diagnostics.excludeExhausted { break }
-                    seen.append(contentsOf: next.routes)
+                        + "running-distinct=\(seen.count + next.routes.count - repeats.count)")
+                    seen.append(contentsOf: next.routes.filter { route in
+                        !seen.contains { RouteQuality.sharedCorridorMetres(
+                            route.geometry.coordinates, $0.geometry.coordinates
+                        ).fraction > RouteQuality.maxSharedFraction }
+                    })
                 }
 
                 let silent = RoutingDataManager(

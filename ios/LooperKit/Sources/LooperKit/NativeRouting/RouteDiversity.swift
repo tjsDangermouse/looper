@@ -129,21 +129,29 @@ public enum RouteDiversity {
 
     /// `select`, with the reasons. The choosing is identical — this is the
     /// implementation and `select` is the view of it that only wants the walks.
+    /// - Parameter alreadyTaken: walks that count against these for diversity
+    ///   without being among them. Used to fill the remaining places of an
+    ///   answer from a second, less-preferred pool — a walker who has seen
+    ///   most of what a small town has should still be handed three walks,
+    ///   and the ones they have not seen should come first.
     public static func selecting(
-        _ candidates: [Candidate], limit: Int = 3, maxShared: Double = maxSharedFraction
+        _ candidates: [Candidate], limit: Int = 3, maxShared: Double = maxSharedFraction,
+        alreadyTaken: [Candidate] = []
     ) -> Selection {
         let ranked = candidates.indices.sorted { candidates[$0].score > candidates[$1].score }
         var chosen: [Int] = []
-        var octants: Set<Int> = []
+        var taken = alreadyTaken
+        var octants = Set(alreadyTaken.map { LocalGeo.bearingOctant($0.bearing) })
         for requireNewOctant in [true, false] {
             for index in ranked {
                 if chosen.count >= limit { break }
                 if chosen.contains(index) { continue }
                 let octant = LocalGeo.bearingOctant(candidates[index].bearing)
                 if requireNewOctant && octants.contains(octant) { continue }
-                let tooSimilar = chosen.contains { mutualSharedFraction(candidates[index], candidates[$0]) > maxShared }
+                let tooSimilar = taken.contains { mutualSharedFraction(candidates[index], $0) > maxShared }
                 if tooSimilar { continue }
                 chosen.append(index)
+                taken.append(candidates[index])
                 octants.insert(octant)
             }
             if chosen.count >= limit { break }
@@ -154,7 +162,7 @@ public enum RouteDiversity {
         // second, so a running tally would report losses that never happened.
         var rejectedShared = 0
         for index in candidates.indices where !chosen.contains(index) {
-            if chosen.contains(where: { mutualSharedFraction(candidates[index], candidates[$0]) > maxShared }) {
+            if taken.contains(where: { mutualSharedFraction(candidates[index], $0) > maxShared }) {
                 rejectedShared += 1
             }
         }

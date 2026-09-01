@@ -111,9 +111,12 @@ public struct LocalLoopRouter: Sendable {
         public var diversityNoRoom = 0
         /// Gate-passing walks set aside because they had already been offered.
         public var excludedAsAlreadySeen = 0
-        /// Every gate-passing walk had already been offered, so the request
-        /// was answered from the full pool rather than with nothing.
+        /// Every gate-passing walk had already been offered, so the answer was
+        /// filled entirely from walks the walker has seen.
         public var excludeExhausted = false
+        /// Places in the answer filled from already-seen walks because there
+        /// were not enough new ones to fill them.
+        public var toppedUpFromSeen = 0
         /// The out-and-back to the nearest node the circuit search could root
         /// at. Zero when the start is already in the 2-core. Every walk in the
         /// answer carries it, at both ends, and is charged for it by the
@@ -285,26 +288,36 @@ public struct LocalLoopRouter: Sendable {
         // answer instead of the pool means a refresh re-offers the same walks
         // or nothing at all, because the selector had already narrowed sixty
         // candidates down to the same three it chose last time.
-        var eligible = Array(candidates.indices)
+        var unseen = Array(candidates.indices)
+        var seen: [Int] = []
         if !request.exclude.isEmpty {
-            let unseen = eligible.filter { index in
+            let split = partition(unseen) { index in
                 request.exclude.allSatisfy { previous in
                     RouteQuality.sharedCorridorMetres(candidates[index].coordinates, previous).fraction
                         <= RouteQuality.maxSharedFraction
                 }
             }
-            diagnostics.excludedAsAlreadySeen = eligible.count - unseen.count
-            // A walker who has seen everything this doorstep has is better
-            // served by the best of it again than by an error.
-            if unseen.isEmpty {
-                diagnostics.excludeExhausted = true
-            } else {
-                eligible = unseen
-            }
+            unseen = split.matching
+            seen = split.rest
+            diagnostics.excludedAsAlreadySeen = seen.count
+            diagnostics.excludeExhausted = unseen.isEmpty
         }
 
-        let selection = RouteDiversity.selecting(eligible.map { candidates[$0] }, limit: request.wanted)
-        let chosen = selection.chosen.map { eligible[$0] }
+        // Walks not yet seen fill the answer first. If there are not enough of
+        // them the rest of the places are filled from the ones that have been
+        // — because a walker in a small town pressing refresh wants three
+        // walks with whatever is new among them, and handing back one walk, or
+        // the same three every time, are both worse answers than that.
+        let selection = RouteDiversity.selecting(unseen.map { candidates[$0] }, limit: request.wanted)
+        var chosen = selection.chosen.map { unseen[$0] }
+        if chosen.count < request.wanted && !seen.isEmpty {
+            let topUp = RouteDiversity.selecting(
+                seen.map { candidates[$0] }, limit: request.wanted - chosen.count,
+                alreadyTaken: chosen.map { candidates[$0] }
+            )
+            chosen += topUp.chosen.map { seen[$0] }
+            diagnostics.toppedUpFromSeen = topUp.chosen.count
+        }
         diagnostics.diversityRejected = selection.rejectedShared
         diagnostics.diversityNoRoom = selection.noRoom
         let labels = RouteDiversity.labels(for: chosen.map {
@@ -333,6 +346,13 @@ public struct LocalLoopRouter: Sendable {
     }
 
     // MARK: - Ranking and selection
+
+    /// Split in one pass, keeping both halves in their original order.
+    private func partition(_ indices: [Int], by keep: (Int) -> Bool) -> (matching: [Int], rest: [Int]) {
+        var matching: [Int] = [], rest: [Int] = []
+        for index in indices { if keep(index) { matching.append(index) } else { rest.append(index) } }
+        return (matching, rest)
+    }
 
     /// How well a closed walk answers the request, on the terms the quality
     /// score already uses and this stage already knows exactly: how close it

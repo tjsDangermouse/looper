@@ -108,7 +108,11 @@ final class LocalRoutingSearchTests: XCTestCase {
             in: graph, index: index
         )
         XCTAssertTrue(exhausted.diagnostics.excludeExhausted)
-        XCTAssertEqual(exhausted.routes.map(\.distanceMeters), first.routes.map(\.distanceMeters))
+        XCTAssertEqual(
+            exhausted.routes.count, first.routes.count,
+            "a walker who has seen everything should still be handed a full set"
+        )
+        XCTAssertEqual(exhausted.diagnostics.toppedUpFromSeen, exhausted.routes.count)
     }
 
     /// A variation finds different walks, and variation 0 changes nothing.
@@ -164,6 +168,42 @@ final class LocalRoutingSearchTests: XCTestCase {
                 XCTAssertTrue(report.pass, "a variation offered a walk the gate refuses: \(report.rejections)")
             }
         }
+    }
+
+    /// A thin pool still fills the answer, newest walks first.
+    ///
+    /// Excluding a walk has to demote it, not delete it. Deleting shrinks the
+    /// pool with every refresh, so a walker in a small town presses the button
+    /// and is handed one walk instead of three — which reads as the engine
+    /// getting worse the more they use it.
+    func testARefreshStillFillsTheAnswerWhenLittleIsLeftUnseen() throws {
+        let data = SyntheticOSM.grid(size: 9, spacingMetres: 200)
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: data)
+        let index = LocalEdgeIndex(graph: graph)
+        let router = LocalLoopRouter()
+
+        var seen: [Route] = []
+        for round in 0..<6 {
+            let result = try router.findLoops(
+                .init(
+                    lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng, targetMetres: 2000,
+                    variation: round * 3, exclude: seen.map(\.geometry.coordinates)
+                ),
+                in: graph, index: index
+            )
+            XCTAssertEqual(
+                result.routes.count, 3,
+                "round \(round) offered \(result.routes.count) walks, not a full set"
+            )
+            // Whatever was new is genuinely new.
+            for route in result.routes where !seen.contains(where: {
+                RouteQuality.sharedCorridorMetres(route.geometry.coordinates, $0.geometry.coordinates)
+                    .fraction > RouteQuality.maxSharedFraction
+            }) {
+                seen.append(route)
+            }
+        }
+        XCTAssertGreaterThan(seen.count, 3, "six refreshes turned up nothing beyond the first set")
     }
 
     // MARK: - Graph reductions
