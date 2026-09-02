@@ -34,10 +34,6 @@ final class AppModel: ObservableObject {
     @Published var runningPaceUnit = LooperKit.Unit(rawValue: UserDefaults.standard.string(forKey: "running-pace-unit") ?? "km") ?? .km {
         didSet { UserDefaults.standard.set(runningPaceUnit.rawValue, forKey: "running-pace-unit") }
     }
-    /// Which generator to ask for. A developer/testing setting: it changes
-    /// which engine draws the walk, not what a walk is. Persisted like every
-    /// other preference in here, and defaulting to the current engine until
-    /// real-world testing says otherwise.
     /// Which engine finds the walk: the existing hosted service, or the new
     /// on-device one. A tester's choice, not a walker's — both answer the same
     /// question and return the same kind of route — and it exists so the two
@@ -47,16 +43,6 @@ final class AppModel: ObservableObject {
             UserDefaults.standard.set(routingMode.rawValue, forKey: "routing-mode")
             dataProgress = nil
         }
-    }
-    /// Which of the *service's own* generators to ask for, when Remote is the
-    /// engine. Unrelated to the choice above and never sent when it isn't.
-    ///
-    /// `onDevice` is coerced away on read: it is not a generator the service
-    /// has, and a stored value from an earlier build — or from a tester who
-    /// has been switching engines — must not leave this picker with no valid
-    /// selection.
-    @Published var routingEngine = (RoutingEngine(rawValue: UserDefaults.standard.string(forKey: "routing-engine") ?? "") ?? .remote).serverValue ?? .remote {
-        didSet { UserDefaults.standard.set(routingEngine.rawValue, forKey: "routing-engine") }
     }
     /// What the service said about the answer currently on screen, if it said.
     @Published private(set) var engineReport: RoutingEngineReport?
@@ -440,7 +426,7 @@ final class AppModel: ObservableObject {
         let requestedWaypoints = waypoints
 
         let modeForRequest = routingMode
-        let engineForRequest = modeForRequest == .onDevice ? RoutingEngine.onDevice : routingEngine
+        let engineForRequest = modeForRequest
         let askedAt = Date()
         // The two engines are chosen between here and nowhere else. Neither
         // knows the other exists, and On-device never falls back to Remote:
@@ -448,7 +434,7 @@ final class AppModel: ObservableObject {
         // comparison, so a local request that cannot be served says so.
         let engine: LoopRoutingEngine = modeForRequest == .onDevice
             ? onDeviceEngine
-            : RemoteLoopRoutingEngine(apiBase: apiBase, client: httpClient, serviceEngine: routingEngine)
+            : RemoteLoopRoutingEngine(apiBase: apiBase, client: httpClient)
         let loopRequest = LoopRequest(
             start: start,
             mode: mode,
@@ -493,8 +479,6 @@ final class AppModel: ObservableObject {
                     engine: result.engine ?? result.localDiagnostics.map { local in
                         RoutingEngineReport(
                             routingEngine: .onDevice,
-                            requestedEngine: .onDevice,
-                            engineReason: local.failure,
                             generationMs: local.totalMs,
                             searchClosedWalks: local.closedWalks,
                             searchStates: local.search.storeSize,

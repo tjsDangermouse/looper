@@ -19,7 +19,7 @@ REMOTE / CURRENT — unchanged
   Looper route service            (Node, unchanged)
      │
      ▼
-  Phase 3B generator / Direct Search  ──►  self-hosted GraphHopper
+  Production loop generator             ──►  self-hosted GraphHopper
                                               (walking graph, OSM PBF)
 
 
@@ -263,9 +263,8 @@ reason: repeated-ground accounting must still mean what it meant.
 
 ## Search
 
-The Phase 9/10 closed-walk algorithm, ported. Not reinvented, not re-tuned: the
-Java implementation in `route-service/gh-harness/.../direct/` was the golden
-reference, and it was not modified.
+The closed-walk algorithm validated by the routing prototype, ported without
+re-tuning.
 
 ```text
 bounded exploration    Dijkstra to D × 0.56; home distances are exact
@@ -349,9 +348,8 @@ Routing engine
   ● On-device / New
 ```
 
-The preference persists. When Remote is selected, a second row still chooses
-between the service's own two generators — that is a choice *within* Remote,
-not an alternative to it.
+The preference persists. Remote always uses the production service as
+deployed; On-device performs every routing decision on the phone.
 
 ## Offline behaviour
 

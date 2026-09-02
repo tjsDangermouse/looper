@@ -1,8 +1,8 @@
 import Foundation
 import LooperKit
 
-/// On-device record of routing-engine trials, for field testing the direct
-/// closed-walk search against the current engine.
+/// On-device record of routing-engine trials, for field testing the on-device
+/// router against the current remote engine.
 ///
 /// Deliberately the same shape as `NavigationLogger`: a small JSON file in
 /// Application Support, a plain-text export the tester shares from Settings
@@ -53,16 +53,12 @@ final class RoutingTrialLog: ObservableObject {
         var id: String
         var timestamp: Date
         var routingEngine: String
-        var requestedEngine: String?
-        var engineReason: String?
-        var fallbackReason: String?
         var requestedMetres: Double
         var mode: String
         var activity: String
         /// Distances of every route offered, in the order they were offered.
         var offeredMetres: [Double]
         var generationMs: Double
-        var serviceGenerationMs: Double?
         var searchMs: Double?
         var searchClosedWalks: Int?
         var hadWaypoints: Bool
@@ -115,15 +111,11 @@ final class RoutingTrialLog: ObservableObject {
             id: UUID().uuidString,
             timestamp: Date(),
             routingEngine: (engine?.routingEngine ?? selectedEngine).rawValue,
-            requestedEngine: (engine?.requestedEngine ?? selectedEngine).rawValue,
-            engineReason: engine?.engineReason,
-            fallbackReason: engine?.fallbackReason,
             requestedMetres: requestedMetres,
             mode: mode.rawValue,
             activity: activity.rawValue,
             offeredMetres: routes.map(\.distanceMeters),
             generationMs: generationMs,
-            serviceGenerationMs: engine?.generationMs,
             searchMs: engine?.searchMs,
             searchClosedWalks: engine?.searchClosedWalks,
             hadWaypoints: hadWaypoints,
@@ -164,8 +156,8 @@ final class RoutingTrialLog: ObservableObject {
     /// into a message and regular enough to load into a spreadsheet.
     func makeExport() -> URL? {
         let header = [
-            "timestamp", "engine", "requested", "reason", "fallback", "mode", "activity",
-            "requestedMetres", "offeredCount", "offeredMetres", "appMs", "serviceMs",
+            "timestamp", "engine", "mode", "activity",
+            "requestedMetres", "offeredCount", "offeredMetres", "appMs",
             "searchMs", "closedWalks", "waypoints", "startLat", "startLng",
             "selectedIndex", "verdict", "issues", "note",
         ].joined(separator: "\t")
@@ -184,16 +176,12 @@ final class RoutingTrialLog: ObservableObject {
         var fields: [String] = []
         fields.append(formatter.string(from: trial.timestamp))
         fields.append(trial.routingEngine)
-        fields.append(trial.requestedEngine ?? "")
-        fields.append(trial.engineReason ?? "")
-        fields.append(trial.fallbackReason ?? "")
         fields.append(trial.mode)
         fields.append(trial.activity)
         fields.append(String(format: "%.0f", trial.requestedMetres))
         fields.append(String(trial.offeredMetres.count))
         fields.append(trial.offeredMetres.map { String(format: "%.0f", $0) }.joined(separator: ","))
         fields.append(String(format: "%.0f", trial.generationMs))
-        fields.append(trial.serviceGenerationMs.map { String(format: "%.0f", $0) } ?? "")
         fields.append(trial.searchMs.map { String(format: "%.1f", $0) } ?? "")
         fields.append(trial.searchClosedWalks.map(String.init) ?? "")
         fields.append(trial.hadWaypoints ? "yes" : "no")

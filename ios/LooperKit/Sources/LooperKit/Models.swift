@@ -41,32 +41,37 @@ public enum Activity: String, Codable, Hashable, Sendable {
     case running
 }
 
-/// Which generator the route service should use.
+/// Which routing implementation should find the walk.
 ///
 /// A developer/testing choice rather than a walker's: both engines answer the
 /// same question and return the same kind of route, so nothing in the map, the
 /// walk screen or the spoken guidance branches on this. It exists so that the
 /// two can be compared on real ground.
 ///
-/// - `remote`: the current hosted generator — candidate bearings, legs routed
-///   one at a time.
-/// - `direct`: the closed-walk search, which searches the walk itself over the
-///   routing graph and returns the exact edges it walked.
-///
-/// Ordered waypoints are answered by `remote` and by `onDevice`, each in its
-/// own way. The service's `direct` generator has no representation for them and
-/// falls back to `remote`, which it says so in the answer; the on-device engine
-/// builds them itself, from the backbone out — see `LocalWaypointRouter`.
+/// Ordered waypoints are answered by both implementations, each in its own
+/// way; the on-device engine builds them from the backbone out — see
+/// `LocalWaypointRouter`.
 public enum RoutingEngine: String, Codable, Hashable, Sendable, CaseIterable {
     case remote
-    case direct
     case onDevice
+
+    public init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer().decode(String.self)
+        // Test builds briefly persisted the abandoned remote "direct"
+        // generator on routes. It was still remote routing, so preserve those
+        // saved routes by migrating their provenance as they are read.
+        self = value == "onDevice" ? .onDevice : .remote
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 
     /// What to show a tester. Deliberately short enough for a badge.
     public var badge: String {
         switch self {
         case .remote: return "REMOTE"
-        case .direct: return "DIRECT"
         case .onDevice: return "ON-DEVICE"
         }
     }
@@ -74,62 +79,33 @@ public enum RoutingEngine: String, Codable, Hashable, Sendable, CaseIterable {
     public var title: String {
         switch self {
         case .remote: return "Remote / Current"
-        case .direct: return "Direct Search / New"
         case .onDevice: return "On-device / New"
         }
     }
-
-    /// What may be named in a request to the route service.
-    ///
-    /// `onDevice` is not a generator the service has, and asking it for one
-    /// would be both meaningless and a change to a contract this work is not
-    /// allowed to touch. It is a fact about where an answer came from, which
-    /// is why it exists on `Route` but never on a request.
-    public var serverValue: RoutingEngine? {
-        self == .onDevice ? nil : self
-    }
-
-    /// The two engines a tester chooses between: the existing hosted one and
-    /// the new local one. `direct` is the service's own second generator and
-    /// is selected within Remote, not alongside it.
-    public static let selectableOnDevice: [RoutingEngine] = [.remote, .onDevice]
 }
 
 /// What the service said about how an answer was produced. Developer-facing.
 public struct RoutingEngineReport: Codable, Equatable, Sendable {
     public var routingEngine: RoutingEngine
-    public var requestedEngine: RoutingEngine?
-    public var engineReason: String?
     public var generationMs: Double?
-    public var fallbackReason: String?
     public var searchClosedWalks: Int?
     public var searchStates: Int?
     public var searchMs: Double?
 
     public init(
         routingEngine: RoutingEngine,
-        requestedEngine: RoutingEngine? = nil,
-        engineReason: String? = nil,
         generationMs: Double? = nil,
-        fallbackReason: String? = nil,
         searchClosedWalks: Int? = nil,
         searchStates: Int? = nil,
         searchMs: Double? = nil
     ) {
         self.routingEngine = routingEngine
-        self.requestedEngine = requestedEngine
-        self.engineReason = engineReason
         self.generationMs = generationMs
-        self.fallbackReason = fallbackReason
         self.searchClosedWalks = searchClosedWalks
         self.searchStates = searchStates
         self.searchMs = searchMs
     }
 
-    /// True when Direct Search was asked for and something else answered.
-    public var didFallBack: Bool {
-        requestedEngine != nil && requestedEngine != routingEngine
-    }
 }
 
 /// A step's maneuver comes back as either GraphHopper/ORS's numeric code or

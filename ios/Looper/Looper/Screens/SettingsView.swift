@@ -40,26 +40,13 @@ struct SettingsView: View {
                         }
                         if RoutingTrialLog.includedInThisBuild {
                             Picker(selection: $model.routingMode) {
-                                ForEach(RoutingEngine.selectableOnDevice, id: \.self) { engine in
+                                ForEach(RoutingEngine.allCases, id: \.self) { engine in
                                     Text(engine.title).tag(engine)
                                 }
                             } label: {
                                 Label("Routing engine", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
                             }
                             .pickerStyle(.inline)
-                            // The service's own second generator, which is a
-                            // choice *within* Remote rather than an
-                            // alternative to it. Hidden when On-device is
-                            // selected, because nothing is being asked of the
-                            // service at all then.
-                            if model.routingMode == .remote {
-                                Picker(selection: $model.routingEngine) {
-                                    Text("Current").tag(RoutingEngine.remote)
-                                    Text("Direct search").tag(RoutingEngine.direct)
-                                } label: {
-                                    Label("Remote generator", systemImage: "server.rack")
-                                }
-                            }
                             NavigationLink {
                                 RoutingTrialsView(log: model.routingTrials)
                             } label: {
@@ -215,9 +202,6 @@ private struct RoutingTrialsView: View {
                         HStack {
                             Text(trial.routingEngine.uppercased())
                                 .font(.caption.weight(.bold))
-                            if let fallback = trial.fallbackReason {
-                                Text("fallback: \(fallback)").font(.caption2).foregroundStyle(.orange)
-                            }
                             Spacer()
                             if let verdict = trial.verdict {
                                 Text(verdict.title).font(.caption).foregroundStyle(.secondary)
@@ -251,9 +235,10 @@ private struct RoutingTrialsView: View {
     }
 
     private var summary: String {
-        let direct = log.trials.filter { $0.routingEngine == "direct" }.count
-        let remote = log.trials.count - direct
-        return "\(log.trials.count) recorded · \(direct) direct · \(remote) remote"
+        let local = log.trials.filter { $0.routingEngine == RoutingEngine.onDevice.rawValue }.count
+        // Historical "direct" rows were also produced by the remote service.
+        let remote = log.trials.count - local
+        return "\(log.trials.count) recorded · \(local) on-device · \(remote) remote"
     }
 
     private func refreshExport() {
@@ -303,10 +288,6 @@ private struct RoutingTrialRatingView: View {
 
             Section("What was generated") {
                 LabeledContent("Engine", value: trial.routingEngine)
-                if let requested = trial.requestedEngine, requested != trial.routingEngine {
-                    LabeledContent("Requested", value: requested)
-                }
-                if let reason = trial.fallbackReason { LabeledContent("Fallback", value: reason) }
                 LabeledContent("Asked for", value: "\(Int(trial.requestedMetres)) m")
                 LabeledContent("Offered", value: trial.offeredMetres.map { "\(Int($0))" }.joined(separator: ", "))
                 LabeledContent("Round trip", value: "\(Int(trial.generationMs)) ms")

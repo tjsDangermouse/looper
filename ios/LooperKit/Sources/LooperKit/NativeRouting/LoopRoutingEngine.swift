@@ -108,14 +108,10 @@ public protocol LoopRoutingEngine: Sendable {
 public struct RemoteLoopRoutingEngine: LoopRoutingEngine {
     private let apiBase: String
     private let client: LoopsHTTPClient
-    /// Which of the *service's own* generators to ask for. Unrelated to the
-    /// on-device engine, and never `.onDevice` — see `RoutingEngine.serverValue`.
-    private let serviceEngine: RoutingEngine?
 
-    public init(apiBase: String, client: LoopsHTTPClient, serviceEngine: RoutingEngine? = nil) {
+    public init(apiBase: String, client: LoopsHTTPClient) {
         self.apiBase = apiBase
         self.client = client
-        self.serviceEngine = serviceEngine?.serverValue
     }
 
     public func generateLoops(_ request: LoopRequest) async throws -> LoopResponse {
@@ -131,16 +127,19 @@ public struct RemoteLoopRoutingEngine: LoopRoutingEngine {
             variation: request.variation,
             waypoints: request.waypoints,
             excludeRoutes: request.excludeRoutes,
-            routingEngine: serviceEngine,
             apiBase: apiBase,
             client: client
         )
         return LoopResponse(
-            routes: result.routes,
+            routes: result.routes.map { route in
+                var route = route
+                route.routingEngine = .remote
+                return route
+            },
             warning: result.warning,
             expectationExceeded: result.expectationExceeded,
-            engine: result.engine,
-            routingEngine: result.engine?.routingEngine ?? .remote
+            engine: RoutingEngineReport(routingEngine: .remote),
+            routingEngine: .remote
         )
     }
 }

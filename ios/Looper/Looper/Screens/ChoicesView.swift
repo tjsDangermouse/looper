@@ -178,13 +178,8 @@ private struct EngineBadge: View {
                     .padding(.vertical, 2)
                     .background(
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(report.routingEngine == .direct ? Color.looperAccent.opacity(0.25) : Color.white.opacity(0.10))
+                            .fill(report.routingEngine == .onDevice ? Color.looperAccent.opacity(0.25) : Color.white.opacity(0.10))
                     )
-                if report.didFallBack {
-                    Text(fallbackNote(report))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
                 if let ms = report.generationMs {
                     Text("\(Int(ms)) ms").font(.caption2).foregroundStyle(.secondary)
                 }
@@ -194,12 +189,4 @@ private struct EngineBadge: View {
         }
     }
 
-    /// Falling back is an ordinary outcome, not an error, so it reads as one.
-    private func fallbackNote(_ report: RoutingEngineReport) -> String {
-        switch report.engineReason {
-        case "waypoint-fallback": return "waypoints use the current engine"
-        case "engine-unsupported": return "direct search unavailable here"
-        default: return report.fallbackReason.map { "direct search gave way: \($0)" } ?? "fell back"
-        }
-    }
 }

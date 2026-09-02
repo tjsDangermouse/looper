@@ -27,10 +27,9 @@ struct LoopRequestBody: Encodable {
     let variation: Int
     let waypoints: [StartPoint]?
     let exclude: [[Point]]?
-    let routingEngine: RoutingEngine?
 
     enum CodingKeys: String, CodingKey {
-        case start, mode, distanceKm, durationMinutes, units, activity, walkingPaceMinutes, walkingPaceUnit, variation, waypoints, exclude, routingEngine
+        case start, mode, distanceKm, durationMinutes, units, activity, walkingPaceMinutes, walkingPaceUnit, variation, waypoints, exclude
     }
 
     func encode(to encoder: Encoder) throws {
@@ -46,7 +45,6 @@ struct LoopRequestBody: Encodable {
         try container.encode(variation, forKey: .variation)
         try container.encodeIfPresent(waypoints, forKey: .waypoints)
         try container.encodeIfPresent(exclude, forKey: .exclude)
-        try container.encodeIfPresent(routingEngine, forKey: .routingEngine)
     }
 }
 
@@ -70,39 +68,21 @@ private struct LoopsResponseBody: Decodable {
         let reversed: Bool?
     }
 
-    /// The service's own account of how the answer was produced. Every field
-    /// is optional: a service that predates the engine selector simply does
-    /// not send it, and the app must go on working when it doesn't.
-    struct EngineDTO: Decodable {
-        let routingEngine: String?
-        let requestedEngine: String?
-        let engineReason: String?
-        let generationMs: Double?
-        let fallbackReason: String?
-        let searchClosedWalks: Int?
-        let searchStates: Int?
-        let searchMs: Double?
-    }
-
     let routes: [RouteDTO]?
     let warning: String?
     let expectationExceeded: Bool?
     let error: String?
-    let engine: EngineDTO?
 }
 
 public struct LoopsResult {
     public var routes: [Route]
     public var warning: String?
     public var expectationExceeded: Bool
-    /// Absent against a service that does not report one. Developer-facing.
-    public var engine: RoutingEngineReport?
 
-    public init(routes: [Route], warning: String? = nil, expectationExceeded: Bool = false, engine: RoutingEngineReport? = nil) {
+    public init(routes: [Route], warning: String? = nil, expectationExceeded: Bool = false) {
         self.routes = routes
         self.warning = warning
         self.expectationExceeded = expectationExceeded
-        self.engine = engine
     }
 }
 
@@ -141,7 +121,6 @@ public func requestLoops(
     variation: Int,
     waypoints: [Point] = [],
     excludeRoutes: [Route] = [],
-    routingEngine: RoutingEngine? = nil,
     apiBase: String,
     client: LoopsHTTPClient
 ) async throws -> LoopsResult {
@@ -159,8 +138,7 @@ public func requestLoops(
         walkingPaceUnit: walkingPaceUnit,
         variation: variation,
         waypoints: waypoints.isEmpty ? nil : waypoints.map { .init(lng: $0.lng, lat: $0.lat) },
-        exclude: excludeRoutes.isEmpty ? nil : excludeRoutes.map { compactRoute($0.geometry.coordinates) },
-        routingEngine: routingEngine
+        exclude: excludeRoutes.isEmpty ? nil : excludeRoutes.map { compactRoute($0.geometry.coordinates) }
     )
     let encoded = try JSONEncoder().encode(body)
     let (data, statusCode) = try await client.post(url: url, body: encoded)
@@ -170,20 +148,6 @@ public func requestLoops(
     }
     guard let decoded else {
         throw LooperAPIError.message("Routes are unavailable right now.")
-    }
-    // An answer from a service that does not report an engine is read as
-    // coming from the current one, which is what it is.
-    let report = decoded.engine.map { dto in
-        RoutingEngineReport(
-            routingEngine: dto.routingEngine.flatMap(RoutingEngine.init(rawValue:)) ?? .remote,
-            requestedEngine: dto.requestedEngine.flatMap(RoutingEngine.init(rawValue:)),
-            engineReason: dto.engineReason,
-            generationMs: dto.generationMs,
-            fallbackReason: dto.fallbackReason,
-            searchClosedWalks: dto.searchClosedWalks,
-            searchStates: dto.searchStates,
-            searchMs: dto.searchMs
-        )
     }
     // The service names a loop for the way it heads; the app has always called
     // that a route's name.
@@ -196,9 +160,8 @@ public func requestLoops(
             targetDifferencePercent: dto.targetDifferencePercent,
             geometry: dto.geometry,
             steps: dto.steps,
-            reversed: dto.reversed,
-            routingEngine: report?.routingEngine
+            reversed: dto.reversed
         )
     }
-    return LoopsResult(routes: routes, warning: decoded.warning, expectationExceeded: decoded.expectationExceeded ?? false, engine: report)
+    return LoopsResult(routes: routes, warning: decoded.warning, expectationExceeded: decoded.expectationExceeded ?? false)
 }
