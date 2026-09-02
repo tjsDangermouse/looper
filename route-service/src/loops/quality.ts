@@ -3,7 +3,6 @@ import {
   compactness as isoperimetricCompactness,
   distanceBetween,
   haversine,
-  maxRadiusMetres,
   resample,
   type LngLat,
   type Sample,
@@ -83,28 +82,6 @@ export const MAX_BOUNDING_BOX_RATIO = 4.5
  * so the bar sits at the tangle line itself rather than a margin above it.
  */
 export const MIN_COMPACTNESS = 0.2
-/**
- * How far the walk's furthest point gets from the door, over the radius a
- * circle of the same length would have. Dimensionless, and it reads the shape
- * off directly: a knot of little loops sits well under 1, a circle at 1, a 2:1
- * oval at about 1.3, a there-and-back at about π.
- *
- * This is the measurement compactness cannot make. Compactness says how round
- * a walk is, so it answers "elongated loop" and "tangle" identically — both
- * are far from round — and MIN_COMPACTNESS therefore spends some of its work
- * rejecting good long walks along with the scribbles. Reach separates them,
- * because a tangle by construction never gets far from where it started. A
- * walk clearing this bar is judged on the generous thresholds below instead:
- * a river out and a street back, a ridge, a seafront, is long and thin
- * because that is the walk, and a walker asked for it as much as for a lap.
- */
-export const ELONGATION_REACH_RATIO = 1.3
-/** What compactness has to clear once reach has vouched for the walk. Still a
- *  floor — an elongated walk may wander, but not fold up. */
-export const ELONGATED_MIN_COMPACTNESS = 0.1
-/** And what aspect ratio, which is the whole point: a walk earns the right to
- *  be long and thin by actually going somewhere. */
-export const ELONGATED_BOUNDING_BOX_RATIO = 12
 /**
  * The stub at the door: how far the walk goes out before it commits to the
  * circuit, and comes back along afterwards. A few tens of metres is the shared
@@ -383,10 +360,6 @@ export type QualityThresholds = {
   minLegShare: number
   maxBoundingBoxRatio: number
   minCompactness: number
-  /** See ELONGATION_REACH_RATIO. */
-  elongationReachRatio: number
-  elongatedMinCompactness: number
-  elongatedBoundingBoxRatio: number
   maxStartStubMetres: number
   startStubShare: number
   /** See MIN_BACKTRACK_METRES. A minimum, not a maximum: backtracking has to
@@ -403,9 +376,6 @@ export const DEFAULT_QUALITY_THRESHOLDS: QualityThresholds = {
   minLegShare: MIN_LEG_SHARE,
   maxBoundingBoxRatio: MAX_BOUNDING_BOX_RATIO,
   minCompactness: MIN_COMPACTNESS,
-  elongationReachRatio: ELONGATION_REACH_RATIO,
-  elongatedMinCompactness: ELONGATED_MIN_COMPACTNESS,
-  elongatedBoundingBoxRatio: ELONGATED_BOUNDING_BOX_RATIO,
   maxStartStubMetres: MAX_START_STUB_METRES,
   startStubShare: START_STUB_SHARE,
   minBacktrackMetres: MIN_BACKTRACK_METRES,
@@ -498,21 +468,6 @@ export function analyseRouteQuality(input: QualityInput): QualityReport {
    * retraced stretches happens to be a legitimate feature.
    */
   const scribbleMeters = Math.max(0, repeats.repeatedMeters - (isLongEnoughBacktrack ? repeats.longestReverseRunMetres : 0))
-  /**
-   * A walk that genuinely goes somewhere, and so is allowed to be long and
-   * thin and to enclose little area. What it may not be is a knot of little
-   * loops near the door, and reach is exactly the measurement that tells the
-   * two apart. See ELONGATION_REACH_RATIO.
-   */
-  const idealRadius = distanceMeters / (2 * Math.PI)
-  /**
-   * Measured only when it can change the verdict. It is a pass over every
-   * vertex of the walk, and the walks it would change the verdict for are the
-   * minority that one of the two shape rules is about to refuse.
-   */
-  const isShapeInDoubt = boundingBoxRatio > t.maxBoundingBoxRatio || shape < t.minCompactness
-  const reaches = !isWholeWalkOutAndBack && isShapeInDoubt && idealRadius > 0
-    && maxRadiusMetres(coordinates, start) / idealRadius >= t.elongationReachRatio
 
   const distanceErrorFraction = targetMetres > 0 ? Math.abs(distanceMeters - targetMetres) / targetMetres : 0
   const durationErrorFraction = targetSeconds && targetSeconds > 0 ? Math.abs(durationSeconds - targetSeconds) / targetSeconds : undefined
@@ -529,10 +484,8 @@ export function analyseRouteQuality(input: QualityInput): QualityReport {
   // to be lopsided against.
   if (!isWholeWalkOutAndBack && legShares.length > 2 && legShares.some(share => share > t.maxLegShare)) rejections.push('leg-too-long')
   if (legShares.slice(1, -1).some(share => share < t.minLegShare)) rejections.push('leg-too-short')
-  if (!isWholeWalkOutAndBack
-    && boundingBoxRatio > (reaches ? t.elongatedBoundingBoxRatio : t.maxBoundingBoxRatio)) rejections.push('elongated')
-  if (!isWholeWalkOutAndBack
-    && shape < (reaches ? t.elongatedMinCompactness : t.minCompactness)) rejections.push('shapeless')
+  if (!isWholeWalkOutAndBack && boundingBoxRatio > t.maxBoundingBoxRatio) rejections.push('elongated')
+  if (!isWholeWalkOutAndBack && shape < t.minCompactness) rejections.push('shapeless')
   // The doorstep stub is the same band the mid-route backtrack check applies:
   // fine as the ordinary shared pavement every loop has, fine again once it
   // is long enough to be a real feature in its own right (a promenade the

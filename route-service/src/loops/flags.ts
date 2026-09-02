@@ -92,52 +92,6 @@ export type AlgorithmFlags = {
   keepPinnedSpurs: boolean
   /** Serve an identical repeat request from a bounded in-memory cache. */
   requestCache: boolean
-  /**
-   * Pull a dead-ending join back to a point on the previous leg's own routed
-   * path, so that leg is trimmed rather than routed a second time.
-   *
-   * Routing to a point that lies on an already-routed path returns that path's
-   * prefix — measured byte-identical on every probe, with GraphHopper's own
-   * distance agreeing with its geometry to 0.015%. So the first of the fix-up's
-   * two calls is buying back an answer it already holds.
-   */
-  pullbackReusesPrevious: boolean
-  /**
-   * Stop retrying a leg for a short backtrack alone.
-   *
-   * The retry swings the bearing twenty degrees and shortens the reach a fifth.
-   * Measured against the production corpus, that clears the backtrack 15 times
-   * in 256 — and the builder keeps the last attempt regardless, so the other
-   * 241 pay for a leg that is shorter, more swung, and still backtracking. The
-   * seam is still checked by the join fix-up, which is what actually repairs it.
-   */
-  backtrackNeedsBudgetToo: boolean
-  /**
-   * Keep the attempt that best fits its planned length, rather than whichever
-   * happened to be last.
-   *
-   * `attemptLeg` overwrites its answer on every attempt, so a step that
-   * exhausts its retries keeps the shortest, most-swung guess it made. On the
-   * corpus, 145 leg steps exhausted their retries and only 61 of them were
-   * keeping their closest fit.
-   */
-  keepBestLegAttempt: boolean
-  /**
-   * Ask for the cheaper reroute of an over-long leg once per leg, not once per
-   * attempt at it.
-   *
-   * Where the first attempt's relaxed retry did not shorten anything, later
-   * attempts' retries were kept 8 times in 37: the ground offers no cheaper way
-   * round, and asking again with a slightly different target does not change
-   * that.
-   */
-  budgetOncePerLeg: boolean
-  /**
-   * Carry forward measured early loss of the current geometric skeleton and
-   * repay it gradually through the remaining outward guide reaches. Phase 6
-   * prototype; never changes the closing leg and ships off pending its gate.
-   */
-  perimeterRetention: boolean
 }
 
 /**
@@ -203,11 +157,6 @@ export const DEFAULT_FLAGS: AlgorithmFlags = {
   // failure trimming was introduced to fix. See the Phase 8 report.
   keepPinnedSpurs: false,
   requestCache: false,
-  pullbackReusesPrevious: false,
-  backtrackNeedsBudgetToo: false,
-  keepBestLegAttempt: false,
-  budgetOncePerLeg: false,
-  perimeterRetention: false,
 }
 
 export const withFlags = (flags?: Partial<AlgorithmFlags>): AlgorithmFlags => ({ ...DEFAULT_FLAGS, ...flags })

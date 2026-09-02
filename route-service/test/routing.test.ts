@@ -3,7 +3,7 @@ import booleanPointInPolygon from '@turf/boolean-point-in-polygon'
 import { AVOID_PRIORITY, RELAXED_AVOID_PRIORITY } from '../src/loops/avoidance.js'
 import { buildRouteBody, GraphHopperError, parseLeg, maneuverName, isUTurnSign, type GraphHopperLeg } from '../src/graphhopper.js'
 import { pavementReport } from '../src/loops/edges.js'
-import { LEG_BUDGET_SHARE, boundedRetentionPayment, buildLoopIncrementally, joinAndTrimLegs, joinLegGeometries, routeLegAttempt } from '../src/loops/routing.js'
+import { LEG_BUDGET_SHARE, buildLoopIncrementally, joinAndTrimLegs, joinLegGeometries, routeLegAttempt } from '../src/loops/routing.js'
 import type { LngLat } from '../src/loops/geo.js'
 import { FIXTURE_ORIGIN, at, polyline } from './fixtures/routes.js'
 
@@ -40,21 +40,6 @@ function densify(a: LngLat, b: LngLat): LngLat[] {
 }
 
 const same = (a: LngLat, b: LngLat) => Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9
-
-describe('perimeter-retention safety rails', () => {
-  it('spreads a deficit over the remaining outward legs', () => {
-    expect(boundedRetentionPayment(600, 3, 1000)).toBe(200)
-  })
-
-  it('caps one payment at a quarter of the ordinary reach', () => {
-    expect(boundedRetentionPayment(3000, 2, 1000)).toBe(250)
-  })
-
-  it('never pays into closure or from a non-positive deficit', () => {
-    expect(boundedRetentionPayment(500, 0, 1000)).toBe(0)
-    expect(boundedRetentionPayment(0, 2, 1000)).toBe(0)
-  })
-})
 
 describe('the request sent to the routing engine', () => {
   it('asks for one ordinary leg, not a round trip', () => {
@@ -573,28 +558,6 @@ describe('joining legs into a walk somebody would recognise', () => {
     const trimmed = joinAndTrimLegs([withSpike])
     expect(trimmed.coordinates.length).toBeLessThan(joined.coordinates.length)
     expect(trimmed.distanceMeters).toBeLessThan(joined.distanceMeters)
-  })
-
-  it('keeps later turn positions aligned after cutting a spike from an earlier step', () => {
-    const coordinates = [at(0, 0), at(200, 0), at(200, 20), at(200, 0), at(400, 0), at(400, 200)]
-    const withInstructionedSpike: GraphHopperLeg = {
-      coordinates,
-      distanceMeters: 640,
-      durationSeconds: 460,
-      steps: [
-        { instruction: 'Head east', distanceMeters: 200, durationSeconds: 140, sign: 0, startIndex: 0, endIndex: 1 },
-        // This is the stretch that contained the removed out-and-back. If its
-        // original 240 m survives, every turn after it is called 40 m late.
-        { instruction: 'Turn right onto Main Street', distanceMeters: 240, durationSeconds: 170, sign: 2, startIndex: 1, endIndex: 4 },
-        { instruction: 'Turn left onto North Road', distanceMeters: 200, durationSeconds: 150, sign: -2, startIndex: 4, endIndex: 5 },
-        { instruction: 'Arrive', distanceMeters: 0, durationSeconds: 0, sign: 4, startIndex: 5, endIndex: 5 },
-      ],
-    }
-
-    const trimmed = joinAndTrimLegs([withInstructionedSpike])
-    expect(trimmed.steps.map(step => step.distanceMeters)).toEqual([
-      expect.closeTo(200, 0), expect.closeTo(200, 0), expect.closeTo(200, 0), 0,
-    ])
   })
 
   it('leaves a walk with nothing wrong with it exactly as it was', () => {

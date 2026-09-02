@@ -79,20 +79,8 @@ export const simpleCrossing = polyline([
   [0, 0], [-400, 400], [-800, 0], [-400, -400], [0, 0],
 ])
 
-/**
- * 2 km long, 200 m wide. Not a circle, and for a long time not offered either
- * — but it is a walk: out along one side and back along the other, which is
- * what a river, a ridge or a seafront gives you. It reaches, so it is judged
- * on the generous limits and passes them.
- */
+/** 2 km long, 200 m wide: technically a loop, in practice a there-and-back. */
 export const narrowElongated = polyline([[0, 0], [2000, 0], [2000, 200], [0, 200], [0, 0]])
-
-/**
- * Thin past the point of being a walk: two kilometres out and back along a
- * corridor fifty metres wide. It reaches, so it is judged on the generous
- * limits — and it fails them, which is what those limits are for.
- */
-export const hairlineElongated = polyline([[0, 0], [2000, 0], [2000, 50], [0, 50], [0, 0]])
 
 /** Two offered loops that are really the same walk eight metres apart. */
 export const twinA = polyline(ring(500))

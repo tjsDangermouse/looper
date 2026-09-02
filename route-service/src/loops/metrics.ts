@@ -2,8 +2,6 @@ import type { LngLat } from './geo.js'
 import type { CustomModel } from './avoidance.js'
 import { pavementReport } from './edges.js'
 import type { GraphHopperLeg } from '../graphhopper.js'
-import { appendFileSync } from 'node:fs'
-import { attributeCall, setTraceSink } from './trace.js'
 
 /**
  * What one request actually cost.
@@ -52,38 +50,6 @@ export const ROUTE_PURPOSES: readonly RoutePurpose[] = [
   'leg', 'leg-relaxed', 'leg-budget', 'spike', 'join-pullback',
   'waypoint-direct', 'waypoint-leg', 'repair', 'network-summary', 'screen', 'other',
 ] as const
-
-/**
- * What one call cost at the boundary, filled in by the router as it goes.
- *
- * Passed down rather than returned because the trace is written where the
- * *purpose* is known and the boundary is where the *cost* is known, and the
- * two are three layers apart. Everything in it is optional: a router that
- * ignores the parameter behaves exactly as before, which is what the unit
- * tests do.
- *
- * It exists for the phase after this one. Phase 2 established that 1,863 calls
- * is the number to attack and that a third of them are fix-ups of legs already
- * routed once; deciding which of those are avoidable needs to know, per call,
- * which corridor set it carried, whether that set was already in the engine,
- * and whether the answer was one Looper had already been given.
- */
-export type BoundaryTrace = {
-  /** Names the corridor set and strength this call carried. Absent for a plain leg. */
-  modelId?: string
-  /** Whether an identical request had already been answered, or was in flight. */
-  memo?: 'hit' | 'join' | 'miss'
-  /** The engine had lost the handle and the model was described again. */
-  rediscovered?: boolean
-  /** Waiting for a slot on the shared limiter, before any byte was written. */
-  queueMs?: number
-  /** Request written to response read, engine time included. */
-  transportMs?: number
-  /** What the engine says `hopper.route` took, when it says. */
-  engineRouteMs?: number
-  requestBytes?: number
-  responseBytes?: number
-}
 
 /** Why the generator stopped dispatching work. */
 export type EarlyStopReason =
@@ -372,64 +338,11 @@ export class RequestMetrics {
  * wrapper is transparent: same arguments, same result, same thrown errors —
  * a failed call still cost the engine the work, so it is still counted.
  */
-/**
- * A JSONL record of every engine call, written only when `LOOPER_TRACE_FILE`
- * names a file.
- *
- * The counters above say what a request cost in aggregate. This says what each
- * individual call was: which class of custom model it carried, how big the
- * corridor set was, what it cost and how much graph it settled. It exists so
- * that engine experiments can be replayed against the real workload rather
- * than against fixtures chosen by hand, and it is off unless asked for —
- * appending a line per call is cheap, but "cheap" is not "free" and production
- * is not a benchmark.
- */
-const TRACE_FILE = process.env.LOOPER_TRACE_FILE
-/**
- * Whether each traced call also carries the points and custom model it was
- * made with, so the corpus can be replayed against a bare engine. Separate
- * from the trace itself because the corridors dominate the file size — a
- * twelve-area model is tens of kilobytes — and most questions do not need it.
- */
-const TRACE_BODIES = process.env.LOOPER_TRACE_BODIES === '1'
-
-/**
- * Which weighting a call actually asked for, from the model itself rather than
- * from the caller's intent. `purpose` says which fixup is paying; this says
- * what the engine was handed, which is what its search behaviour depends on.
- */
-export type RequestClass = 'plain' | 'avoid-strong' | 'avoid-relaxed' | 'avoid-other' | 'lower-bound' | 'mixed'
-
-export function classifyRequest(model: CustomModel | undefined): RequestClass {
-  if (!model) return 'plain'
-  const multiplier = model.priority?.[0]?.multiply_by
-  const hasDistanceInfluence = model.distance_influence !== undefined
-  if (multiplier === undefined) return hasDistanceInfluence ? 'lower-bound' : 'plain'
-  if (hasDistanceInfluence) return 'mixed'
-  const value = Number(multiplier)
-  if (value === 0.05) return 'avoid-strong'
-  if (value === 0.2) return 'avoid-relaxed'
-  return 'avoid-other'
-}
-
-function trace(record: Record<string, unknown>) {
-  if (!TRACE_FILE) return
-  try {
-    appendFileSync(TRACE_FILE, JSON.stringify(record) + '\n')
-  } catch {
-    // A benchmark's notebook is not allowed to break the thing it is watching.
-  }
-}
-
-let nextCallId = 1
-
-setTraceSink(trace)
-
 const COUNTED_BY = Symbol('looper.countedBy')
 type Counted = { [COUNTED_BY]?: RequestMetrics }
 
 export function countingRouter(
-  route: (points: LngLat[], customModel: CustomModel | undefined, purpose?: RoutePurpose, boundary?: BoundaryTrace) => Promise<GraphHopperLeg>,
+  route: (points: LngLat[], customModel: CustomModel | undefined, purpose?: RoutePurpose) => Promise<GraphHopperLeg>,
   metrics: RequestMetrics | undefined,
   now: () => number = () => Date.now(),
 ) {
@@ -440,40 +353,17 @@ export function countingRouter(
   if ((route as Counted)[COUNTED_BY] === metrics) return route
   const counted = async (points: LngLat[], customModel: CustomModel | undefined, purpose: RoutePurpose = 'other') => {
     const began = now()
-    // Assigned before the call rather than after it, so a fix-up dispatched
-    // while its parent is still in flight still names the right parent, and so
-    // ids order by dispatch rather than by completion.
-    const callId = nextCallId++
-    const attribution = attributeCall(callId, purpose)
-    const boundary: BoundaryTrace = {}
     let visitedNodes: number | undefined
-    let resultMetres: number | undefined
     let pavement: { hops: number; measuredMetres: number } | undefined
     try {
-      const leg = await route(points, customModel, purpose, boundary)
-      resultMetres = Math.round(leg.distanceMeters)
+      const leg = await route(points, customModel, purpose)
       visitedNodes = leg.visitedNodes
       pavement = pavementReport(leg.coordinates, leg.roadClasses)
       return leg
     } finally {
       // A call that threw is still a call, and still cost the engine time. It
       // simply has no node count to report, which is what `undefined` says.
-      const elapsed = now() - began
-      metrics.countCall(purpose, elapsed, Math.max(1, points.length - 1), customModel?.areas?.features?.length ?? 0, visitedNodes, pavement)
-      trace({
-        callId,
-        ...attribution,
-        purpose,
-        class: classifyRequest(customModel),
-        points: points.length,
-        areas: customModel?.areas?.features?.length ?? 0,
-        areaVertices: customModel?.areas?.features?.reduce((sum, f) => sum + (f.geometry.coordinates[0]?.length ?? 0), 0) ?? 0,
-        ms: elapsed,
-        resultMetres,
-        visitedNodes,
-        ...boundary,
-        ...(TRACE_BODIES ? { points, model: customModel ?? null } : {}),
-      })
+      metrics.countCall(purpose, now() - began, Math.max(1, points.length - 1), customModel?.areas?.features?.length ?? 0, visitedNodes, pavement)
     }
   }
   Object.defineProperty(counted, COUNTED_BY, { value: metrics, enumerable: false })

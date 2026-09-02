@@ -142,17 +142,6 @@ function makeSample(from: Metric, to: Metric, travelled: number): Sample {
 }
 
 /** Long and short sides of the route's bounding box, in metres. */
-/** The furthest any point of the walk gets from the start, in metres. */
-export function maxRadiusMetres(coordinates: LngLat[], start: LngLat): number {
-  const project = projector(start)
-  let radius = 0
-  for (const point of coordinates) {
-    const [x, y] = project(point)
-    radius = Math.max(radius, Math.hypot(x, y))
-  }
-  return radius
-}
-
 export function boundingBoxSides(coordinates: LngLat[]): { longMetres: number; shortMetres: number } {
   if (coordinates.length < 2) return { longMetres: 0, shortMetres: 0 }
   const project = projector(coordinates[0])

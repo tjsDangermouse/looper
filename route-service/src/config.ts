@@ -1,6 +1,4 @@
 import { DEFAULT_FLAGS, type AlgorithmFlags } from './loops/flags.js'
-import { DEFAULT_ROUTING_ENGINE, type RoutingEngine } from './loops/engine.js'
-import { DEFAULT_CANDIDATE_WALKS, DEFAULT_MIN_ROUTES } from './loops/direct.js'
 
 /** Every knob the service has, read once at start-up. */
 const number = (value: string | undefined, fallback: number) => {
@@ -38,11 +36,6 @@ const flags: AlgorithmFlags = {
   waypointBackbone: flag(process.env.LOOPER_WAYPOINT_BACKBONE, DEFAULT_FLAGS.waypointBackbone),
   keepPinnedSpurs: flag(process.env.LOOPER_KEEP_PINNED_SPURS, DEFAULT_FLAGS.keepPinnedSpurs),
   requestCache: flag(process.env.LOOPER_REQUEST_CACHE, DEFAULT_FLAGS.requestCache),
-  pullbackReusesPrevious: flag(process.env.LOOPER_PULLBACK_REUSES_PREVIOUS, DEFAULT_FLAGS.pullbackReusesPrevious),
-  backtrackNeedsBudgetToo: flag(process.env.LOOPER_BACKTRACK_NEEDS_BUDGET, DEFAULT_FLAGS.backtrackNeedsBudgetToo),
-  keepBestLegAttempt: flag(process.env.LOOPER_KEEP_BEST_LEG_ATTEMPT, DEFAULT_FLAGS.keepBestLegAttempt),
-  budgetOncePerLeg: flag(process.env.LOOPER_BUDGET_ONCE_PER_LEG, DEFAULT_FLAGS.budgetOncePerLeg),
-  perimeterRetention: flag(process.env.LOOPER_PERIMETER_RETENTION, DEFAULT_FLAGS.perimeterRetention),
 }
 
 export const config = {
@@ -76,50 +69,6 @@ export const config = {
   logLevel: process.env.LOG_LEVEL ?? 'info',
   /** See loops/flags.ts. Each algorithm change has its own switch. */
   flags,
-  /**
-   * How Looper talks to the engine, as opposed to what it asks for.
-   *
-   * Separate from `flags` on purpose: nothing here can change a route, so
-   * nothing here belongs beside the switches that can. Both ship off, because
-   * the model registry needs a facade that keeps corridors and the shipped
-   * GraphHopper container does not — pointed at one that does not, the
-   * capability check turns it off again by itself.
-   */
-  boundary: {
-    /** Name a corridor set once and refer to it, instead of restating it per call. */
-    modelRegistry: flag(process.env.LOOPER_MODEL_REGISTRY, false),
-    /** Answer an identical request from the one already asked, within a generation. */
-    routeMemo: flag(process.env.LOOPER_ROUTE_MEMO, false),
-  },
-  /**
-   * The direct closed-walk search — Phase 9's engine, productionised.
-   *
-   * Separate from `flags` because it is not a change to how the Phase 3B
-   * generator behaves: it is a different generator. Nothing in `flags`
-   * reaches it and nothing it does reaches them.
-   *
-   * `LOOPER_DIRECT_CLOSED_WALK_SEARCH` sets the *default* engine for requests
-   * that do not name one. It does not gate the engine's existence: a client
-   * that explicitly asks for `direct` gets it either way, which is what makes
-   * the iOS developer toggle work against a server that still defaults to
-   * Phase 3B. See loops/engine.ts for the whole precedence.
-   */
-  direct: {
-    defaultEngine: (flag(process.env.LOOPER_DIRECT_CLOSED_WALK_SEARCH, false) ? 'direct' : DEFAULT_ROUTING_ENGINE) as RoutingEngine,
-    /** How many searched walks the facade hands back for the gate to judge. */
-    candidateWalks: number(process.env.LOOPER_DIRECT_CANDIDATE_WALKS, DEFAULT_CANDIDATE_WALKS),
-    /** Fewer offered walks than this and the whole request goes to Phase 3B. */
-    minRoutes: number(process.env.LOOPER_DIRECT_MIN_ROUTES, DEFAULT_MIN_ROUTES),
-    /** The search's own leash. Longer than a leg, shorter than the request. */
-    timeoutMs: number(process.env.LOOPER_DIRECT_TIMEOUT_MS, 10000),
-    /**
-     * Whether the search knows about turns: a ranking penalty for a tight
-     * junction return during the search, and the gate's own exact u-turn count
-     * applied to a completed walk before it is handed on. A knob only so that
-     * the measurement in the Phase 10 report can be reproduced — see §7.
-     */
-    turnAware: flag(process.env.LOOPER_DIRECT_TURN_AWARE, true),
-  },
   cacheMaxEntries: number(process.env.ROUTE_CACHE_MAX_ENTRIES, 500),
   cacheTtlMs: number(process.env.ROUTE_CACHE_TTL_MS, 10 * 60 * 1000),
   cacheEmptyTtlMs: number(process.env.ROUTE_CACHE_EMPTY_TTL_MS, 60 * 1000),

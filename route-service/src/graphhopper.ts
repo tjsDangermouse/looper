@@ -57,44 +57,18 @@ export type GraphHopperLeg = {
 }
 
 export class GraphHopperError extends Error {
-  constructor(message: string, readonly status?: number, readonly kind: 'unreachable' | 'timeout' | 'transport' | 'server' | 'handle' = 'server') {
+  constructor(message: string, readonly status?: number, readonly kind: 'unreachable' | 'timeout' | 'transport' | 'server' = 'server') {
     super(message)
     this.name = 'GraphHopperError'
   }
 }
 
-/**
- * A corridor set the engine has already been given, named rather than
- * restated. `register` and `define` appear only the first time this process
- * uses a handle; after that the id alone is the whole model.
- */
-export type ModelHandle = {
-  generation: string
-  id: string
-  register?: Record<string, unknown>
-  define?: { areas: string[]; multiply_by?: string; distance_influence?: number }
-}
-
 export type RouteRequestOptions = {
   profile: string
   customModel?: CustomModel
-  /** Sent instead of `customModel`, against a facade that understands handles. */
-  modelHandle?: ModelHandle
   locale?: string
   timeoutMs?: number
   signal?: AbortSignal
-}
-
-/** What a leg cost at the boundary, alongside the leg itself. */
-export type RouteResult = {
-  payload: unknown
-  requestBytes: number
-  responseBytes: number
-  /** Request written to response read, so it includes the engine's own time. */
-  transportMs: number
-  parseMs: number
-  /** What the engine says it spent, when it says. Zero from a build that does not. */
-  timing: { dispatchMs: number; routeMs: number; serializeMs: number }
 }
 
 /**
@@ -102,7 +76,7 @@ export type RouteResult = {
  * without a server. `ch.disable` is required for a per-request custom model,
  * and the graph is built without Contraction Hierarchies in any case.
  */
-export function buildRouteBody(points: LngLat[], options: Pick<RouteRequestOptions, 'profile' | 'customModel' | 'locale' | 'modelHandle'>): Record<string, unknown> {
+export function buildRouteBody(points: LngLat[], options: Pick<RouteRequestOptions, 'profile' | 'customModel' | 'locale'>): Record<string, unknown> {
   const body: Record<string, unknown> = {
     points: points.map(([lng, lat]) => [lng, lat]),
     profile: options.profile,
@@ -121,10 +95,6 @@ export function buildRouteBody(points: LngLat[], options: Pick<RouteRequestOptio
     snap_preventions: ['ferry'],
   }
   if (options.customModel) body.custom_model = options.customModel
-  // A handle and a model are the same statement made two ways, so a body
-  // carries one or the other and never both: two sources of truth for what is
-  // being avoided is exactly the shape of bug this protocol must not have.
-  if (options.modelHandle) body.looper_model = options.modelHandle
   return body
 }
 
@@ -150,77 +120,6 @@ export const maneuverName = (sign: number | undefined) => (sign === undefined ? 
 /** The signs GraphHopper uses for a genuine turn-around. */
 export const isUTurnSign = (sign: number | undefined) => sign === 8 || sign === -8 || sign === -98
 
-
-/**
- * One closed walk from the direct search, as it arrives from the facade.
- *
- * The walk is an ordinary GraphHopper response — `paths[0]` with its points,
- * instructions and path details — so {@link parseLeg} reads it with exactly
- * the code it reads a routed leg with, and nothing downstream has to know
- * which engine drew the line. Beside it sits `looper`, which carries what the
- * search knows and a routed leg cannot: the length it searched for, the exact
- * compactness at the moment the walk closed, the bounding-box ratio, the turn
- * count and the compass octant it committed to.
- */
-export type ClosedWalk = {
-  paths: unknown[]
-  looper: {
-    searchedMetres: number
-    compactness: number
-    /** -1 where the walk encloses no width at all. */
-    bboxRatio: number
-    uTurns: number
-    family: number
-    rank: number
-  }
-}
-
-export type ClosedWalkSearch = {
-  walks: ClosedWalk[]
-  closedWalks: number
-  rejectedShape: number
-  rejectedTurns: number
-  limitMetres: number
-  snapped?: [number, number]
-  failure?: string
-  search?: {
-    generated: number
-    expanded: number
-    pruned_distance: number
-    pruned_reuse: number
-    pruned_beam: number
-    pruned_dominated: number
-    peak_band: number
-    completed: number
-    search_ms: number
-    store_size: number
-    chunks_released: number
-    retained_bytes: number
-    peak_store_bytes: number
-    peak_heap_delta_bytes: number
-    stem_metres: number
-    root: number
-  }
-  graph?: {
-    raw_nodes: number; raw_edges: number; core_nodes: number; core_edges: number
-    nodes: number; super_edges: number; arcs: number; build_ms: number
-  }
-  timing?: { explore_ms: number; build_ms: number; search_ms: number; judge_ms: number; assemble_ms: number; total_ms: number }
-}
-
-export type ClosedWalkOptions = {
-  /** How many walks to hand back for the gate to judge. */
-  wanted?: number
-  beam?: number
-  band?: number
-  perNode?: number
-  diversityQuota?: boolean
-  turnAware?: boolean
-  locale?: string
-  timeoutMs?: number
-  signal?: AbortSignal
-}
-
 export class GraphHopperClient {
   constructor(
     private readonly baseUrl: string,
@@ -228,37 +127,10 @@ export class GraphHopperClient {
     private readonly defaultTimeoutMs = 8000,
   ) {}
 
-  async route(points: LngLat[], options: Omit<RouteRequestOptions, 'profile'> = {}): Promise<RouteResult> {
-    const body = buildRouteBody(points, {
-      profile: this.profile,
-      customModel: options.customModel,
-      modelHandle: options.modelHandle,
-      locale: options.locale,
-    })
-    return this.post('/route', body, options.timeoutMs ?? this.defaultTimeoutMs, options.signal)
-  }
-
-  /**
-   * Open a scope for one generation's corridors, if this engine keeps them.
-   *
-   * Undefined means "this engine does not know about handles", which the
-   * shipped GraphHopper container does not — so it is an ordinary answer and
-   * not a failure. Anything else is a real fault and is thrown.
-   */
-  async beginGeneration(signal?: AbortSignal, timeoutMs = 3000): Promise<string | undefined> {
-    let response: Response
-    try {
-      response = await this.request('/generation', { method: 'POST' }, timeoutMs, signal)
-    } catch (error) {
-      if (error instanceof GraphHopperError && error.status !== undefined && error.status < 500) return undefined
-      throw error
-    }
-    const data = (await response.json()) as { generation?: string }
-    return data?.generation
-  }
-
-  async endGeneration(generation: string, timeoutMs = 3000): Promise<void> {
-    await this.request(`/generation/${encodeURIComponent(generation)}`, { method: 'DELETE' }, timeoutMs)
+  async route(points: LngLat[], options: Omit<RouteRequestOptions, 'profile'> = {}): Promise<GraphHopperLeg> {
+    const body = buildRouteBody(points, { profile: this.profile, customModel: options.customModel, locale: options.locale })
+    const payload = await this.post('/route', body, options.timeoutMs ?? this.defaultTimeoutMs, options.signal)
+    return parseLeg(payload)
   }
 
   /**
@@ -294,74 +166,19 @@ export class GraphHopperClient {
     }
   }
 
-  /**
-   * Ask the facade to search for closed walks from a point.
-   *
-   * This is not a routing call and it is deliberately not on the `route` path:
-   * nothing between here and the graph asks for a path between two points. The
-   * facade explores a bounded region of its own graph, searches the walk over
-   * it, and returns the walks it found already materialised as GraphHopper
-   * paths. A build that does not advertise `looper_closed_walk` answers 404,
-   * which is an ordinary outcome — the caller has Phase 3B — rather than a
-   * fault.
-   */
-  async closedWalks(point: LngLat, targetMetres: number, options: ClosedWalkOptions = {}): Promise<ClosedWalkSearch> {
-    const body: Record<string, unknown> = {
-      lat: point[1],
-      lng: point[0],
-      targetMetres,
-      wanted: options.wanted ?? 24,
-      locale: options.locale ?? 'en',
-    }
-    if (options.beam !== undefined) body.beam = options.beam
-    if (options.band !== undefined) body.band = options.band
-    if (options.perNode !== undefined) body.perNode = options.perNode
-    if (options.diversityQuota !== undefined) body.diversityQuota = options.diversityQuota
-    if (options.turnAware !== undefined) body.turnAware = options.turnAware
-    const response = await this.request('/looper/closed-walk', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }, options.timeoutMs ?? this.defaultTimeoutMs, options.signal)
-    return (await response.json()) as ClosedWalkSearch
-  }
-
-  async info(timeoutMs = 3000): Promise<{ version?: string; profiles: string[]; bbox?: number[]; capabilities: string[] }> {
+  async info(timeoutMs = 3000): Promise<{ version?: string; profiles: string[]; bbox?: number[] }> {
     const response = await this.request('/info', { method: 'GET' }, timeoutMs)
     const data = (await response.json()) as any
-    return {
-      version: data?.version,
-      profiles: (data?.profiles ?? []).map((p: any) => p?.name).filter(Boolean),
-      bbox: data?.bbox,
-      // Absent on the shipped GraphHopper container, which is how a caller
-      // tells a facade that can search walks from one that only routes.
-      capabilities: Array.isArray(data?.capabilities) ? data.capabilities.filter((value: unknown) => typeof value === 'string') : [],
-    }
+    return { version: data?.version, profiles: (data?.profiles ?? []).map((p: any) => p?.name).filter(Boolean), bbox: data?.bbox }
   }
 
-  private async post(path: string, body: unknown, timeoutMs: number, signal?: AbortSignal): Promise<RouteResult> {
-    const serialised = JSON.stringify(body)
-    const began = performance.now()
+  private async post(path: string, body: unknown, timeoutMs: number, signal?: AbortSignal) {
     const response = await this.request(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: serialised,
+      body: JSON.stringify(body),
     }, timeoutMs, signal)
-    // Read as text and parsed here rather than through `response.json()`, so
-    // that what the engine cost and what parsing its answer costs are two
-    // numbers instead of one. Phase 2 needed them apart; so does this phase.
-    const text = await response.text()
-    const transportMs = performance.now() - began
-    const parseBegan = performance.now()
-    const payload = JSON.parse(text)
-    return {
-      payload,
-      requestBytes: serialised.length,
-      responseBytes: text.length,
-      transportMs,
-      parseMs: performance.now() - parseBegan,
-      timing: parseTiming(response.headers.get('x-looper-timing')),
-    }
+    return (await response.json()) as any
   }
 
   private async request(path: string, init: RequestInit, timeoutMs: number, signal?: AbortSignal): Promise<Response> {
@@ -372,10 +189,10 @@ export class GraphHopperClient {
     try {
       const response = await fetch(new URL(path, this.baseUrl), { ...init, signal: controller.signal })
       if (!response.ok) {
-        const { message, kind } = await readMessage(response)
+        const detail = await readMessage(response)
         // GraphHopper answers 400 for "there is no path between these points",
         // which for us is an ordinary outcome, not a fault.
-        throw new GraphHopperError(message, response.status, kind)
+        throw new GraphHopperError(detail, response.status, response.status === 400 ? 'unreachable' : 'server')
       }
       return response
     } catch (error) {
@@ -414,32 +231,13 @@ export function parseShortestPathTree(body: string): Array<{ point: LngLat; netw
   return reached.length ? reached : undefined
 }
 
-async function readMessage(response: Response): Promise<{ message: string; kind: GraphHopperError['kind'] }> {
-  const fallback = response.status === 400 ? 'unreachable' : 'server'
+async function readMessage(response: Response): Promise<string> {
   try {
     const data = (await response.json()) as any
-    // A handle the engine no longer holds is its own kind of failure: it means
-    // "say the model again", and it must never be read as "there is no path".
-    const kind = data?.looper_error === 'unknown_handle' ? 'handle' : fallback
-    return { message: String(data?.message ?? `HTTP ${response.status}`), kind }
+    return String(data?.message ?? `HTTP ${response.status}`)
   } catch {
-    return { message: `HTTP ${response.status}`, kind: fallback }
+    return `HTTP ${response.status}`
   }
-}
-
-/** `dispatch=203,route=1773,serialize=1532`, in microseconds. Absent is zero. */
-function parseTiming(header: string | null): RouteResult['timing'] {
-  const timing = { dispatchMs: 0, routeMs: 0, serializeMs: 0 }
-  if (!header) return timing
-  for (const part of header.split(',')) {
-    const [name, value] = part.split('=')
-    const ms = Number(value) / 1000
-    if (!Number.isFinite(ms)) continue
-    if (name === 'dispatch') timing.dispatchMs = ms
-    else if (name === 'route') timing.routeMs = ms
-    else if (name === 'serialize') timing.serializeMs = ms
-  }
-  return timing
 }
 
 export function parseLeg(payload: any): GraphHopperLeg {
