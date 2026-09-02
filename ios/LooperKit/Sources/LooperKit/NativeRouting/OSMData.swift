@@ -83,6 +83,10 @@ public enum OSMTags {
         "indoor", "tunnel", "bridge", "name", "ref", "surface", "informal",
         "crossing", "junction", "public_transport", "construction", "proposed",
         "conveying", "tracktype", "designation", "toll", "step_count", "incline",
+        // Read by the access policy's weighting. Chunks already on the phone
+        // predate these and simply have nothing to say, which the policy reads
+        // as "unset" — the same answer as a way that genuinely has no rating.
+        "sac_scale", "mtb:scale",
     ]
 
     public static let nodeKeys: Set<String> = [

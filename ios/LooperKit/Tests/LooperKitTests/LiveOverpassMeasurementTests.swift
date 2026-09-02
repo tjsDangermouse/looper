@@ -44,7 +44,7 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                 let index = LocalEdgeIndex(graph: graph)
                 let router = LocalLoopRouter()
                 let began = Date()
-                let result = try router.findLoops(
+                let result = try router.findRingLoops(
                     .init(lat: point.lat, lon: point.lng, targetMetres: target), in: graph, index: index
                 )
                 let ms = Date().timeIntervalSince(began) * 1000
@@ -60,11 +60,12 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                 walkable=\(build.waysWalkable)/\(build.waysConsidered) \
                 explored=\(result.diagnostics.exploration.nodesReached)n \
                 super=\(result.diagnostics.searchGraph.superEdges) \
-                closures=\(result.diagnostics.search.closures) band-]=\(result.diagnostics.search.closuresOutsideBand) shape-]=\(result.diagnostics.search.closuresTooShapeless) beam-]=\(result.diagnostics.search.prunedBeam) dom-]=\(result.diagnostics.search.prunedDominated) early=\(result.diagnostics.search.stoppedEarly) closed=\(result.diagnostics.closedWalks) shape-]=\(result.diagnostics.rejectedShape) turns-]=\(result.diagnostics.rejectedTurns) gate-]=\(result.diagnostics.gateRejected) passed=\(result.diagnostics.passedGate) \
+                built=\(result.diagnostics.candidatesBuilt) abandoned=\(result.diagnostics.candidatesAbandoned) \
+                judged=\(result.diagnostics.closedWalks) gate-]=\(result.diagnostics.gateRejected) \
+                passed=\(result.diagnostics.passedGate) batches=\(result.diagnostics.batchesRun) \
                 diverse-]=\(result.diagnostics.diversityRejected) noroom=\(result.diagnostics.diversityNoRoom) \
-                stem=\(Int(result.diagnostics.stemMetres))m oct=\(result.diagnostics.shortlistOctants) offered=\(result.routes.count) \
-                searchMs=\(Int(result.diagnostics.search.searchMs)) judgeMs=\(Int(result.diagnostics.judgeMs)) assembleMs=\(Int(result.diagnostics.assembleMs)) totalMs=\(Int(ms)) \
-                peakKB=\(result.diagnostics.search.peakStoreBytes / 1024)
+                pool-long=\(result.diagnostics.poolElongated) offered=\(result.routes.count) \
+                sweepMs=\(Int(result.diagnostics.sweepMs)) totalMs=\(Int(ms))
                 """)
                 if !result.diagnostics.gateRejectionsByReason.isEmpty {
                     let byReason = result.diagnostics.gateRejectionsByReason
@@ -73,7 +74,7 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                         .joined(separator: " ")
                     print("   gate: \(byReason)")
                 }
-                for route in result.routes {
+                for (position, route) in result.routes.enumerated() {
                     // Shape, not just length. `reach` is the number this run is
                     // actually about: how far the walk gets from the door
                     // against a circle of its own length, so 1.0 is a circle
@@ -95,10 +96,17 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                     let reach = route.distanceMeters > 0 ? radius / (route.distanceMeters / (2 * .pi)) : 0
                     let sides = RouteQuality.boundingBoxSides(line)
                     let bbox = sides.shortMetres > 0 ? sides.longMetres / sides.shortMetres : .infinity
+                    // Pavement share and hops are the numbers for the symptom a
+                    // walker actually reports — "a few metres up one side of the
+                    // road and back down the other". Nothing on the device has
+                    // ever counted it. See `RouteQuality.pavement`.
+                    let pavement = position < result.diagnostics.offeredPavement.count
+                        ? result.diagnostics.offeredPavement[position] : RouteQuality.PavementReport()
                     print(String(
-                        format: "   -> %@ %dm steps=%d compact=%.2f reach=%.2f bbox=%.1f",
+                        format: "   -> %@ %dm steps=%d compact=%.2f reach=%.2f bbox=%.1f pave=%.0f%% hops/km=%.1f",
                         route.name, Int(route.distanceMeters), route.steps.count,
-                        RouteQuality.compactness(line), reach, bbox
+                        RouteQuality.compactness(line), reach, bbox,
+                        pavement.share * 100, pavement.hopsPerKm
                     ))
                 }
 
@@ -107,7 +115,7 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                 // and every candidate in the pool is compared against every
                 // one of them on the ground before the selector runs.
                 let refreshBegan = Date()
-                let refreshed = try router.findLoops(
+                let refreshed = try router.findRingLoops(
                     .init(
                         lat: point.lat, lon: point.lng, targetMetres: target, variation: 7,
                         exclude: result.routes.map { $0.geometry.coordinates }
@@ -116,7 +124,7 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                 )
                 print("   refresh: offered=\(refreshed.routes.count) "
                     + "pool=\(refreshed.diagnostics.passedGate) seen-]=\(refreshed.diagnostics.excludedAsAlreadySeen) "
-                    + "searchMs=\(Int(refreshed.diagnostics.search.searchMs)) "
+                    + "sweepMs=\(Int(refreshed.diagnostics.sweepMs)) "
                     + "totalMs=\(Int(refreshed.diagnostics.totalMs)) "
                     + "wallMs=\(Int(Date().timeIntervalSince(refreshBegan) * 1000))")
 
@@ -145,7 +153,7 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                 // standing in the same place get the same three walks".
                 var distinctFirstOffers = Set<String>()
                 for variation in [0, 51, 132, 264, 411, 663, 807] {
-                    let fresh = try router.findLoops(
+                    let fresh = try router.findRingLoops(
                         .init(lat: point.lat, lon: point.lng, targetMetres: target, variation: variation),
                         in: graph, index: index
                     )
@@ -160,7 +168,7 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                 // button does it. Each round excludes everything seen so far.
                 var seen = result.routes
                 for round in 1...10 {
-                    let next = try router.findLoops(
+                    let next = try router.findRingLoops(
                         .init(
                             lat: point.lat, lon: point.lng, targetMetres: target,
                             variation: round * 3,
@@ -290,6 +298,12 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                 route.distanceMeters / target * 100 - 100,
                 RouteQuality.compactness(line), route.steps.count
             ))
+            for (which, place) in pins.enumerated() {
+                let nearest = line.map { haversine($0, place) }.min() ?? .infinity
+                if nearest > LocalLoopRouter.waypointHitToleranceMetres {
+                    print(String(format: "      MISS pin %d by %.0fm", which, nearest))
+                }
+            }
             XCTAssertTrue(
                 LocalLoopRouter.route(line, hits: pins),
                 "a waypoint walk that misses its pins is not the walk that was asked for"

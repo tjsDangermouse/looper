@@ -101,7 +101,13 @@ final class LocalRoutingDataTests: XCTestCase {
         }
         // Explicit tags beat the default in both directions...
         XCTAssertFalse(policy.decide(tags: ["highway": "footway", "foot": "no"]).isWalkable)
-        XCTAssertFalse(policy.decide(tags: ["highway": "service", "access": "private"]).isWalkable)
+        // A private way is priced, not refused — `looper_foot.json` gives it a
+        // priority of 0.1, which is ten times the cost and not a wall. Refusing
+        // it deletes the only link between two streets as often as it avoids a
+        // drive. See `PedestrianAccessPolicy.pricedValues`.
+        let priv = policy.decide(tags: ["highway": "service", "access": "private"])
+        XCTAssertTrue(priv.isWalkable)
+        XCTAssertEqual(priv.weight, 12.5, accuracy: 0.001, "0.1 for private, 0.8 for not being a pedestrian way")
         XCTAssertTrue(policy.decide(tags: ["highway": "service", "access": "private", "foot": "yes"]).isWalkable)
         XCTAssertTrue(policy.decide(tags: ["highway": "track", "access": "permissive"]).isWalkable)
         XCTAssertTrue(policy.decide(tags: ["highway": "service", "access": "destination"]).isWalkable)
@@ -109,6 +115,43 @@ final class LocalRoutingDataTests: XCTestCase {
         XCTAssertFalse(policy.decide(tags: ["highway": "motorway", "foot": "yes"]).isWalkable)
         // A trunk road in a country that permits walking, tagged to say so.
         XCTAssertTrue(policy.decide(tags: ["highway": "trunk", "foot": "yes"]).isWalkable)
+
+        // Terrain a walking app has no business offering.
+        XCTAssertFalse(policy.decide(tags: ["highway": "path", "sac_scale": "mountain_hiking"]).isWalkable)
+        XCTAssertTrue(policy.decide(tags: ["highway": "path", "sac_scale": "hiking"]).isWalkable)
+    }
+
+    /// The tie-break that decides which side of the road a walk is on.
+    ///
+    /// A pavement and its carriageway are near enough the same length that a
+    /// router with no preference takes whichever is a few metres shorter, block
+    /// by block, and the walk crosses and recrosses the road. See
+    /// `PedestrianAccessPolicy.weight(tags:roadClass:)`.
+    func testDedicatedPedestrianWaysAreCheaperThanTheCarriagewayBesideThem() {
+        let policy = PedestrianAccessPolicy.standard
+        for highway in ["footway", "path", "pedestrian", "steps"] {
+            XCTAssertEqual(
+                policy.decide(tags: ["highway": highway]).weight, 1, accuracy: 0.001,
+                "\(highway) is where a walker is meant to be and costs its own length"
+            )
+        }
+        for highway in ["residential", "service", "tertiary", "primary", "bridleway"] {
+            XCTAssertEqual(
+                policy.decide(tags: ["highway": highway]).weight, 1.25, accuracy: 0.001,
+                "\(highway) is a carriageway, at the 0.8 priority the profile gives it"
+            )
+        }
+        // Enough to settle a near-tie against the carriageway beside it, and far
+        // too little to pay for a detour: a 100 m pavement beats a 100 m road,
+        // and loses to a road 20% shorter.
+        XCTAssertLessThan(100 * 1.0, 100 * 1.25)
+        XCTAssertGreaterThan(100 * 1.0, 79 * 1.25)
+
+        // A rating no walker asked for, priced rather than refused.
+        XCTAssertEqual(
+            policy.decide(tags: ["highway": "path", "mtb:scale": "4"]).weight,
+            1 / 0.7, accuracy: 0.001
+        )
     }
 
     func testOnewayIsATrafficRuleNotAWalkingRule() {

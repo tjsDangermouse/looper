@@ -27,6 +27,16 @@ import Foundation
 ///    edge it ran along, so "do not walk this again" is a number on an edge.
 ///    That is both exact and cheaper than the thing it replaces.
 public enum LocalLegRouter {
+    /// How much dearer ground a previous leg already used is, for a caller
+    /// that wants the service's own strength.
+    ///
+    /// `AVOID_PRIORITY = 0.05` — priority divides weight, so a twentyfold cost
+    /// — and its relaxed retry at 0.2, a fivefold one. Not the default: the
+    /// waypoint router was swept against the 4 below and its constants depend
+    /// on it, so this is asked for rather than imposed.
+    public static let avoidPenalty = 20.0
+    public static let relaxedAvoidPenalty = 5.0
+
     /// One anchor-to-anchor leg, as ground.
     public struct Leg: Sendable {
         /// One entry per base edge walked, oriented the way it was walked.
@@ -81,6 +91,7 @@ public enum LocalLegRouter {
         protecting: [Point] = [],
         avoiding: Set<Int32> = [],
         retracePenalty: Double = 4,
+        weighted: Bool = false,
         maximumSnapMetres: Double = 500
     ) throws -> Leg {
         guard points.count >= 2 else { throw Failure.unreachable(from: points.first ?? Point(0, 0), to: points.last ?? Point(0, 0)) }
@@ -92,7 +103,8 @@ public enum LocalLegRouter {
         for hop in 1..<points.count {
             let leg = try route(
                 graph: graph, index: index, from: points[hop - 1], to: points[hop],
-                penalising: penalised, penalty: retracePenalty, maximumSnapMetres: maximumSnapMetres
+                penalising: penalised, penalty: retracePenalty, weighted: weighted,
+                maximumSnapMetres: maximumSnapMetres
             )
             for walked in leg.legs where walked.physical >= 0 { penalised.insert(walked.physical) }
             legs.append(contentsOf: leg.legs)
@@ -130,6 +142,20 @@ public enum LocalLegRouter {
         to: Point,
         penalising: Set<Int32> = [],
         penalty: Double = 4,
+        /// Whether to prefer the ground a walker would rather be on, or to
+        /// treat every metre as a metre. See `LocalWalkingGraph.edgeWeight`.
+        ///
+        /// Off by default, and the default is load-bearing. The waypoint
+        /// router's constants were swept against unweighted legs, and — more
+        /// than that — it recognises a U-turn at a pin by asking whether the
+        /// leg arrived and left on the same physical edge. Preferring pavements
+        /// defeats exactly that test, because arriving on the pavement and
+        /// leaving on the carriageway is the same U-turn on two different
+        /// edges, and its join repair then never fires. That is the same
+        /// confusion between a street and an edge that the ring router's
+        /// corridor exists to settle, and until the waypoint router settles it
+        /// the same way, it is better served by the costs it was tuned on.
+        weighted: Bool = false,
         maximumSnapMetres: Double = 500
     ) throws -> Leg {
         guard graph.edgeCount > 0 else { throw Failure.nothingToSnapTo(from) }
@@ -140,8 +166,14 @@ public enum LocalLegRouter {
             throw Failure.nothingToSnapTo(to)
         }
 
+        // Not a distance. A metre of carriageway beside a mapped pavement
+        // costs more than a metre of the pavement, exactly as it does under the
+        // profile the remote engine routes every leg with, so the leg stops
+        // taking whichever of the two is a few metres shorter block by block.
+        // What is reported is always the true length.
         @inline(__always) func cost(_ edge: Int) -> Double {
-            graph.edgeMetres[edge] * (penalising.contains(Int32(edge)) ? penalty : 1)
+            graph.edgeMetres[edge] * (weighted ? graph.edgeWeight[edge] : 1)
+                * (penalising.contains(Int32(edge)) ? penalty : 1)
         }
 
         // Two points on the same edge with nothing but that edge between them
@@ -180,7 +212,6 @@ public enum LocalLegRouter {
             guard seed < distance[entry.node] else { continue }
             distance[entry.node] = seed
             departureOf[entry.node] = entry.departure
-            heap.push(node: Int32(entry.node), key: seed)
         }
         guard !departures.isEmpty else { throw Failure.unreachable(from: from, to: to) }
 
@@ -202,16 +233,51 @@ public enum LocalLegRouter {
         let targetPenalty = penalising.contains(Int32(target.edge)) ? penalty : 1
         let wanted = Set(arrivals.map(\.node))
 
-        // ---------------------------------------------------------- Dijkstra
+        // ------------------------------------------------------------- A*
         // Unbounded, and stopped by the goal rather than by a radius: a leg's
         // length is the answer, not an input, so there is nothing honest to
-        // bound it with. It terminates when every way of arriving has settled,
-        // which on a town graph is a fraction of the nodes.
+        // bound it with. It terminates when every way of arriving has settled.
+        //
+        // Ordered by cost-so-far plus a straight line to the goal, rather than
+        // by cost alone. A plain Dijkstra settles a disc around the start and
+        // spends most of it walking away from the target; the ring generator
+        // asks for a thousand legs per request, so paying attention to which
+        // way the goal lies is most of the wall clock. This is the same trade
+        // GraphHopper makes with `astarbi`, without the prepared landmarks.
+        //
+        // The estimate has to be a genuine lower bound or the path it returns
+        // is not the shortest. Two things make it one: every edge costs at
+        // least its own length, because `edgeWeight` and `penalty` are both at
+        // least 1; and a network distance is never shorter than the straight
+        // line. The equirectangular approximation below is exact enough at town
+        // scale that its error is far inside the 1% it is scaled down by.
+        let goalLat = arrivals.reduce(0.0) { $0 + graph.nodeLat[$1.node] } / Double(arrivals.count)
+        let goalLon = arrivals.reduce(0.0) { $0 + graph.nodeLon[$1.node] } / Double(arrivals.count)
+        let metresPerDegreeLat = 111_132.0
+        let metresPerDegreeLon = 111_320.0 * cos(goalLat * .pi / 180)
+        /// How far the arrivals sit from the point the estimate measures to.
+        /// Subtracting it is what keeps the estimate a lower bound for *both*
+        /// of them rather than only for their midpoint.
+        let spread = arrivals.map { arrival -> Double in
+            let dy = (graph.nodeLat[arrival.node] - goalLat) * metresPerDegreeLat
+            let dx = (graph.nodeLon[arrival.node] - goalLon) * metresPerDegreeLon
+            return (dx * dx + dy * dy).squareRoot()
+        }.max() ?? 0
+        /// Never an overestimate: see above. Measured to the nearest arrival
+        /// rather than to their midpoint would be tighter, but there are at
+        /// most two of them and they are the two ends of one edge.
+        @inline(__always) func estimate(_ node: Int) -> Double {
+            let dy = (graph.nodeLat[node] - goalLat) * metresPerDegreeLat
+            let dx = (graph.nodeLon[node] - goalLon) * metresPerDegreeLon
+            return (dx * dx + dy * dy).squareRoot() * 0.99 - spread
+        }
         var remaining = wanted
+        for entry in departures where distance[entry.node].isFinite {
+            heap.push(node: Int32(entry.node), key: distance[entry.node] + Swift.max(0, estimate(entry.node)))
+        }
         while let entry = heap.pop() {
             let node = Int(entry.node)
             if settled[node] { continue }
-            if entry.key > distance[node] { continue }
             settled[node] = true
             remaining.remove(node)
             if remaining.isEmpty { break }
@@ -222,7 +288,7 @@ public enum LocalLegRouter {
                 guard step < distance[next] else { continue }
                 distance[next] = step
                 parentArc[next] = Int32(arc)
-                heap.push(node: Int32(next), key: step)
+                heap.push(node: Int32(next), key: step + Swift.max(0, estimate(next)))
             }
         }
 

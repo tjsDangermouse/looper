@@ -114,6 +114,34 @@ public struct LocalEdgeIndex: Sendable {
 
     /// The nearest walkable edge, searching outward a ring of cells at a time
     /// and stopping once no unexamined cell can hold anything closer.
+    /// Every edge with any geometry in the given box.
+    ///
+    /// The grid already answers this — it is what it is for — and the ring
+    /// generator needs it to price the ground beside a leg as well as the
+    /// ground under it. Approximate in the outward direction only: an edge is
+    /// returned if its *cell* overlaps the box, so the caller still has to
+    /// measure. That is the cheap half of the work done cheaply.
+    public func edges(
+        minLat: Double, maxLat: Double, minLon: Double, maxLon: Double
+    ) -> Set<Int32> {
+        guard !cellEdge.isEmpty else { return [] }
+        var out: Set<Int32> = []
+        let lowX = Swift.max(0, Int((minLon - self.minLon) / cellSizeLon))
+        let highX = Swift.min(columns - 1, Int((maxLon - self.minLon) / cellSizeLon))
+        let lowY = Swift.max(0, Int((minLat - self.minLat) / cellSizeLat))
+        let highY = Swift.min(rows - 1, Int((maxLat - self.minLat) / cellSizeLat))
+        guard lowX <= highX, lowY <= highY else { return [] }
+        for cellY in lowY...highY {
+            for cellX in lowX...highX {
+                let cell = cellY * columns + cellX
+                for slot in Int(cellStart[cell])..<Int(cellStart[cell + 1]) {
+                    out.insert(cellEdge[slot])
+                }
+            }
+        }
+        return out
+    }
+
     public func snap(
         lat: Double,
         lon: Double,

@@ -131,7 +131,28 @@ public struct LocalLoopRouter: Sendable {
         /// shortlist sitting in two octants cannot yield three separable
         /// walks however long it is.
         public var shortlistOctants = 0
+        /// One per offered walk, in the order they are offered. See
+        /// `RouteQuality.pavement`: the share of the walk on ways meant for
+        /// walkers, and how often it crossed between those and the carriageway.
+        public var offeredPavement: [RouteQuality.PavementReport] = []
         public var offered = 0
+        // --- The ported ring generator. Zero on the searched path. ----------
+        /// Candidates the sweep tried to build.
+        public var candidatesBuilt = 0
+        /// Builds that gave up — a leg that could not be routed at all, or a
+        /// running total already past `ringAbandonShare` of the target.
+        public var candidatesAbandoned = 0
+        /// Sweeps run before the pool was big enough to choose from.
+        public var batchesRun = 0
+        /// Gate-passing candidates that go somewhere rather than round —
+        /// `reachRatio >= RouteQuality.elongationReachRatio`. The selector's
+        /// first pass asks for one kind of each, so a pool with none of these
+        /// can only ever offer three round walks, however many it holds.
+        public var poolElongated = 0
+        /// How long the sweep spent building and judging candidates.
+        public var sweepMs: Double = 0
+        /// What the one re-aim rescaled the planned legs by, if it ran.
+        public var reAimScale: Double = 0
         public var buildMs: Double = 0
         public var judgeMs: Double = 0
         public var assembleMs: Double = 0
@@ -374,6 +395,7 @@ public struct LocalLoopRouter: Sendable {
         var routes: [Route] = []
         for (position, index) in chosen.enumerated() {
             let entry = assembled[index]
+            diagnostics.offeredPavement.append(RouteQuality.pavement(of: entry.legs))
             let seconds = entry.metres / LocalInstructions.walkingMetresPerSecond
             routes.append(Route(
                 id: UUID().uuidString,

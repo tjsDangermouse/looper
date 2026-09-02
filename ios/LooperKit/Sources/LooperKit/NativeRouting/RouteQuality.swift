@@ -51,6 +51,12 @@ public enum RouteQuality {
     /// And what aspect ratio, which is the whole point: a walk earns the
     /// right to be long and thin by actually going somewhere.
     public static let elongatedBoundingBoxRatio = 12.0
+    /// What share of a loop one corner-to-corner leg may be, and what share
+    /// an interior one must be. `MAX_LEG_SHARE` and `MIN_LEG_SHARE`. A loop
+    /// with one leg carrying half the distance is a walk out and a scramble
+    /// back; a loop with a leg of nothing has a corner that does no work.
+    public static let maxLegShare = 0.45
+    public static let minLegShare = 0.08
     public static let maxStartStubMetres: Double = 150
     public static let endpointToleranceMetres: Double = 40
 
@@ -562,7 +568,12 @@ public enum RouteQuality {
         stemMetres: Double = 0,
         maxDistanceError: Double = RouteQuality.maxDistanceError,
         excusedRetraceMetres: Double = 0,
-        excusedUTurns: Int = 0
+        excusedUTurns: Int = 0,
+        /// What share of the walk each of its legs is, where a leg is one
+        /// corner-to-corner stretch. Absent from an engine that never cut the
+        /// walk into legs, which is why the two rules and the score term below
+        /// only apply when it is given. See `scoreRoute`.
+        legShares: [Double]? = nil
     ) -> Report {
         var rejections: [String] = []
         // The stem is the same edges out and back, so on the network it reads
@@ -645,8 +656,22 @@ public enum RouteQuality {
         // and rejected only in between.
         if stub > startStubLimit && stub < minBacktrackMetres { rejections.append("start-spur") }
         if !returnsToStart(coordinates, start: start) { rejections.append("open-ended") }
+        // A loop whose legs are wildly uneven is a walk out and a scramble
+        // back, not a ring — one corner-to-corner stretch carrying half the
+        // distance means the other corners are decoration. Both rules are the
+        // service's, and both are skipped for a walk that is honestly an
+        // out-and-back, which is a shape a walker may legitimately want.
+        if let shares = legShares, !wholeWalkOutAndBack {
+            if shares.count > 2, shares.contains(where: { $0 > maxLegShare }) {
+                rejections.append("leg-too-long")
+            }
+            if shares.count > 2, shares.dropFirst().dropLast().contains(where: { $0 < minLegShare }) {
+                rejections.append("leg-too-short")
+            }
+        }
 
         let score = scoreRoute(
+            legShares: legShares,
             repeats: repeats, distanceErrorFraction: distanceErrorFraction,
             compactness: shape, uTurnCount: uTurnCount, distanceMetres: distanceMetres
         )
@@ -687,6 +712,7 @@ public enum RouteQuality {
     /// lopsided against. It contributes nothing rather than being re-weighted,
     /// which keeps the two engines' scores on one scale.
     static func scoreRoute(
+        legShares: [Double]? = nil,
         repeats: RepeatReport, distanceErrorFraction: Double,
         compactness: Double, uTurnCount: Int, distanceMetres: Double
     ) -> Double {
@@ -696,7 +722,78 @@ public enum RouteQuality {
         let closeness = clamp(1 - distanceErrorFraction / maxDistanceError)
         let shape = clamp(compactness)
         let simplicity = clamp(1 - Double(uTurnCount) / Double(maxUTurns + 1))
-        let raw = 100 * (0.35 * overlap + 0.25 * closeness + 0.20 * shape + 0.10 * simplicity)
+        // The service's fifth term. A walk that was never cut into legs has
+        // nothing to be lopsided against, so rather than re-weight the other
+        // four for it — which would put the two engines' scores on different
+        // scales without saying so — such a walk is given the balance of a
+        // perfectly even one. It is then judged on the four things that can
+        // actually be measured about it, and scored out of the same hundred.
+        let balance: Double
+        if let shares = legShares, let widest = shares.max(), let narrowest = shares.min(), shares.count > 1 {
+            balance = clamp(1 - (widest - narrowest) / (maxLegShare - minLegShare))
+        } else {
+            balance = 1
+        }
+        let raw = 100 * (0.35 * overlap + 0.25 * closeness + 0.20 * shape
+            + 0.10 * balance + 0.10 * simplicity)
         return (raw * 10).rounded() / 10
+    }
+
+    // MARK: - Pavement
+
+    /// The road classes that are somewhere a walker is meant to be, rather than
+    /// a carriageway they are tolerated on. `edges.ts`'s
+    /// `PEDESTRIAN_ROAD_CLASSES`.
+    public static let pedestrianRoadClasses: Set<PedestrianAccessPolicy.RoadClass> =
+        [.footway, .path, .pedestrian, .steps]
+
+    /// How often a walk changes its mind about which side of the road it is on.
+    ///
+    /// Where OSM maps a pavement as its own way, a pavement and its carriageway
+    /// are near enough the same length that a router with no preference between
+    /// them takes whichever is a few metres shorter, block by block. The line
+    /// then crosses and recrosses the road, which is confusing to look at and
+    /// produces a turn prompt every time.
+    ///
+    /// Counted as *transitions*, not as classes: a walk entirely on pavements
+    /// and a walk entirely on roads both score zero, because neither leaves the
+    /// walker wondering where they are meant to be. Only alternation costs. Per
+    /// kilometre, so a 10 km walk is comparable with a 3 km one.
+    ///
+    /// A faithful port of `edges.ts`'s `pavementReport`, which the service uses
+    /// as telemetry only. It is what `looper_foot.json`'s 0.8 multiplier was
+    /// tuned against — Douglas went from 13% of the leg on pavement to 97% —
+    /// and the on-device graph has no equivalent of that multiplier, so this is
+    /// the number that says whether it needs one.
+    public struct PavementReport: Sendable, Equatable {
+        public var pavementMetres: Double
+        public var measuredMetres: Double
+        /// Times the walk changed between pavement and carriageway.
+        public var hops: Int
+
+        public var share: Double { measuredMetres > 0 ? pavementMetres / measuredMetres : 0 }
+        public var hopsPerKm: Double { measuredMetres > 0 ? Double(hops) * 1000 / measuredMetres : 0 }
+
+        public init(pavementMetres: Double = 0, measuredMetres: Double = 0, hops: Int = 0) {
+            self.pavementMetres = pavementMetres
+            self.measuredMetres = measuredMetres
+            self.hops = hops
+        }
+    }
+
+    /// Consecutive legs of the same kind are one stretch — the graph splits an
+    /// edge at every junction, so a single pavement is many legs and none of
+    /// those boundaries is a hop.
+    public static func pavement(of legs: [WalkLeg]) -> PavementReport {
+        var report = PavementReport()
+        var previous: Bool?
+        for leg in legs where leg.metres > 0 {
+            let isPavement = pedestrianRoadClasses.contains(leg.roadClass)
+            report.measuredMetres += leg.metres
+            if isPavement { report.pavementMetres += leg.metres }
+            if let was = previous, was != isPavement { report.hops += 1 }
+            previous = isPavement
+        }
+        return report
     }
 }

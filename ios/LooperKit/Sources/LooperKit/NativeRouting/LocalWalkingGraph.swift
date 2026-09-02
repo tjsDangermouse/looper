@@ -24,6 +24,11 @@ public struct LocalWalkingGraph: Sendable {
     public let edgeFrom: [Int32]
     public let edgeTo: [Int32]
     public let edgeMetres: [Double]
+    /// What a metre of this edge costs a search that is choosing between ways,
+    /// against a metre of the ground a walker would rather be on. 1 for a
+    /// dedicated pedestrian way. Never applied to a reported distance — see
+    /// `PedestrianAccessPolicy.weight(tags:roadClass:)`.
+    public let edgeWeight: [Double]
     public let edgeForward: [Bool]
     public let edgeBackward: [Bool]
     /// Offsets into `geometry`; edge `i` occupies `geometryStart[i]..<geometryStart[i+1]`.
@@ -77,6 +82,7 @@ public struct LocalWalkingGraph: Sendable {
     public init(
         nodeOSMID: [Int64], nodeLat: [Double], nodeLon: [Double],
         edgeFrom: [Int32], edgeTo: [Int32], edgeMetres: [Double],
+        edgeWeight: [Double] = [],
         edgeForward: [Bool], edgeBackward: [Bool],
         geometryStart: [Int32], geometry: [Double],
         edgeName: [Int32], edgeRoadClass: [UInt8], edgeWayID: [Int64], names: [String],
@@ -88,6 +94,10 @@ public struct LocalWalkingGraph: Sendable {
         self.edgeFrom = edgeFrom
         self.edgeTo = edgeTo
         self.edgeMetres = edgeMetres
+        // An unweighted caller — a fixture, or `empty` — gets a graph where
+        // every way is as good as every other, which is what it was asking for.
+        self.edgeWeight = edgeWeight.count == edgeFrom.count
+            ? edgeWeight : [Double](repeating: 1, count: edgeFrom.count)
         self.edgeForward = edgeForward
         self.edgeBackward = edgeBackward
         self.geometryStart = geometryStart
@@ -220,7 +230,7 @@ public enum LocalWalkingGraphBuilder {
         }
 
         var edgeFrom: [Int32] = [], edgeTo: [Int32] = []
-        var edgeMetres: [Double] = []
+        var edgeMetres: [Double] = [], edgeWeight: [Double] = []
         var edgeForward: [Bool] = [], edgeBackward: [Bool] = []
         var geometryStart: [Int32] = [0]
         var geometry: [Double] = []
@@ -265,6 +275,7 @@ public enum LocalWalkingGraphBuilder {
                     edgeFrom.append(graphNode(run.ids[segmentStart]))
                     edgeTo.append(graphNode(run.ids[position]))
                     edgeMetres.append(metres)
+                    edgeWeight.append(run.decision.weight)
                     edgeForward.append(run.decision.forward)
                     edgeBackward.append(run.decision.backward)
                     edgeName.append(nameSlot)
@@ -316,7 +327,7 @@ public enum LocalWalkingGraphBuilder {
 
         let graph = LocalWalkingGraph(
             nodeOSMID: nodeOSMID, nodeLat: nodeLat, nodeLon: nodeLon,
-            edgeFrom: edgeFrom, edgeTo: edgeTo, edgeMetres: edgeMetres,
+            edgeFrom: edgeFrom, edgeTo: edgeTo, edgeMetres: edgeMetres, edgeWeight: edgeWeight,
             edgeForward: edgeForward, edgeBackward: edgeBackward,
             geometryStart: geometryStart, geometry: geometry,
             edgeName: edgeName, edgeRoadClass: edgeRoadClass, edgeWayID: edgeWayID, names: names,

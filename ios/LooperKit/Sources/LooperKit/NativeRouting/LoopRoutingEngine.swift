@@ -263,16 +263,22 @@ public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
             return try waypointLoops(request, targetMetres: targetMetres, graph: graph, index: index)
         }
 
-        let result = try router.findLoops(
+        // The generator the service itself answers walkers with, ported. The
+        // closed-walk search it replaces is still here and still tested —
+        // `LocalLoopRouter.findLoops` — because the two want measuring against
+        // each other on the same ground, and because a walker's answer should
+        // not depend on which of them was easier to reach for.
+        let result = try router.findRingLoops(
             .init(
                 lat: request.start.lat, lon: request.start.lng, targetMetres: targetMetres,
-                variation: request.variation,
+                wanted: 3, variation: request.variation,
                 exclude: request.excludeRoutes.map(\.geometry.coordinates)
             ),
             in: graph, index: index
         )
         let d = result.diagnostics
-        RoutingLog.search.info("local search graph=\(d.graphNodes)n/\(d.graphEdges)e explored=\(d.exploration.nodesReached)n snap=\(Int(d.exploration.snapDistanceMetres))m super=\(d.searchGraph.superEdges) closed=\(d.closedWalks) passedGate=\(d.passedGate) seen-]=\(d.excludedAsAlreadySeen)\(d.excludeExhausted ? "!" : "") alike-]=\(d.diversityRejected) oct=\(d.shortlistOctants) offered=\(d.offered) searchMs=\(Int(d.search.searchMs)) totalMs=\(Int(d.totalMs)) failure=\(d.failure ?? "-", privacy: .public)")
+        let pavement = d.offeredPavement.isEmpty ? 0 : d.offeredPavement.reduce(0) { $0 + $1.share } / Double(d.offeredPavement.count)
+        RoutingLog.search.info("local ring graph=\(d.graphNodes)n/\(d.graphEdges)e built=\(d.candidatesBuilt) abandoned=\(d.candidatesAbandoned) judged=\(d.closedWalks) gate-]=\(d.gateRejected) passed=\(d.passedGate) batches=\(d.batchesRun) seen-]=\(d.excludedAsAlreadySeen)\(d.excludeExhausted ? "!" : "") alike-]=\(d.diversityRejected) offered=\(d.offered) pave=\(Int(pavement * 100))% sweepMs=\(Int(d.sweepMs)) totalMs=\(Int(d.totalMs)) failure=\(d.failure ?? "-", privacy: .public)")
         guard !result.routes.isEmpty else {
             throw LocalLoopRouter.Failure.noLoopFound
         }
