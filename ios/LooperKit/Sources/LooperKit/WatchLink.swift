@@ -12,7 +12,7 @@ public enum WatchLink {
     /// version it doesn't know throws rather than decoding half a message —
     /// the two devices can be updated separately, and an old Watch app
     /// guessing at a new phone's payload is worse than a stale screen.
-    public static let version = 1
+    public static let version = 2
 }
 
 /// Where the outing has got to, as both devices understand it. This is the
@@ -42,7 +42,8 @@ public enum HealthWorkoutOwner: String, Codable, Equatable, Sendable {
 
 /// The loop the Watch should be showing before and during an outing. Sent once
 /// when a loop is prepared or started, and again whenever the Watch asks for
-/// it — never on a timer. It carries no route geometry: the Watch draws no map.
+/// it — never on a timer. Live turn geometry arrives later with workout state,
+/// so this durable pre-walk payload stays small.
 public struct LoopPlanPayload: Codable, Equatable, Sendable {
     /// The session record's id. Every later state update and command quotes
     /// it, so a message left over from the previous outing is ignored rather
@@ -101,8 +102,6 @@ public struct LoopPlanPayload: Codable, Equatable, Sendable {
 }
 
 /// One manoeuvre, as the iPhone's navigation engine has already decided it.
-/// The Watch renders this and nothing else — it never looks at geometry, and
-/// it never works out a turn for itself.
 public struct ManeuverPayload: Codable, Equatable, Sendable {
     /// The step's index in the route. Identity for haptics: the same turn
     /// arriving again at a shorter distance is the same turn, and must not
@@ -125,10 +124,28 @@ public struct ManeuverPayload: Codable, Equatable, Sendable {
     public var turnKind: Turn { Turn(rawValue: turn) ?? .straight }
 }
 
+/// A deliberately small map window around the next manoeuvre. The iPhone
+/// chooses the slice from its authoritative route and progress; the Watch
+/// only draws it. Keeping this separate from the full loop avoids repeatedly
+/// sending thousands of coordinates over the workout channel.
+public struct RoutePreviewPayload: Codable, Equatable, Sendable {
+    public var coordinates: [Point]
+    public var maneuver: Point
+    /// Present once the walker is close enough to fit usefully in the same
+    /// map window. Farther out, the preview stays focused on the junction.
+    public var currentPosition: Point?
+
+    public init(coordinates: [Point], maneuver: Point, currentPosition: Point? = nil) {
+        self.coordinates = coordinates
+        self.maneuver = maneuver
+        self.currentPosition = currentPosition
+    }
+}
+
 /// The live state of the outing, sent from the phone to the Watch several
-/// times a minute while walking. Everything here is small and scalar on
-/// purpose: the mirrored channel allows 100 KB per 10 seconds, and the track
-/// itself is never part of it.
+/// times a minute while walking. Apart from one capped turn-preview slice,
+/// everything is scalar: the mirrored channel allows 100 KB per 10 seconds,
+/// and the recorded track itself is never part of it.
 public struct WorkoutStatePayload: Codable, Equatable, Sendable {
     public var sessionID: String
     public var phase: WorkoutPhase
@@ -146,6 +163,8 @@ public struct WorkoutStatePayload: Codable, Equatable, Sendable {
     /// Only sent when it is close enough behind the next one to be worth
     /// reading — a "then" fifteen minutes away is noise on a small screen.
     public var then: ManeuverPayload?
+    /// Compact route geometry around `next`, ready for the Watch to draw.
+    public var routePreview: RoutePreviewPayload?
     public var updatedAt: Date
 
     public init(
@@ -159,6 +178,7 @@ public struct WorkoutStatePayload: Codable, Equatable, Sendable {
         offRoute: Bool,
         next: ManeuverPayload? = nil,
         then: ManeuverPayload? = nil,
+        routePreview: RoutePreviewPayload? = nil,
         updatedAt: Date = Date()
     ) {
         self.sessionID = sessionID
@@ -171,6 +191,7 @@ public struct WorkoutStatePayload: Codable, Equatable, Sendable {
         self.offRoute = offRoute
         self.next = next
         self.then = then
+        self.routePreview = routePreview
         self.updatedAt = updatedAt
     }
 }

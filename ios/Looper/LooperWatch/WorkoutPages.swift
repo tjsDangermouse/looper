@@ -17,7 +17,7 @@ struct WorkoutPages: View {
                 .tag(Page.controls)
             MetricsPage(model: model)
                 .tag(Page.metrics)
-            GuidancePage(model: model)
+            GuidancePage(model: model, isVisible: page == .guidance)
                 .tag(Page.guidance)
         }
         .tabViewStyle(.page)
@@ -186,9 +186,9 @@ private struct Metric: View {
     }
 }
 
-/// How far round the loop, as a ring rather than a map. The Watch shows no
-/// route geometry at all — that is the phone's job, and a 2 cm map is no help
-/// mid-stride.
+/// How far round the whole loop, as a ring. The guidance page owns the
+/// street-scale map around the next turn; this page keeps the outing's overall
+/// progress glanceable instead of squeezing the entire loop into 2 cm.
 private struct ProgressRing: View {
     let fraction: Double
 

@@ -15,6 +15,7 @@ extension Color {
     }
 
     static let looperAccent = Color(hex: "9cc36b")
+    static let looperRouteCasing = Color(hex: "173048")
     static let looperRaised = Color(hex: "0d2437")
     static let looperOnAccent = Color(hex: "06180a")
     static let looperHeart = Color(hex: "e0596b")

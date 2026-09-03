@@ -10,6 +10,14 @@ public enum WatchNavigationConfig {
     public static let thenGapMeters: Double = 400
     /// …and only once the first of the pair is actually coming up.
     public static let thenVisibleWithinMeters: Double = 300
+    /// The map is a junction preview, not the whole loop. These distances
+    /// leave enough approach to read the shape without zooming the turn down
+    /// to a speck on a 40 mm screen.
+    public static let previewApproachMeters: Double = 350
+    public static let previewExitMeters: Double = 180
+    /// A hard wire-size bound. Forty-eight points preserve street-scale bends
+    /// while keeping a one-second state update comfortably below the limit.
+    public static let previewPointLimit = 48
 }
 
 /// The turn after `hit`, if the loop has one. The walk screen only ever needs
@@ -32,6 +40,56 @@ private func maneuver(_ hit: TurnHit) -> ManeuverPayload {
         instruction: hit.instruction,
         distanceMeters: max(0, hit.distanceAway)
     )
+}
+
+/// Selects a street-scale window around the next junction. Step indices are
+/// the phone router's geometry anchors, so no turn position is inferred on
+/// the Watch.
+public func makeRoutePreview(_ route: Route, _ hit: TurnHit, currentPosition: Point? = nil) -> RoutePreviewPayload? {
+    let points = route.geometry.coordinates
+    guard points.count >= 2,
+          let rawTurnIndex = hit.step.startIndex,
+          points.indices.contains(rawTurnIndex) else { return nil }
+
+    let turnIndex = rawTurnIndex
+    var startIndex = turnIndex
+    var approach = 0.0
+    while startIndex > 0 && approach < WatchNavigationConfig.previewApproachMeters {
+        approach += haversine(points[startIndex - 1], points[startIndex])
+        startIndex -= 1
+    }
+
+    var endIndex = turnIndex
+    var exit = 0.0
+    while endIndex + 1 < points.count && exit < WatchNavigationConfig.previewExitMeters {
+        exit += haversine(points[endIndex], points[endIndex + 1])
+        endIndex += 1
+    }
+
+    let window = Array(points[startIndex...endIndex])
+    guard window.count >= 2 else { return nil }
+    let compact = compactPreview(
+        window,
+        preserving: turnIndex - startIndex,
+        limit: WatchNavigationConfig.previewPointLimit
+    )
+    let visiblePosition = hit.distanceAway <= WatchNavigationConfig.previewApproachMeters ? currentPosition : nil
+    return RoutePreviewPayload(
+        coordinates: compact,
+        maneuver: points[turnIndex],
+        currentPosition: visiblePosition
+    )
+}
+
+private func compactPreview(_ points: [Point], preserving requiredIndex: Int, limit: Int) -> [Point] {
+    guard points.count > limit, limit >= 2 else { return points }
+    var indices: Set<Int> = [0, points.count - 1, requiredIndex]
+    if limit > 3 {
+        for index in 1...(limit - 3) {
+            indices.insert(Int((Double(index) * Double(points.count - 1) / Double(limit - 2)).rounded()))
+        }
+    }
+    return indices.sorted().prefix(limit).map { points[$0] }
 }
 
 /// What the Watch should show before an outing starts.
@@ -68,6 +126,7 @@ public func makeWorkoutState(
     let pace = (distance >= 100 && elapsed >= 60) ? elapsed / (distance / 1000) : nil
     let planned = record.plannedDistanceMeters
     let hit = route.flatMap { nextTurn($0, record.progressMeters) }
+    let currentPosition = record.track.last(where: \.isUsable)?.point
 
     var then: ManeuverPayload?
     if let route, let hit, let following = turnAfter(route, hit),
@@ -87,6 +146,7 @@ public func makeWorkoutState(
         offRoute: offRoute,
         next: hit.map(maneuver),
         then: then,
+        routePreview: route.flatMap { route in hit.flatMap { makeRoutePreview(route, $0, currentPosition: currentPosition) } },
         updatedAt: now
     )
 }

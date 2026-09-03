@@ -35,6 +35,11 @@ private func state(
         remainingMeters: 2_800,
         offRoute: offRoute,
         next: next,
+        routePreview: RoutePreviewPayload(
+            coordinates: [Point(-4.48, 54.15), Point(-4.479, 54.151)],
+            maneuver: Point(-4.479, 54.151),
+            currentPosition: Point(-4.48, 54.15)
+        ),
         updatedAt: epoch
     )
 }
@@ -278,6 +283,49 @@ final class WorkoutStatePayloadTests: XCTestCase {
         XCTAssertEqual(payload.next?.instruction, "Turn left onto Harbour Road")
         XCTAssertEqual(payload.next?.distanceMeters, 50)
         XCTAssertEqual(payload.next?.turnKind, .left)
+    }
+
+    func testRoutePreviewUsesTheStepGeometryAnchorForTheTurn() {
+        let points = (0..<80).map { index in
+            Point(-4.50 + Double(index) * 0.00005, 54.15 + (index < 40 ? 0 : Double(index - 40) * 0.00004))
+        }
+        var mapped = route
+        mapped.geometry = LineGeometry(coordinates: points)
+        mapped.steps[1].startIndex = 40
+        mapped.steps[1].endIndex = 65
+
+        let preview = makeRoutePreview(
+            mapped,
+            TurnHit(step: mapped.steps[1], index: 1, distanceAway: 50),
+            currentPosition: points[34]
+        )
+
+        XCTAssertEqual(preview?.maneuver, points[40])
+        XCTAssertEqual(preview?.currentPosition, points[34])
+        XCTAssertTrue((preview?.coordinates.count ?? 0) <= WatchNavigationConfig.previewPointLimit)
+        XCTAssertTrue(preview?.coordinates.contains(points[40]) == true)
+    }
+
+    func testFarAwayPositionDoesNotZoomTheJunctionPreviewOut() {
+        var mapped = route
+        mapped.geometry = LineGeometry(coordinates: [
+            Point(-4.50, 54.15), Point(-4.499, 54.15), Point(-4.498, 54.151), Point(-4.497, 54.151)
+        ])
+        mapped.steps[1].startIndex = 2
+        let preview = makeRoutePreview(
+            mapped,
+            TurnHit(step: mapped.steps[1], index: 1, distanceAway: 800),
+            currentPosition: Point(-4.51, 54.14)
+        )
+        XCTAssertNil(preview?.currentPosition)
+    }
+
+    func testRoutePreviewIsAbsentWhenRouterProvidesNoGeometryAnchor() {
+        let payload = makeWorkoutState(
+            record: record(progress: 350), route: route, phase: .active, offRoute: false,
+            now: epoch.addingTimeInterval(600)
+        )
+        XCTAssertNil(payload.routePreview)
     }
 
     /// Two turns half a kilometre apart are two separate instructions, and
