@@ -26,6 +26,11 @@ private let namedTurns: [String: Turn] = [
     "turn-left": .left, "turn-right": .right, "keep-left": .slightLeft, "keep-right": .slightRight,
     "u-turn-left": .uTurn, "u-turn-right": .uTurn, "continue": .straight, "roundabout": .straight,
     "finish": .arrive, "waypoint": .arrive,
+    // Crossing a road is straight ahead as far as the walker and the arrow on
+    // the walk screen are concerned. It reads as its own instruction rather
+    // than its own shape, so it needs no `Turn` case of its own — and adding
+    // one would ripple into the watch and the haptics for no gain.
+    "cross": .straight,
 ]
 
 private func matches(_ text: String, _ pattern: String) -> Bool {
@@ -105,12 +110,22 @@ private func onto(_ instruction: String, road: String?) -> String {
 /// is kept, so the distances still add up to the length of the loop.
 private let microStepMetres = 10.0
 
+/// A crossing names the road it crosses and is the one instruction a walker
+/// cannot infer from the ground, so it is never folded away — not by the
+/// distance rule, and not by `rejoins`, which would otherwise swallow every
+/// crossing between two pavements of the same named street.
+private func isCrossing(_ step: Step) -> Bool {
+    if case .name("cross") = step.maneuver { return true }
+    return false
+}
+
 public func tidySteps(_ steps: [Step]) -> [Step] {
     var out: [Step] = []
     for step in steps {
         if var last = out.last {
             let rejoins = last.road != nil && last.road == step.road
-            if turnKind(step) != .arrive && (step.distanceMeters < microStepMetres || rejoins) {
+            if turnKind(step) != .arrive && !isCrossing(step)
+                && (step.distanceMeters < microStepMetres || rejoins) {
                 last.distanceMeters += step.distanceMeters
                 last.durationSeconds += step.durationSeconds
                 last.endIndex = step.endIndex
@@ -139,8 +154,18 @@ public func reverseRoute(_ route: Route) -> Route {
         } else {
             let joins = walked[joinsIndex]
             var turned = road
-            turned.maneuver = .name(mirrorTurn(turnKind(joins)).rawValue)
-            turned.instruction = onto(mirrorInstruction(joins.instruction), road: road.road)
+            if isCrossing(joins) {
+                // A crossing is symmetric: walked either way round, the loop
+                // crosses the same road at the same place. So it is carried
+                // over as it stands rather than mirrored — there is no left or
+                // right in it to mirror, and naming the road it leads onto
+                // would describe the crossing as a turning.
+                turned.maneuver = .name("cross")
+                turned.instruction = joins.instruction
+            } else {
+                turned.maneuver = .name(mirrorTurn(turnKind(joins)).rawValue)
+                turned.instruction = onto(mirrorInstruction(joins.instruction), road: road.road)
+            }
             steps.append(turned)
         }
     }

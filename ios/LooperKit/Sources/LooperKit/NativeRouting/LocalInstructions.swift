@@ -10,16 +10,24 @@ public struct WalkLeg: Sendable {
     /// The base-graph edge this leg ran along, so retracing can be asked of the
     /// network. `-1` where the caller does not track it.
     public var physical: Int32
+    /// Whether this stretch is a walker crossing a carriageway rather than
+    /// walking along one. See `PedestrianAccessPolicy.isCrossing(tags:)`.
+    public var isCrossing: Bool
+    /// The carriageway a crossing crosses, where the graph could name one.
+    public var crosses: String?
 
     public init(
         coordinates: [Point], metres: Double, name: String?,
-        roadClass: PedestrianAccessPolicy.RoadClass, physical: Int32 = -1
+        roadClass: PedestrianAccessPolicy.RoadClass, physical: Int32 = -1,
+        isCrossing: Bool = false, crosses: String? = nil
     ) {
         self.coordinates = coordinates
         self.metres = metres
         self.name = name
         self.roadClass = roadClass
         self.physical = physical
+        self.isCrossing = isCrossing
+        self.crosses = crosses
     }
 }
 
@@ -47,8 +55,25 @@ public enum LocalInstructions {
 
     public static func steps(for legs: [WalkLeg]) -> [Step] {
         guard !legs.isEmpty else { return [] }
-        var steps: [Step] = []
-        var coordinateIndex = 0
+
+        // The assembled walk, built exactly as `LocalLegRouter.line(of:)` builds
+        // the route's own geometry, so a step's `startIndex` and `endIndex`
+        // address the very array the walk screen draws. `boundary[i]` is where
+        // leg `i` begins in it.
+        var polyline: [Point] = []
+        var boundary: [Int] = []
+        for leg in legs {
+            var placed = false
+            for point in leg.coordinates {
+                if polyline.last != point { polyline.append(point) }
+                if !placed {
+                    boundary.append(Swift.max(0, polyline.count - 1))
+                    placed = true
+                }
+            }
+            if !placed { boundary.append(Swift.max(0, polyline.count - 1)) }
+        }
+        let endOfWalk = Swift.max(0, polyline.count - 1)
 
         struct Pending {
             var maneuver: String
@@ -56,8 +81,21 @@ public enum LocalInstructions {
             var road: String?
             var metres: Double
             var startIndex: Int
+
+            func step(endIndex: Int) -> Step {
+                Step(
+                    instruction: instruction,
+                    distanceMeters: metres.rounded(),
+                    durationSeconds: (metres / LocalInstructions.walkingMetresPerSecond).rounded(),
+                    startIndex: startIndex,
+                    endIndex: endIndex,
+                    maneuver: .name(maneuver),
+                    road: road
+                )
+            }
         }
 
+        var steps: [Step] = []
         var pending = Pending(
             maneuver: "continue",
             instruction: setOff(along: legs[0].name),
@@ -65,66 +103,119 @@ public enum LocalInstructions {
             metres: legs[0].metres,
             startIndex: 0
         )
-        coordinateIndex += Swift.max(0, legs[0].coordinates.count - 1)
 
-        for index in 1..<legs.count {
+        var index = 1
+        while index < legs.count {
+            // A crossing is one manoeuvre, however many edges the survey split
+            // it into. A crossing way is cut *at* the carriageway it crosses,
+            // because the node the two share is a junction, so a single
+            // kerb-to-kerb crossing routinely arrives here as two legs.
+            if legs[index].isCrossing {
+                var runEnd = index
+                var runMetres = 0.0
+                var crossed: String?
+                while runEnd < legs.count, legs[runEnd].isCrossing {
+                    runMetres += legs[runEnd].metres
+                    if crossed == nil { crossed = legs[runEnd].crosses }
+                    runEnd += 1
+                }
+                guard runEnd < legs.count else {
+                    // The walk ends on the crossing, so there is no road on the
+                    // far side to introduce and the ground belongs to the step
+                    // already open.
+                    pending.metres += runMetres
+                    index = runEnd
+                    break
+                }
+                // The crossing *is* the manoeuvre that begins the far side,
+                // which is the app's own step convention: one instruction, and
+                // it covers the crossing and the road it leads onto. Calling a
+                // turn onto the crossing and another off it is what made a
+                // crossing sound like two corners.
+                let onward = legs[runEnd]
+                steps.append(pending.step(endIndex: boundary[index]))
+                pending = Pending(
+                    maneuver: "cross",
+                    instruction: crossPhrase(road: crossed),
+                    road: onward.name,
+                    metres: runMetres + onward.metres,
+                    startIndex: boundary[index]
+                )
+                index = runEnd + 1
+                continue
+            }
+
             let previous = legs[index - 1], leg = legs[index]
-            let turn = turnAngle(arriving: previous.coordinates, leaving: leg.coordinates)
+            let turn = turnAngle(polyline, at: boundary[index])
             let maneuver = maneuverName(for: turn)
             let changedRoad = leg.name != previous.name
             if maneuver == "continue" && !changedRoad {
                 // The road bending round is not an instruction.
                 pending.metres += leg.metres
-                coordinateIndex += Swift.max(0, leg.coordinates.count - 1)
+                index += 1
                 continue
             }
-            steps.append(Step(
-                instruction: pending.instruction,
-                distanceMeters: pending.metres.rounded(),
-                durationSeconds: (pending.metres / walkingMetresPerSecond).rounded(),
-                startIndex: pending.startIndex,
-                endIndex: coordinateIndex,
-                maneuver: .name(pending.maneuver),
-                road: pending.road
-            ))
+            steps.append(pending.step(endIndex: boundary[index]))
             pending = Pending(
                 maneuver: maneuver,
                 instruction: phrase(maneuver: maneuver, road: leg.name, roadClass: leg.roadClass),
                 road: leg.name,
                 metres: leg.metres,
-                startIndex: coordinateIndex
+                startIndex: boundary[index]
             )
-            coordinateIndex += Swift.max(0, leg.coordinates.count - 1)
+            index += 1
         }
 
-        steps.append(Step(
-            instruction: pending.instruction,
-            distanceMeters: pending.metres.rounded(),
-            durationSeconds: (pending.metres / walkingMetresPerSecond).rounded(),
-            startIndex: pending.startIndex,
-            endIndex: coordinateIndex,
-            maneuver: .name(pending.maneuver),
-            road: pending.road
-        ))
+        steps.append(pending.step(endIndex: endOfWalk))
         steps.append(Step(
             instruction: "You’re back where you started",
             distanceMeters: 0,
             durationSeconds: 0,
-            startIndex: coordinateIndex,
-            endIndex: coordinateIndex,
+            startIndex: endOfWalk,
+            endIndex: endOfWalk,
             maneuver: .name("finish"),
             road: nil
         ))
         return steps
     }
 
-    /// Degrees from straight on: negative to the left, positive to the right.
-    static func turnAngle(arriving: [Point], leaving: [Point]) -> Double {
-        guard arriving.count >= 2, leaving.count >= 2 else { return 0 }
-        let a = arriving[arriving.count - 2], b = arriving[arriving.count - 1]
-        let c = leaving[0], d = leaving[1]
-        let incoming = LocalGeo.bearing(lat1: a.lat, lon1: a.lng, lat2: b.lat, lon2: b.lng)
-        let outgoing = LocalGeo.bearing(lat1: c.lat, lon1: c.lng, lat2: d.lat, lon2: d.lng)
+    /// How much geometry a manoeuvre is judged over, either side of the
+    /// junction.
+    ///
+    /// One coordinate pair is not enough, and crossings are why. A crossing
+    /// leaves the pavement at right angles, so its first two coordinates read
+    /// as a square turn however straight the walk through them actually is —
+    /// which is how "cross the road" came out as "turn right" and then "turn
+    /// left". Twelve metres is far enough to see past the kerb and short
+    /// enough not to smooth away a corner that is really there.
+    static let bearingWindowMetres: Double = 12
+
+    /// The bearing of the walk on one side of `pivot`, measured over
+    /// `bearingWindowMetres` of ground rather than over one survey vertex.
+    /// Nil where there is no ground on that side at all.
+    static func windowBearing(_ coordinates: [Point], at pivot: Int, before: Bool) -> Double? {
+        guard pivot >= 0, pivot < coordinates.count else { return nil }
+        var index = pivot
+        var travelled = 0.0
+        while before ? index > 0 : index < coordinates.count - 1 {
+            let next = before ? index - 1 : index + 1
+            let a = coordinates[index], b = coordinates[next]
+            travelled += LocalGeo.distance(lat1: a.lat, lon1: a.lng, lat2: b.lat, lon2: b.lng)
+            index = next
+            if travelled >= bearingWindowMetres { break }
+        }
+        guard index != pivot else { return nil }
+        let from = before ? coordinates[index] : coordinates[pivot]
+        let to = before ? coordinates[pivot] : coordinates[index]
+        return LocalGeo.bearing(lat1: from.lat, lon1: from.lng, lat2: to.lat, lon2: to.lng)
+    }
+
+    /// Degrees from straight on at a junction: negative to the left, positive
+    /// to the right.
+    static func turnAngle(_ coordinates: [Point], at pivot: Int) -> Double {
+        guard let incoming = windowBearing(coordinates, at: pivot, before: true),
+              let outgoing = windowBearing(coordinates, at: pivot, before: false)
+        else { return 0 }
         var delta = outgoing - incoming
         while delta > 180 { delta -= 360 }
         while delta < -180 { delta += 360 }
@@ -139,6 +230,13 @@ public enum LocalInstructions {
         if magnitude < turnDegrees { return left ? "turn-left" : "turn-right" }
         if magnitude < sharpDegrees { return left ? "sharp-left" : "sharp-right" }
         return left ? "u-turn-left" : "u-turn-right"
+    }
+
+    /// Naming the road being crossed is the whole point: "Turn right" at a
+    /// crossing tells a walker to look for a turning that is not there.
+    static func crossPhrase(road: String?) -> String {
+        guard let road else { return "Cross the road" }
+        return "Cross \(road)"
     }
 
     static func setOff(along road: String?) -> String {

@@ -315,12 +315,45 @@ the network rather than by proximity, because a searched walk knows its edges.
 
 Generated on the device from edge geometry, incoming and outgoing bearings,
 street names and junction topology: continue, bear left/right, turn left/right,
-sharp left/right, turn around, arrive. They fit the app's existing `Step` model
-and its convention that a step's instruction is the manoeuvre at its *start*.
+sharp left/right, turn around, **cross**, arrive. They fit the app's existing
+`Step` model and its convention that a step's instruction is the manoeuvre at
+its *start*.
 
 Deliberately modest. Field testing decides what guidance needs to say, and
 instructions elaborated before anyone has walked behind them tend to be
 elaborate in the wrong places.
+
+**Crossing is the one manoeuvre field testing has already asked for.** A walker
+was told to "turn right" where there was no turning: the route was crossing the
+road, and a crossing was being described as two corners — a right onto ten
+metres of unnamed tarmac and a left off it again. Three things had to change:
+
+- **A crossing has to be knowable.** `PedestrianAccessPolicy.isCrossing(tags:)`
+  reads `footway=crossing` and its relatives; `LocalWalkingGraph` keeps the
+  answer per edge, along with the name of the carriageway incident to the
+  crossing's own endpoint — which is the road being crossed, readable from the
+  graph's own topology because a crossing way is cut *at* the road it crosses.
+  It is deliberately **not** a `RoadClass` case: a crossing genuinely is a
+  footway for access and weighting, and folding it into the class enum would
+  silently move `isPedestrianWay` and the `pave=NN%` telemetry's own definition.
+- **A manoeuvre has to be judged over ground, not over one vertex.** A crossing
+  leaves the kerb at right angles, so its first two coordinates read as a square
+  turn however straight the walk through them is. Bearings are now measured over
+  twelve metres either side of the junction.
+- **A crossing is one instruction, however many edges it is.** Cut at the
+  carriageway, a kerb-to-kerb crossing routinely arrives as two edges. The run
+  collapses into a single "Cross \<road\>" — the manoeuvre that begins the far
+  side — and `tidySteps` will never fold it away, which it otherwise would,
+  since both pavements of one street carry the street's name.
+
+Nothing here changes a route. The crossing flag is not read by the cost model,
+and `RouteQuality.pavement` gained `crossings`, `crossingsPerKm` and
+`crossBacks` while leaving `hops` exactly as it was. That last point is the
+whole reason the counters exist: `hops` counts pavement-to-carriageway
+transitions, so a walk that hops to the far pavement and back never leaves
+pedestrian ground and scores **zero** — which is why every measurement taken
+before this, including the sweep that chose `looper_foot.json`'s multiplier, was
+blind to the swapping walkers actually complain about.
 
 ## The engine seam
 

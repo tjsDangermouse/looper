@@ -151,6 +151,30 @@ public struct PedestrianAccessPolicy: Sendable {
         return 1 / priority
     }
 
+    /// Whether this way is a walker crossing a carriageway, rather than a way
+    /// running along one.
+    ///
+    /// Deliberately *not* a `RoadClass` case. A crossing genuinely is a footway
+    /// as far as access and weighting are concerned — it is somewhere a walker
+    /// is meant to be — and folding it into the class enum would silently move
+    /// `isPedestrianWay` and `RouteQuality.pedestrianRoadClasses`, changing what
+    /// the `pave=NN%` telemetry has been counting all along. Two orthogonal
+    /// facts about an edge, kept as two fields.
+    ///
+    /// `footway=crossing` is the common tagging. `highway=crossing` is normally
+    /// a node, but is occasionally used on a way. A bare `crossing=*` on a
+    /// pedestrian way says the same thing in older data, so it is read too —
+    /// but only on a pedestrian way, because `crossing=no` on a carriageway
+    /// means "no crossing here", which is the opposite claim.
+    public func isCrossing(tags: [String: String]) -> Bool {
+        if tags["footway"] == "crossing" { return true }
+        if tags["highway"] == "crossing" { return true }
+        guard let highway = tags["highway"] else { return false }
+        guard RoadClass(highway: highway).isPedestrianWay else { return false }
+        guard let crossing = tags["crossing"] else { return false }
+        return crossing != "no"
+    }
+
     /// Whether the way is one GraphHopper would price rather than refuse.
     func isPriced(_ tags: [String: String]) -> Bool {
         if let foot = tags["foot"] { return PedestrianAccessPolicy.pricedValues.contains(foot) }

@@ -277,7 +277,13 @@ public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
         )
         let d = result.diagnostics
         let pavement = d.offeredPavement.isEmpty ? 0 : d.offeredPavement.reduce(0) { $0 + $1.share } / Double(d.offeredPavement.count)
-        RoutingLog.search.info("local ring graph=\(d.graphNodes)n/\(d.graphEdges)e built=\(d.candidatesBuilt) abandoned=\(d.candidatesAbandoned) judged=\(d.closedWalks) gate-]=\(d.gateRejected) passed=\(d.passedGate) batches=\(d.batchesRun) seen-]=\(d.excludedAsAlreadySeen)\(d.excludeExhausted ? "!" : "") alike-]=\(d.diversityRejected) offered=\(d.offered) pave=\(Int(pavement * 100))% sweepMs=\(Int(d.sweepMs)) totalMs=\(Int(d.totalMs)) failure=\(d.failure ?? "-", privacy: .public)")
+        // Crossings and cross-backs are logged beside the pavement share
+        // because the share alone cannot show the problem they measure: a walk
+        // that hops from one pavement to the other and back is 100% pavement.
+        let offers = Double(Swift.max(1, d.offeredPavement.count))
+        let crossingsPerKm = d.offeredPavement.reduce(0) { $0 + $1.crossingsPerKm } / offers
+        let crossBacks = d.offeredPavement.reduce(0) { $0 + $1.crossBacks }
+        RoutingLog.search.info("local ring graph=\(d.graphNodes)n/\(d.graphEdges)e built=\(d.candidatesBuilt) abandoned=\(d.candidatesAbandoned) judged=\(d.closedWalks) gate-]=\(d.gateRejected) passed=\(d.passedGate) batches=\(d.batchesRun) seen-]=\(d.excludedAsAlreadySeen)\(d.excludeExhausted ? "!" : "") alike-]=\(d.diversityRejected) offered=\(d.offered) pave=\(Int(pavement * 100))% cross/km=\(String(format: "%.2f", crossingsPerKm)) crossback=\(crossBacks) sweepMs=\(Int(d.sweepMs)) totalMs=\(Int(d.totalMs)) failure=\(d.failure ?? "-", privacy: .public)")
         guard !result.routes.isEmpty else {
             throw LocalLoopRouter.Failure.noLoopFound
         }

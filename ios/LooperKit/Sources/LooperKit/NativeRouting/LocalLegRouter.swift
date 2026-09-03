@@ -330,7 +330,9 @@ public enum LocalLegRouter {
                 metres: graph.edgeMetres[edge],
                 name: graph.name(ofEdge: edge),
                 roadClass: graph.roadClass(ofEdge: edge),
-                physical: Int32(edge)
+                physical: Int32(edge),
+                isCrossing: graph.isCrossing(ofEdge: edge),
+                crosses: graph.crossedRoad(ofEdge: edge)
             ))
         }
         switch arrival.arrival {
@@ -374,7 +376,9 @@ public enum LocalLegRouter {
             metres: towardsFrom ? snap.metresFromStart : snap.metresToEnd,
             name: graph.name(ofEdge: snap.edge),
             roadClass: graph.roadClass(ofEdge: snap.edge),
-            physical: Int32(snap.edge)
+            physical: Int32(snap.edge),
+            isCrossing: graph.isCrossing(ofEdge: snap.edge),
+            crosses: graph.crossedRoad(ofEdge: snap.edge)
         )
     }
 
@@ -392,7 +396,9 @@ public enum LocalLegRouter {
             let leg = WalkLeg(
                 coordinates: [Point(source.lon, source.lat), Point(target.lon, target.lat)],
                 metres: 0, name: graph.name(ofEdge: edge), roadClass: graph.roadClass(ofEdge: edge),
-                physical: Int32(edge)
+                physical: Int32(edge),
+                isCrossing: graph.isCrossing(ofEdge: edge),
+                crosses: graph.crossedRoad(ofEdge: edge)
             )
             return Leg(legs: [leg], metres: 0, coordinates: leg.coordinates)
         }
@@ -422,7 +428,9 @@ public enum LocalLegRouter {
         let leg = WalkLeg(
             coordinates: coordinates, metres: metres,
             name: graph.name(ofEdge: edge), roadClass: graph.roadClass(ofEdge: edge),
-            physical: Int32(edge)
+            physical: Int32(edge),
+            isCrossing: graph.isCrossing(ofEdge: edge),
+            crosses: graph.crossedRoad(ofEdge: edge)
         )
         return Leg(legs: [leg], metres: metres, coordinates: coordinates)
     }

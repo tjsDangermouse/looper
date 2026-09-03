@@ -580,7 +580,9 @@ public struct LocalLoopRouter: Sendable {
                 metres: edge.metres,
                 name: base.name(ofEdge: physical),
                 roadClass: base.roadClass(ofEdge: physical),
-                physical: edge.physical
+                physical: edge.physical,
+                isCrossing: base.isCrossing(ofEdge: physical),
+                crosses: base.crossedRoad(ofEdge: physical)
             ))
         }
 

@@ -769,17 +769,45 @@ public enum RouteQuality {
         public var pavementMetres: Double
         public var measuredMetres: Double
         /// Times the walk changed between pavement and carriageway.
+        ///
+        /// Left exactly as it was so the series stays comparable with every
+        /// figure recorded before crossings were counted — including the sweep
+        /// that chose `looper_foot.json`'s multiplier. It is **blind to a
+        /// side-swap**: pavement, crossing and far pavement are all pedestrian
+        /// ground, so hopping the road and hopping back scores zero here. That
+        /// is what `crossings` and `crossBacks` below are for.
         public var hops: Int
+        /// Separate crossings of a carriageway. Consecutive crossing legs are
+        /// one crossing: a crossing way is cut at the road it crosses, so one
+        /// kerb-to-kerb crossing is routinely two legs.
+        public var crossings: Int
+        /// Crossings followed by another within `crossBackMetres`. This is the
+        /// swap-the-pavement-and-swap-back complaint, as a number — the thing
+        /// no existing measurement could see.
+        public var crossBacks: Int
 
         public var share: Double { measuredMetres > 0 ? pavementMetres / measuredMetres : 0 }
         public var hopsPerKm: Double { measuredMetres > 0 ? Double(hops) * 1000 / measuredMetres : 0 }
+        public var crossingsPerKm: Double {
+            measuredMetres > 0 ? Double(crossings) * 1000 / measuredMetres : 0
+        }
 
-        public init(pavementMetres: Double = 0, measuredMetres: Double = 0, hops: Int = 0) {
+        public init(
+            pavementMetres: Double = 0, measuredMetres: Double = 0, hops: Int = 0,
+            crossings: Int = 0, crossBacks: Int = 0
+        ) {
             self.pavementMetres = pavementMetres
             self.measuredMetres = measuredMetres
             self.hops = hops
+            self.crossings = crossings
+            self.crossBacks = crossBacks
         }
     }
+
+    /// How close two crossings have to be for the second to be reading as a
+    /// change of mind rather than as a second road. Two sides of one street
+    /// are metres apart; two streets are not.
+    public static let crossBackMetres: Double = 50
 
     /// Consecutive legs of the same kind are one stretch — the graph splits an
     /// edge at every junction, so a single pavement is many legs and none of
@@ -787,12 +815,28 @@ public enum RouteQuality {
     public static func pavement(of legs: [WalkLeg]) -> PavementReport {
         var report = PavementReport()
         var previous: Bool?
+        var wasCrossing = false
+        /// Ground walked since the last crossing ended, so a crossing that
+        /// follows hard on another can be told from one a street away.
+        var sinceCrossing = Double.infinity
         for leg in legs where leg.metres > 0 {
             let isPavement = pedestrianRoadClasses.contains(leg.roadClass)
             report.measuredMetres += leg.metres
             if isPavement { report.pavementMetres += leg.metres }
             if let was = previous, was != isPavement { report.hops += 1 }
             previous = isPavement
+
+            if leg.isCrossing {
+                if !wasCrossing {
+                    report.crossings += 1
+                    if sinceCrossing <= crossBackMetres { report.crossBacks += 1 }
+                }
+                wasCrossing = true
+            } else {
+                if wasCrossing { sinceCrossing = 0 }
+                wasCrossing = false
+                sinceCrossing += leg.metres
+            }
         }
         return report
     }

@@ -41,6 +41,18 @@ public struct LocalWalkingGraph: Sendable {
     /// The OSM way this edge came from. The physical identity a walk's
     /// "already spent this ground" accounting is decided on.
     public let edgeWayID: [Int64]
+    /// Whether this edge is a walker crossing a carriageway rather than a way
+    /// running along one. Read from tags by
+    /// `PedestrianAccessPolicy.isCrossing(tags:)`, and deliberately kept
+    /// separate from `edgeRoadClass` — see that method for why.
+    ///
+    /// Nothing in the cost model reads this. It exists so that guidance can say
+    /// "cross the road" instead of calling a turn onto ten metres of unnamed
+    /// tarmac, and so that a route's crossings can be counted.
+    public let edgeIsCrossing: [Bool]
+    /// For a crossing edge, the `names` slot of the carriageway it crosses, or
+    /// `-1` where none could be identified. Meaningless on any other edge.
+    public let edgeCrosses: [Int32]
     public let names: [String]
 
     // MARK: Adjacency (CSR)
@@ -60,6 +72,18 @@ public struct LocalWalkingGraph: Sendable {
 
     public func roadClass(ofEdge edge: Int) -> PedestrianAccessPolicy.RoadClass {
         PedestrianAccessPolicy.RoadClass(rawValue: edgeRoadClass[edge]) ?? .other
+    }
+
+    public func isCrossing(ofEdge edge: Int) -> Bool {
+        edge < edgeIsCrossing.count ? edgeIsCrossing[edge] : false
+    }
+
+    /// The carriageway a crossing edge crosses, where the builder could name
+    /// one. Nil on a non-crossing edge and on a crossing of an unnamed road.
+    public func crossedRoad(ofEdge edge: Int) -> String? {
+        guard edge < edgeCrosses.count else { return nil }
+        let slot = edgeCrosses[edge]
+        return slot >= 0 ? names[Int(slot)] : nil
     }
 
     /// Flat lon/lat pairs for one edge, `from` end first.
@@ -85,7 +109,9 @@ public struct LocalWalkingGraph: Sendable {
         edgeWeight: [Double] = [],
         edgeForward: [Bool], edgeBackward: [Bool],
         geometryStart: [Int32], geometry: [Double],
-        edgeName: [Int32], edgeRoadClass: [UInt8], edgeWayID: [Int64], names: [String],
+        edgeName: [Int32], edgeRoadClass: [UInt8], edgeWayID: [Int64],
+        edgeIsCrossing: [Bool] = [], edgeCrosses: [Int32] = [],
+        names: [String],
         arcStart: [Int32], arcEdge: [Int32], arcTo: [Int32], arcForward: [Bool]
     ) {
         self.nodeOSMID = nodeOSMID
@@ -105,6 +131,12 @@ public struct LocalWalkingGraph: Sendable {
         self.edgeName = edgeName
         self.edgeRoadClass = edgeRoadClass
         self.edgeWayID = edgeWayID
+        // A caller that says nothing about crossings — a fixture, or `empty` —
+        // gets a graph with none, which is what it was asking for.
+        self.edgeIsCrossing = edgeIsCrossing.count == edgeFrom.count
+            ? edgeIsCrossing : [Bool](repeating: false, count: edgeFrom.count)
+        self.edgeCrosses = edgeCrosses.count == edgeFrom.count
+            ? edgeCrosses : [Int32](repeating: -1, count: edgeFrom.count)
         self.names = names
         self.arcStart = arcStart
         self.arcEdge = arcEdge
@@ -165,6 +197,7 @@ public enum LocalWalkingGraphBuilder {
             var ids: [Int64]
             var decision: PedestrianAccessPolicy.Decision
             var name: String?
+            var isCrossing: Bool
         }
 
         var runs: [Run] = []
@@ -174,12 +207,13 @@ public enum LocalWalkingGraphBuilder {
             guard decision.isWalkable else { continue }
             report.waysWalkable += 1
             let name = way.tags["name"] ?? way.tags["ref"]
+            let crossing = policy.isCrossing(tags: way.tags)
             var current: [Int64] = []
             for id in way.nodes {
                 guard let node = nodeByID[id] else {
                     // Coordinates for this node are in a chunk we have not
                     // loaded. Close the run here rather than bridging the gap.
-                    if current.count >= 2 { runs.append(Run(wayID: way.id, ids: current, decision: decision, name: name)) }
+                    if current.count >= 2 { runs.append(Run(wayID: way.id, ids: current, decision: decision, name: name, isCrossing: crossing)) }
                     current = []
                     continue
                 }
@@ -191,11 +225,11 @@ public enum LocalWalkingGraphBuilder {
                     // *at* the barrier node would reconnect the two sides
                     // through the very thing that blocks them.
                     current.append(id)
-                    if current.count >= 2 { runs.append(Run(wayID: way.id, ids: current, decision: decision, name: name)) }
+                    if current.count >= 2 { runs.append(Run(wayID: way.id, ids: current, decision: decision, name: name, isCrossing: crossing)) }
                     current = []
                 }
             }
-            if current.count >= 2 { runs.append(Run(wayID: way.id, ids: current, decision: decision, name: name)) }
+            if current.count >= 2 { runs.append(Run(wayID: way.id, ids: current, decision: decision, name: name, isCrossing: crossing)) }
         }
 
         // A node is a junction if more than one run uses it, if it begins or
@@ -235,6 +269,7 @@ public enum LocalWalkingGraphBuilder {
         var geometryStart: [Int32] = [0]
         var geometry: [Double] = []
         var edgeName: [Int32] = [], edgeRoadClass: [UInt8] = [], edgeWayID: [Int64] = []
+        var edgeIsCrossing: [Bool] = []
         var names: [String] = []
         var nameIndex: [String: Int32] = [:]
         geometry.reserveCapacity(runs.count * 8)
@@ -281,6 +316,7 @@ public enum LocalWalkingGraphBuilder {
                     edgeName.append(nameSlot)
                     edgeRoadClass.append(run.decision.roadClass.rawValue)
                     edgeWayID.append(run.wayID)
+                    edgeIsCrossing.append(run.isCrossing)
                     geometry.append(contentsOf: pending)
                     geometryStart.append(Int32(geometry.count))
                 }
@@ -321,6 +357,43 @@ public enum LocalWalkingGraphBuilder {
             }
         }
 
+        // The road each crossing crosses, for guidance to name.
+        //
+        // A `footway=crossing` way is split *at* the carriageway it crosses,
+        // because the node the two share is a junction and so becomes a graph
+        // node. The carriageway is therefore incident to one of the crossing
+        // edge's own endpoints, and its name can be read from the graph's own
+        // topology — no geometry, no spatial query, no guessing at what runs
+        // alongside what.
+        var crossingEndpoints: Set<Int32> = []
+        for edge in 0..<edgeFrom.count where edgeIsCrossing[edge] {
+            crossingEndpoints.insert(edgeFrom[edge])
+            crossingEndpoints.insert(edgeTo[edge])
+        }
+        var edgeCrosses = [Int32](repeating: -1, count: edgeFrom.count)
+        if !crossingEndpoints.isEmpty {
+            var roadsAtNode: [Int32: [Int32]] = [:]
+            for edge in 0..<edgeFrom.count {
+                guard !edgeIsCrossing[edge], edgeName[edge] >= 0 else { continue }
+                let roadClass = PedestrianAccessPolicy.RoadClass(rawValue: edgeRoadClass[edge]) ?? .other
+                guard !roadClass.isPedestrianWay else { continue }
+                for node in [edgeFrom[edge], edgeTo[edge]] where crossingEndpoints.contains(node) {
+                    roadsAtNode[node, default: []].append(edgeName[edge])
+                }
+            }
+            for edge in 0..<edgeFrom.count where edgeIsCrossing[edge] {
+                var tally: [Int32: Int] = [:]
+                for node in [edgeFrom[edge], edgeTo[edge]] {
+                    for slot in roadsAtNode[node] ?? [] { tally[slot, default: 0] += 1 }
+                }
+                // The most-shared name wins, and the lowest slot breaks a tie so
+                // the answer never depends on dictionary ordering.
+                edgeCrosses[edge] = tally
+                    .sorted { ($0.value, -$0.key) > ($1.value, -$1.key) }
+                    .first?.key ?? -1
+            }
+        }
+
         report.graphNodes = nodeCount
         report.graphEdges = edgeFrom.count
         report.buildMs = Date().timeIntervalSince(began) * 1000
@@ -330,7 +403,9 @@ public enum LocalWalkingGraphBuilder {
             edgeFrom: edgeFrom, edgeTo: edgeTo, edgeMetres: edgeMetres, edgeWeight: edgeWeight,
             edgeForward: edgeForward, edgeBackward: edgeBackward,
             geometryStart: geometryStart, geometry: geometry,
-            edgeName: edgeName, edgeRoadClass: edgeRoadClass, edgeWayID: edgeWayID, names: names,
+            edgeName: edgeName, edgeRoadClass: edgeRoadClass, edgeWayID: edgeWayID,
+            edgeIsCrossing: edgeIsCrossing, edgeCrosses: edgeCrosses,
+            names: names,
             arcStart: arcStart, arcEdge: arcEdge, arcTo: arcTo, arcForward: arcForward
         )
         return (graph, report)

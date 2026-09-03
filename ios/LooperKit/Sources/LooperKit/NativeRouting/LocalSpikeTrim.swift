@@ -161,7 +161,8 @@ public enum LocalSpikeTrim {
             let untouched = runPoints.count == source.coordinates.count
             rebuilt.append(WalkLeg(
                 coordinates: runPoints, metres: untouched ? source.metres : runMetres,
-                name: source.name, roadClass: source.roadClass, physical: source.physical
+                name: source.name, roadClass: source.roadClass, physical: source.physical,
+                isCrossing: source.isCrossing, crosses: source.crosses
             ))
             runPoints = []
             runMetres = 0
