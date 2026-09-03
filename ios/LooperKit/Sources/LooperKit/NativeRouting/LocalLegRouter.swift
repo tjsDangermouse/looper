@@ -172,8 +172,15 @@ public enum LocalLegRouter {
         // taking whichever of the two is a few metres shorter block by block.
         // What is reported is always the true length.
         @inline(__always) func cost(_ edge: Int) -> Double {
+            // The surcharge is additive and the multipliers are not, because
+            // the two price different things. A metre of carriageway is dearer
+            // *per metre*; a crossing is one event whose cost to a walker owes
+            // nothing to how wide the road happens to be. Additive also keeps
+            // every edge costing at least its own length, which is what the
+            // A* estimate below depends on.
             graph.edgeMetres[edge] * (weighted ? graph.edgeWeight[edge] : 1)
                 * (penalising.contains(Int32(edge)) ? penalty : 1)
+                + (weighted ? graph.edgeSurcharge[edge] : 0)
         }
 
         // Two points on the same edge with nothing but that edge between them
@@ -248,8 +255,14 @@ public enum LocalLegRouter {
         // The estimate has to be a genuine lower bound or the path it returns
         // is not the shortest. Two things make it one: every edge costs at
         // least its own length, because `edgeWeight` and `penalty` are both at
-        // least 1; and a network distance is never shorter than the straight
-        // line. The equirectangular approximation below is exact enough at town
+        // least 1 and `edgeSurcharge` is never negative; and a network distance
+        // is never shorter than the straight line.
+        //
+        // That first clause is a real constraint on every future cost rule and
+        // not just an observation about this one. Nothing may ever be priced
+        // *below* a metre per metre — which is why preferring a pavement is
+        // expressed as making the carriageway dearer, and never as making the
+        // pavement cheap. The equirectangular approximation below is exact enough at town
         // scale that its error is far inside the 1% it is scaled down by.
         let goalLat = arrivals.reduce(0.0) { $0 + graph.nodeLat[$1.node] } / Double(arrivals.count)
         let goalLon = arrivals.reduce(0.0) { $0 + graph.nodeLon[$1.node] } / Double(arrivals.count)

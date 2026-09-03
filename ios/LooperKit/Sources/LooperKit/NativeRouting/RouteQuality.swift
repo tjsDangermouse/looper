@@ -204,7 +204,11 @@ public enum RouteQuality {
 
     /// A grid over sample midpoints, so "what else is near here" is a handful
     /// of cell lookups rather than a scan of the whole walk.
-    fileprivate struct SampleIndex {
+    /// Internal rather than fileprivate: the street grouping in
+    /// `LocalStreetGroups` pairs pavements with carriageways, which is this
+    /// same "what else is near here, running the same way" question asked of
+    /// the graph instead of of one route.
+    struct SampleIndex {
         let samples: [Sample]
         let cell: Double
         var grid: [Int64: [Int]] = [:]

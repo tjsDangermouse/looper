@@ -81,6 +81,7 @@ outside `ios/` was changed.
 | `RoutingDataSource.swift` | The provider abstraction and the Overpass client |
 | `RoutingDataManager.swift` | Coverage, request grouping, splitting into chunks |
 | `LocalWalkingGraph.swift` | The compact graph and its builder |
+| `LocalStreetGroups.swift` | A carriageway and its pavements as one street, and what that costs |
 | `LocalEdgeIndex.swift` | Spatial index and on-device snapping |
 | `LocalExploration.swift` | Bounded Dijkstra; the request-local subgraph |
 | `WalkSearchGraph.swift` | 2-core peel, degree-2 contraction, arcs, stems |
@@ -156,6 +157,73 @@ already on the phone instead of invalidating it.
 GraphHopper's published `foot` behaviour is the reference for ambiguous OSM
 semantics, so a walk found on the phone is walkable by the same rules as one
 found on the server. GraphHopper is not linked, downloaded, run or called.
+
+## Streets, not three separate paths
+
+OSM maps a street as three unrelated ways — the carriageway and a pavement
+either side — and that is the whole of the walker's complaint about the routes
+this app offered. Told nothing else, the router sees three interchangeable paths
+of near-identical length, takes whichever is a few metres shorter to the next
+junction, crosses, and crosses back two junctions later for the same reason.
+
+`LocalStreetGroups` runs once at graph build and gives every edge a **street**.
+It is the same "what else is near here, running the same way" question
+`RouteQuality.findRepeatedCorridors` already asks of a route, asked instead of
+the graph: `resample` produces samples carrying their own direction,
+`SampleIndex` hashes them, and `parallelCosine` (35°) decides whether two
+stretches run together or merely cross. Carriageway samples are hashed once and
+pedestrian samples streamed through — one hash, not a query per edge.
+
+Two rules become expressible that could not be written before, and neither
+could have been written for the remote engine at all, because a GraphHopper
+profile can only score an edge from its own tags. It cannot ask whether there is
+a footway eight metres to the left.
+
+- **A carriageway with a pavement beside it is dearer** — ×2 on top of the 1.25
+  every carriageway already carries. Only where a pavement actually runs
+  alongside *that stretch*: a lane with none keeps exactly the 1.25 it always
+  had, because it is very often the only way through and a charge with no escape
+  buys nothing. This is the difference from `looper-foot-2`, which multiplied
+  every road by ten and paid for long detours to any footway anywhere.
+- **A crossing that returns to the street it left costs 40 m; one that crosses a
+  different street is free.** A walker has no choice about crossing a side road
+  on the way past it, and charging for it would buy detours around junctions —
+  the same mistake in a new place.
+
+The second rule is why the grouping has to exist. `RouteQuality.crossingRuns`
+already tells a junction crossing from a side-swap, but from the walk's approach
+heading — known only once a route exists. A search prices an edge before any
+path reaches it, and a cost that depends on how the edge was reached breaks
+A\*'s guarantee. Grouping makes the same question structural: *does this
+crossing's crossed street match the street at both its ends?*
+
+**One crossing is charged once.** A crossing way is cut at the carriageway it
+crosses, so kerb-to-kerb is routinely two edges; the surcharge is divided across
+the way's own edges, keyed on `edgeWayID`. Charged per edge, the commonest
+tagging in OSM would pay double and the rest single.
+
+**The two constants are really one number.** What matters is their ratio,
+because that sets how much far-side pavement is worth crossing for. Standing
+where a pavement has ended with `D` metres of street left, `S + 10 + D < 2.5 D`
+gives `D > 33 m` — and where the walk would have to cross *back*, the surcharge
+is paid twice and the bar rises to about 67 m. So the router is the more
+reluctant exactly where it should be, and **no far-side lookahead is needed**:
+"cross only if you get enough pavement out of it" is not a second rule to write,
+it is what comparing those two costs already says.
+
+The carriageway multiplier is deliberately moderate. Its only job is to lose a
+near-tie against a way running *parallel* to it, so it buys no detour at ×2. A
+large multiplier's failure mode is an OSM gap: where a pavement is mapped but
+not connected at the point it is needed, a heavy penalty pays for a long way
+round to avoid a few metres of carriageway.
+
+Where anything is unknown — an unnamed carriageway, a pavement the pairing could
+not place — nothing is charged. A rule that cannot tell what it is looking at
+must not price it.
+
+Measured at 3,120 edges (a 40×40 lattice, the order of a town centre): 80 ms for
+the whole graph build. It sits on the path of the first walk in a new area, so
+that is a walker waiting rather than a background job.
 
 ## Chunking
 

@@ -53,6 +53,15 @@ public struct LocalWalkingGraph: Sendable {
     /// For a crossing edge, the `names` slot of the carriageway it crosses, or
     /// `-1` where none could be identified. Meaningless on any other edge.
     public let edgeCrosses: [Int32]
+    /// The street this edge belongs to, as a `names` slot — the same slot for a
+    /// carriageway, both its pavements, and the crossings between them. `-1`
+    /// where nothing could be established. See `LocalStreetGroups`.
+    public let edgeStreet: [Int32]
+    /// Whether a pedestrian way runs alongside this carriageway edge.
+    public let edgeHasParallelPavement: [Bool]
+    /// Additive cost in metres-equivalent, on top of `edgeMetres × edgeWeight`.
+    /// Never applied to a reported distance.
+    public let edgeSurcharge: [Double]
     public let names: [String]
 
     // MARK: Adjacency (CSR)
@@ -86,6 +95,13 @@ public struct LocalWalkingGraph: Sendable {
         return slot >= 0 ? names[Int(slot)] : nil
     }
 
+    /// The street this edge belongs to, where one is known.
+    public func street(ofEdge edge: Int) -> String? {
+        guard edge < edgeStreet.count else { return nil }
+        let slot = edgeStreet[edge]
+        return slot >= 0 ? names[Int(slot)] : nil
+    }
+
     /// Flat lon/lat pairs for one edge, `from` end first.
     public func line(ofEdge edge: Int) -> ArraySlice<Double> {
         geometry[Int(geometryStart[edge])..<Int(geometryStart[edge + 1])]
@@ -111,6 +127,7 @@ public struct LocalWalkingGraph: Sendable {
         geometryStart: [Int32], geometry: [Double],
         edgeName: [Int32], edgeRoadClass: [UInt8], edgeWayID: [Int64],
         edgeIsCrossing: [Bool] = [], edgeCrosses: [Int32] = [],
+        groups: LocalStreetGroups? = nil,
         names: [String],
         arcStart: [Int32], arcEdge: [Int32], arcTo: [Int32], arcForward: [Bool]
     ) {
@@ -137,6 +154,13 @@ public struct LocalWalkingGraph: Sendable {
             ? edgeIsCrossing : [Bool](repeating: false, count: edgeFrom.count)
         self.edgeCrosses = edgeCrosses.count == edgeFrom.count
             ? edgeCrosses : [Int32](repeating: -1, count: edgeFrom.count)
+        // A caller that says nothing about streets — a fixture, or `empty` —
+        // gets a graph where no street rule fires, which is what it asked for.
+        let grouping = (groups?.street.count == edgeFrom.count ? groups : nil)
+            ?? LocalStreetGroups.empty(edgeCount: edgeFrom.count)
+        self.edgeStreet = grouping.street
+        self.edgeHasParallelPavement = grouping.hasParallelPavement
+        self.edgeSurcharge = grouping.surcharge
         self.names = names
         self.arcStart = arcStart
         self.arcEdge = arcEdge
@@ -175,6 +199,10 @@ public enum LocalWalkingGraphBuilder {
         public var nodesLoaded = 0
         public var graphNodes = 0
         public var graphEdges = 0
+        /// Edges the street grouping could place. See `LocalStreetGroups`.
+        public var groupedEdges = 0
+        /// Carriageway edges with a pavement running alongside them.
+        public var pavedCarriageways = 0
         public var buildMs: Double = 0
     }
 
@@ -396,15 +424,44 @@ public enum LocalWalkingGraphBuilder {
 
         report.graphNodes = nodeCount
         report.graphEdges = edgeFrom.count
-        report.buildMs = Date().timeIntervalSince(began) * 1000
 
-        let graph = LocalWalkingGraph(
+        // Grouping needs the finished graph to read — geometry, classes,
+        // crossings and names all at once — so it runs against a graph built
+        // without it, and its answers are folded into the graph that is
+        // returned. Swift arrays are copy-on-write, so this costs one array of
+        // weights rather than a second graph.
+        let ungrouped = LocalWalkingGraph(
             nodeOSMID: nodeOSMID, nodeLat: nodeLat, nodeLon: nodeLon,
             edgeFrom: edgeFrom, edgeTo: edgeTo, edgeMetres: edgeMetres, edgeWeight: edgeWeight,
             edgeForward: edgeForward, edgeBackward: edgeBackward,
             geometryStart: geometryStart, geometry: geometry,
             edgeName: edgeName, edgeRoadClass: edgeRoadClass, edgeWayID: edgeWayID,
             edgeIsCrossing: edgeIsCrossing, edgeCrosses: edgeCrosses,
+            names: names,
+            arcStart: arcStart, arcEdge: arcEdge, arcTo: arcTo, arcForward: arcForward
+        )
+        let groups = LocalStreetGroups.build(for: ungrouped)
+
+        // A carriageway with a pavement beside it is dearer *there*, and
+        // nowhere else. A road with no pavement alongside keeps exactly the
+        // 1.25 it has always had: it is very often the only way through, so a
+        // charge with no escape would distort leg lengths and buy nothing.
+        var grouped = edgeWeight
+        for edge in 0..<grouped.count where groups.hasParallelPavement[edge] {
+            grouped[edge] *= LocalStreetGroups.parallelPavementPenalty
+        }
+        report.groupedEdges = groups.street.reduce(0) { $1 >= 0 ? $0 + 1 : $0 }
+        report.pavedCarriageways = groups.hasParallelPavement.reduce(0) { $1 ? $0 + 1 : $0 }
+        report.buildMs = Date().timeIntervalSince(began) * 1000
+
+        let graph = LocalWalkingGraph(
+            nodeOSMID: nodeOSMID, nodeLat: nodeLat, nodeLon: nodeLon,
+            edgeFrom: edgeFrom, edgeTo: edgeTo, edgeMetres: edgeMetres, edgeWeight: grouped,
+            edgeForward: edgeForward, edgeBackward: edgeBackward,
+            geometryStart: geometryStart, geometry: geometry,
+            edgeName: edgeName, edgeRoadClass: edgeRoadClass, edgeWayID: edgeWayID,
+            edgeIsCrossing: edgeIsCrossing, edgeCrosses: edgeCrosses,
+            groups: groups,
             names: names,
             arcStart: arcStart, arcEdge: arcEdge, arcTo: arcTo, arcForward: arcForward
         )
