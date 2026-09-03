@@ -217,6 +217,110 @@ final class LocalCrossingTests: XCTestCase {
         XCTAssertEqual(steps[1].instruction, "Turn right onto Second Street")
     }
 
+    // MARK: - Junctions, and juts before them
+
+    /// The dog-leg: a pavement juts sideways to reach the dropped kerb, so the
+    /// walk jogs aside, crosses, and jogs back. Before this it was three
+    /// instructions — a bare "Continue", the crossing, and a redundant
+    /// "Continue onto Main Street" while already on Main Street.
+    private func dogleg(jutMetres: Double) -> [WalkLeg] {
+        let start = SyntheticOSM.douglas
+        let before = leg(from: start, bearing: 90, metres: 100, name: "Main Street")
+        let jutIn = leg(from: before.coordinates.last!, bearing: 150, metres: jutMetres, name: nil)
+        let crossing = leg(
+            from: jutIn.coordinates.last!, bearing: 90, metres: 8, name: nil,
+            isCrossing: true, crosses: "Mill Lane"
+        )
+        let jutOut = leg(from: crossing.coordinates.last!, bearing: 30, metres: jutMetres, name: nil)
+        let after = leg(from: jutOut.coordinates.last!, bearing: 90, metres: 100, name: "Main Street")
+        return [before, jutIn, crossing, jutOut, after]
+    }
+
+    func testTheJutBeforeAJunctionIsNotAManoeuvre() {
+        let legs = dogleg(jutMetres: 5)
+        let steps = tidySteps(LocalInstructions.steps(for: legs))
+        XCTAssertEqual(
+            steps.map(\.instruction),
+            ["Set off along Main Street", "Cross the junction and carry straight on",
+             "You\u{2019}re back where you started"]
+        )
+        XCTAssertFalse(steps.contains { $0.instruction == "Continue" }, "a bare Continue says nothing")
+        XCTAssertFalse(
+            steps.contains { $0.instruction.contains("Continue onto Main Street") },
+            "already on Main Street"
+        )
+        // The crossing step carries the street beyond the jut, not the jut.
+        XCTAssertEqual(steps[1].road, "Main Street")
+        XCTAssertEqual(steps.map(\.distanceMeters).reduce(0, +), 218, accuracy: 2)
+    }
+
+    /// `tidySteps` folds a step under ten metres, so a five-metre jut was
+    /// already survivable. Twelve is not, and twelve is ordinary.
+    func testAJutTooLongForTidyingIsStillNotAManoeuvre() {
+        let steps = tidySteps(LocalInstructions.steps(for: dogleg(jutMetres: 12)))
+        XCTAssertEqual(steps.count, 3)
+        XCTAssertEqual(steps[1].instruction, "Cross the junction and carry straight on")
+        XCTAssertEqual(steps.map(\.distanceMeters).reduce(0, +), 232, accuracy: 2)
+    }
+
+    /// The guard on the whole idea. Absorbing on distance alone would delete
+    /// this, and a walker would sail past the turning.
+    func testAGenuineShortTurnIsNotAbsorbed() {
+        let start = SyntheticOSM.douglas
+        let along = leg(from: start, bearing: 90, metres: 100, name: "Main Street", roadClass: .residential)
+        let short = leg(
+            from: along.coordinates.last!, bearing: 0, metres: 12, name: "Mill Lane",
+            roadClass: .residential
+        )
+        let onward = leg(
+            from: short.coordinates.last!, bearing: 0, metres: 100, name: "Mill Lane",
+            roadClass: .residential
+        )
+        let steps = LocalInstructions.steps(for: [along, short, onward])
+        XCTAssertTrue(
+            steps.contains { $0.instruction == "Turn left onto Mill Lane" },
+            "the walk genuinely changes direction here, so it is a turn"
+        )
+    }
+
+    /// A crossing taken *along* the line of travel crosses a junction; one
+    /// taken *across* it changes side of the street being walked.
+    func testACrossingIsToldApartFromASideSwapByTheDirectionItRuns() {
+        let start = SyntheticOSM.douglas
+
+        let along = leg(from: start, bearing: 90, metres: 100, name: "Main Street")
+        let overSideRoad = leg(
+            from: along.coordinates.last!, bearing: 90, metres: 10, name: nil,
+            isCrossing: true, crosses: "Mill Lane"
+        )
+        let onward = leg(from: overSideRoad.coordinates.last!, bearing: 90, metres: 100, name: "Main Street")
+        let junction = RouteQuality.crossingRuns(in: [along, overSideRoad, onward])
+        XCTAssertEqual(junction.count, 1)
+        XCTAssertEqual(junction[0].kind, .junction)
+        XCTAssertTrue(junction[0].carriesStraightOn)
+
+        let swap = RouteQuality.crossingRuns(in: sideSwap())
+        XCTAssertEqual(swap.count, 2)
+        XCTAssertTrue(swap.allSatisfy { $0.kind == .sideSwap })
+    }
+
+    /// Aligned with the line of travel, but the walk then turns — so "carry
+    /// straight on" would be a lie, and the road gets named instead.
+    func testAnAlignedCrossingThatThenTurnsDoesNotSayCarryStraightOn() {
+        let start = SyntheticOSM.douglas
+        let along = leg(from: start, bearing: 90, metres: 100, name: "Main Street")
+        let over = leg(
+            from: along.coordinates.last!, bearing: 90, metres: 10, name: nil,
+            isCrossing: true, crosses: "Mill Lane"
+        )
+        let away = leg(from: over.coordinates.last!, bearing: 0, metres: 100, name: "Quay Road")
+        let runs = RouteQuality.crossingRuns(in: [along, over, away])
+        XCTAssertEqual(runs[0].kind, .junction)
+        XCTAssertFalse(runs[0].carriesStraightOn)
+        let steps = LocalInstructions.steps(for: [along, over, away])
+        XCTAssertEqual(steps[1].instruction, "Cross Mill Lane")
+    }
+
     // MARK: - Counting what happens
 
     private func sideSwap() -> [WalkLeg] {
@@ -239,6 +343,8 @@ final class LocalCrossingTests: XCTestCase {
         let report = RouteQuality.pavement(of: sideSwap())
         XCTAssertEqual(report.crossings, 2)
         XCTAssertEqual(report.crossBacks, 1, "thirty metres later is a change of mind, not a second road")
+        XCTAssertEqual(report.sideSwapCrossings, 2, "both of them changed side of one street")
+        XCTAssertEqual(report.junctionCrossings, 0)
         XCTAssertGreaterThan(report.crossingsPerKm, 0)
     }
 
@@ -266,6 +372,7 @@ final class LocalCrossingTests: XCTestCase {
         XCTAssertEqual(report.hops, 0)
         XCTAssertEqual(report.share, 1, accuracy: 0.0001, "all of it is pavement, and all of it is a mess")
         XCTAssertEqual(report.crossBacks, 1, "which only the new counter can see")
+        XCTAssertEqual(report.sideSwapCrossings, 2, "and which the side-swap count states outright")
     }
 
     // MARK: - Walking the loop the other way round

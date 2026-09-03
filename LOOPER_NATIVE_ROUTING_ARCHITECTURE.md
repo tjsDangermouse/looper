@@ -346,14 +346,44 @@ metres of unnamed tarmac and a left off it again. Three things had to change:
   side — and `tidySteps` will never fold it away, which it otherwise would,
   since both pavements of one street carry the street's name.
 
+**Junctions and juts.** A pavement routinely juts sideways just before a
+junction to reach the dropped kerb, so the walk does not cross square: it jogs
+aside, crosses, and jogs back. Every jog was a corner, and every corner was
+called out. Three further rules answer that:
+
+- **A short leg that leaves the walk heading the way it came in is geometry.**
+  `LocalInstructions.isKink` absorbs it. The test is two-sided on purpose — it
+  asks where the walk *heads* either side, not how sharp the leg's own corners
+  are — so a jut is absorbed and a genuine short turn onto a short street is
+  not. Distance alone would delete the second.
+- **Headings come from the nearest substantial leg, never from a window.** This
+  is the dog-leg's own lesson: the twelve metres either side of a crossing can
+  be *entirely* jut and crossing, so a window measures the very distortion it is
+  meant to see past. Two five-metre juts at sixty degrees swung a windowed
+  heading by 22° and lost a straight crossing.
+- **A crossing taken along the line of travel is a junction; across it, a change
+  of side.** `RouteQuality.crossingRuns` classifies every crossing as
+  `.junction` or `.sideSwap`, and a junction crossed with the walk carrying
+  straight on says so — "Cross the junction and carry straight on" — while a
+  side-swap keeps "Cross \<road\>". The classifier is shared with the
+  measurement below, so what is said and what is counted cannot drift apart.
+
 Nothing here changes a route. The crossing flag is not read by the cost model,
-and `RouteQuality.pavement` gained `crossings`, `crossingsPerKm` and
-`crossBacks` while leaving `hops` exactly as it was. That last point is the
-whole reason the counters exist: `hops` counts pavement-to-carriageway
-transitions, so a walk that hops to the far pavement and back never leaves
-pedestrian ground and scores **zero** — which is why every measurement taken
-before this, including the sweep that chose `looper_foot.json`'s multiplier, was
-blind to the swapping walkers actually complain about.
+and `RouteQuality.pavement` gained `crossings`, `crossingsPerKm`, `crossBacks`,
+`sideSwapCrossings` and `junctionCrossings` while leaving `hops` exactly as it
+was. That last point is the whole reason the counters exist: `hops` counts
+pavement-to-carriageway transitions, so a walk that hops to the far pavement and
+back never leaves pedestrian ground and scores **zero** — which is why every
+measurement taken before this, including the sweep that chose
+`looper_foot.json`'s multiplier, was blind to the swapping walkers actually
+complain about.
+
+**`sideSwapCrossings` is the number to drive down**, not `crossings`. A junction
+crossing is a walker crossing a side road on the way past it, and charging for
+it would buy detours around junctions — the 0.1 multiplier's mistake in a new
+place. Making the two separable is what the next change needs: grouping the two
+pavements and their carriageway into one street, so the cost model can charge a
+side-swap and leave a junction alone.
 
 ## The engine seam
 

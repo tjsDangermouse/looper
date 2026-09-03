@@ -283,7 +283,10 @@ public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
         let offers = Double(Swift.max(1, d.offeredPavement.count))
         let crossingsPerKm = d.offeredPavement.reduce(0) { $0 + $1.crossingsPerKm } / offers
         let crossBacks = d.offeredPavement.reduce(0) { $0 + $1.crossBacks }
-        RoutingLog.search.info("local ring graph=\(d.graphNodes)n/\(d.graphEdges)e built=\(d.candidatesBuilt) abandoned=\(d.candidatesAbandoned) judged=\(d.closedWalks) gate-]=\(d.gateRejected) passed=\(d.passedGate) batches=\(d.batchesRun) seen-]=\(d.excludedAsAlreadySeen)\(d.excludeExhausted ? "!" : "") alike-]=\(d.diversityRejected) offered=\(d.offered) pave=\(Int(pavement * 100))% cross/km=\(String(format: "%.2f", crossingsPerKm)) crossback=\(crossBacks) sweepMs=\(Int(d.sweepMs)) totalMs=\(Int(d.totalMs)) failure=\(d.failure ?? "-", privacy: .public)")
+        // Side-swaps are the number to watch. A junction crossing is a walker
+        // crossing a side road on the way past it and is nobody's fault.
+        let sideSwaps = d.offeredPavement.reduce(0) { $0 + $1.sideSwapCrossings }
+        RoutingLog.search.info("local ring graph=\(d.graphNodes)n/\(d.graphEdges)e built=\(d.candidatesBuilt) abandoned=\(d.candidatesAbandoned) judged=\(d.closedWalks) gate-]=\(d.gateRejected) passed=\(d.passedGate) batches=\(d.batchesRun) seen-]=\(d.excludedAsAlreadySeen)\(d.excludeExhausted ? "!" : "") alike-]=\(d.diversityRejected) offered=\(d.offered) pave=\(Int(pavement * 100))% cross/km=\(String(format: "%.2f", crossingsPerKm)) crossback=\(crossBacks) sideswap=\(sideSwaps) sweepMs=\(Int(d.sweepMs)) totalMs=\(Int(d.totalMs)) failure=\(d.failure ?? "-", privacy: .public)")
         guard !result.routes.isEmpty else {
             throw LocalLoopRouter.Failure.noLoopFound
         }

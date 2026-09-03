@@ -785,6 +785,16 @@ public enum RouteQuality {
         /// swap-the-pavement-and-swap-back complaint, as a number — the thing
         /// no existing measurement could see.
         public var crossBacks: Int
+        /// Crossings taken across the line of travel: the router changing its
+        /// mind about which pavement it prefers.
+        ///
+        /// **This is the number to drive down**, not `crossings`. A junction
+        /// crossing is a walker crossing a side road on the way past it, and
+        /// there is nothing wrong with it.
+        public var sideSwapCrossings: Int
+        /// Crossings taken along the line of travel: unavoidable, and not a
+        /// fault.
+        public var junctionCrossings: Int
 
         public var share: Double { measuredMetres > 0 ? pavementMetres / measuredMetres : 0 }
         public var hopsPerKm: Double { measuredMetres > 0 ? Double(hops) * 1000 / measuredMetres : 0 }
@@ -794,13 +804,16 @@ public enum RouteQuality {
 
         public init(
             pavementMetres: Double = 0, measuredMetres: Double = 0, hops: Int = 0,
-            crossings: Int = 0, crossBacks: Int = 0
+            crossings: Int = 0, crossBacks: Int = 0,
+            sideSwapCrossings: Int = 0, junctionCrossings: Int = 0
         ) {
             self.pavementMetres = pavementMetres
             self.measuredMetres = measuredMetres
             self.hops = hops
             self.crossings = crossings
             self.crossBacks = crossBacks
+            self.sideSwapCrossings = sideSwapCrossings
+            self.junctionCrossings = junctionCrossings
         }
     }
 
@@ -809,34 +822,114 @@ public enum RouteQuality {
     /// are metres apart; two streets are not.
     public static let crossBackMetres: Double = 50
 
+    // MARK: - What a crossing is for
+
+    /// Why the walk crossed.
+    ///
+    /// The difference matters to the walker and it will matter to the cost
+    /// model: a junction crossing is unavoidable and a side-swap is the router
+    /// changing its mind about which pavement it prefers. Charging both the
+    /// same would buy detours around junctions, which is the 0.1 multiplier's
+    /// mistake in a new place.
+    public enum CrossingKind: Sendable, Equatable {
+        /// Taken *along* the line of travel: a junction, or a side road, being
+        /// crossed on the way past it.
+        case junction
+        /// Taken *across* the line of travel: a change of side of the street
+        /// already being walked.
+        case sideSwap
+    }
+
+    /// One crossing, however many legs the survey cut it into.
+    public struct CrossingRun: Sendable, Equatable {
+        /// Legs `first...last` are the crossing itself.
+        public var first: Int
+        public var last: Int
+        public var kind: CrossingKind
+        /// Whether the walk holds its direction across the crossing.
+        public var carriesStraightOn: Bool
+        /// The carriageway crossed, where the graph could name one.
+        public var crosses: String?
+        public var metres: Double
+    }
+
+    /// How far off the line of travel a crossing can run and still be read as
+    /// crossing a junction rather than swapping sides.
+    public static let crossingAlignedDegrees: Double = 45
+
+    /// Every crossing on the walk, classified.
+    ///
+    /// Bearings are taken from the nearest **substantial** leg either side
+    /// rather than from a window on the polyline, and that is not a detail. A
+    /// pavement routinely juts sideways just before a junction to meet the
+    /// dropped kerb, so the metres immediately around a crossing point
+    /// somewhere the walk is not really going. Measured over a window, two
+    /// five-metre juts are enough to turn a straight crossing into a dog-leg
+    /// and lose the classification entirely.
+    public static func crossingRuns(in legs: [WalkLeg], outline: WalkOutline? = nil) -> [CrossingRun] {
+        let shape = outline ?? WalkOutline(legs: legs)
+
+        var runs: [CrossingRun] = []
+        var index = 0
+        while index < legs.count {
+            guard legs[index].isCrossing else { index += 1; continue }
+            var last = index
+            var metres = legs[index].metres
+            var crosses = legs[index].crosses
+            while last + 1 < legs.count, legs[last + 1].isCrossing {
+                last += 1
+                metres += legs[last].metres
+                if crosses == nil { crosses = legs[last].crosses }
+            }
+
+            let approach = LocalInstructions.headingBefore(index, legs: legs, outline: shape)
+            let across = shape.bearing(from: shape.boundary[index], to: shape.legEnd(last))
+            let onward = LocalInstructions.headingAfter(last, legs: legs, outline: shape)
+
+            var kind = CrossingKind.sideSwap
+            if let approach, let across,
+               abs(signedTurn(from: approach, to: across)) < crossingAlignedDegrees {
+                kind = .junction
+            }
+            var straightOn = false
+            if let approach, let onward,
+               abs(signedTurn(from: approach, to: onward)) < LocalInstructions.continueDegrees {
+                straightOn = true
+            }
+
+            runs.append(CrossingRun(
+                first: index, last: last, kind: kind,
+                carriesStraightOn: straightOn, crosses: crosses, metres: metres
+            ))
+            index = last + 1
+        }
+        return runs
+    }
+
     /// Consecutive legs of the same kind are one stretch — the graph splits an
     /// edge at every junction, so a single pavement is many legs and none of
     /// those boundaries is a hop.
     public static func pavement(of legs: [WalkLeg]) -> PavementReport {
         var report = PavementReport()
         var previous: Bool?
-        var wasCrossing = false
-        /// Ground walked since the last crossing ended, so a crossing that
-        /// follows hard on another can be told from one a street away.
-        var sinceCrossing = Double.infinity
         for leg in legs where leg.metres > 0 {
             let isPavement = pedestrianRoadClasses.contains(leg.roadClass)
             report.measuredMetres += leg.metres
             if isPavement { report.pavementMetres += leg.metres }
             if let was = previous, was != isPavement { report.hops += 1 }
             previous = isPavement
+        }
 
-            if leg.isCrossing {
-                if !wasCrossing {
-                    report.crossings += 1
-                    if sinceCrossing <= crossBackMetres { report.crossBacks += 1 }
-                }
-                wasCrossing = true
-            } else {
-                if wasCrossing { sinceCrossing = 0 }
-                wasCrossing = false
-                sinceCrossing += leg.metres
-            }
+        // Counted from runs rather than from legs, because a crossing cut at
+        // the carriageway it crosses arrives as two legs and is one crossing.
+        let runs = crossingRuns(in: legs)
+        report.crossings = runs.count
+        report.sideSwapCrossings = runs.filter { $0.kind == .sideSwap }.count
+        report.junctionCrossings = runs.filter { $0.kind == .junction }.count
+        for (position, run) in runs.enumerated() where position > 0 {
+            let ground = legs[(runs[position - 1].last + 1)..<run.first]
+                .reduce(0) { $0 + $1.metres }
+            if ground <= crossBackMetres { report.crossBacks += 1 }
         }
         return report
     }
