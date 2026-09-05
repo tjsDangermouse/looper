@@ -53,7 +53,7 @@ Status key: ✅ verified against current code · 🔍 needs a verification read 
 
 | # | Divergence | remote | iOS | class | status |
 |---|---|---|---|---|---|
-| 3.1 | **start exclusion** — `START_EXCLUSION_RADIUS_METRES=75` circle cut out of every corridor before widening | `avoidance.ts:20-21,88` | `LocalRingRouter.swift:372-441` — none | **A1** | ✅ |
+| 3.1 | **start exclusion** — `START_EXCLUSION_RADIUS_METRES=75` circle cut out of every corridor before widening | `avoidance.ts:20-21,88` | ~~none~~ **DONE** `d3834ef` — `ringCorridor(around:from:)` drops samples within 100 m of start | **A1** | ✅ done |
 | 3.2 | `MAX_AVOIDANCE_AREAS=12` cap + polygon simplification | `avoidance.ts` | iOS unions all prior legs' edges, exact | — (iOS stricter but exact; leave) | ✅ |
 | 3.3 | corridor half-width 25 m, sample 15 m (remote) vs 12 m (iOS) | `quality.ts` `SAMPLE_METRES` | `LocalRingRouter.swift:352` | 🔍 (check sample spacing) | 🔍 |
 | 3.4 | penalty magnitude — `AVOID_PRIORITY=0.05` (20×) both sides | `avoidance.ts` | `LocalLegRouter.swift:37` | — (matches) | ✅ |
@@ -98,11 +98,11 @@ Thresholds verified identical: `maxDistanceError 0.12`, `maxRepeatedFraction
 
 | # | Divergence | remote | iOS | class | status |
 |---|---|---|---|---|---|
-| 7.1 | **elongation "reach" escape hatch** (`elongationReachRatio 1.3`, loose bbox 12.0 / compactness 0.1) | none — rejects bbox>4.5 / shape<0.2 unconditionally | `RouteQuality.swift:37-53,619-651` | **B1** | ✅ |
+| 7.1 | elongation "reach" escape hatch | none | ~~`RouteQuality.swift`~~ **DONE** — gate reverted to plain bbox>4.5 / shape<0.2; reach* kept as diagnostics only (beam still uses the constants) | **B1** | ✅ done |
 | 7.2 | **duration gate** — `durationErrorFraction > 0.15` → `'duration'`, an essential rejection | `quality.ts:476` | `RouteQuality.analyse` takes no `targetSeconds` | **A7** | ✅ |
 | 7.3 | **U-turn sign cross-check** — `max(geometric, signs.filter(isUTurnSign).length)` | `quality.ts:287-311` | geometry only (`RouteQuality.swift:414-427` → `WalkUTurns`) | **A8 / C3** | ✅ |
-| 7.4 | **`stemMetres` / `excusedRetraceMetres` / `excusedUTurns`** — doorstep window widens to `max(75, stemMetres)`, excused retrace off `scribbleMetres` etc. | none | `RouteQuality.swift:562-572,583-605,644` | **B2** | ✅ |
-| 7.5 | **symmetric doorstep in `edgeRepeatReport`** — remote tests only where a pass *starts* (`along < ignoreStart`); iOS also `along+metres > total-ignoreStart` | `quality.ts` | `RouteQuality.swift:352-353` | **B3** | ✅ |
+| 7.4 | `stemMetres` / `excusedRetraceMetres` / `excusedUTurns` gate params | none | ~~`RouteQuality.swift`~~ **DONE** — params removed from `analyse`; `spurForced` deleted; callers updated | **B2** | ✅ done |
+| 7.5 | symmetric doorstep in `edgeRepeatReport` (`along+metres` vs `along` at the close) | `edges.ts:145` | ~~`RouteQuality.swift:352`~~ **DONE** — keyed on `along` at both ends, as the reference | **B3** | ✅ done |
 | 7.6 | `legShares` always computed (remote) vs only when passed (iOS) | `quality.ts:485-486` | `RouteQuality.swift:664-671` | — (equivalent in practice) | ✅ |
 | 7.7 | frame math — `MetricFrame` vs `projector`/`resample` | — | — | — (noise) | ✅ |
 
@@ -126,7 +126,7 @@ Thresholds verified identical: `maxDistanceError 0.12`, `maxRepeatedFraction
 | 9.1 | `MAX_SHARED_FRACTION 0.55`, `INITIAL_BEARING_METRES 500` / `FRACTION 0.2`, `bearingOctant` | `diversity.ts` | `RouteDiversity.swift` | — (matches) | 🔍 |
 | 9.2 | **unseen-aware early stop** — iOS `enough()` counts only fresh candidates vs `ringEarlyStopPassing=5`; remote `passingCount` counts all | `generate.ts:538,588-596` | `LocalRingRouter.swift:536-540` | **B4** | ✅ |
 | 9.3 | **top-up from already-seen** — iOS back-fills the offer from the excluded pool; remote returns fewer | `generate.ts:402-404` | `LocalRingRouter.swift:652-658`, `RouteDiversity.selecting(...alreadyTaken:)` | **B4** | ✅ |
-| 9.4 | **selector passes** — remote `selectDiverseRoutes` = 2 passes `[newOctant, drop]`, ranks by `quality.score`, no shape dimension. iOS `selecting` = 3 passes: pass 0 needs new octant **and new elongation-shape**, pass 1 new octant, pass 2 drop both | `diversity.ts:102-138` | `RouteDiversity.swift:160-195` | **B1-coupled** | ✅ |
+| 9.4 | selector passes — 3 (octant+shape / octant / drop) vs remote's 2 (octant / drop) | `diversity.ts:102-138` | ~~`RouteDiversity.swift`~~ **DONE** — `selecting` is now the reference's 2 passes | **B1** | ✅ done |
 | 9.5 | pareto/octant archive — `paretoArchive` off in prod; iOS omits `choose()` octant-Pareto branch | `generate.ts:405-433` | — | — (correct) | ✅ |
 
 ## Area 10 — instructions (`graphhopper.ts` steps + `routing.ts joinLegGeometries` ↔ `LocalInstructions`)

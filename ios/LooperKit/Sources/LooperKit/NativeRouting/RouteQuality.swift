@@ -329,8 +329,9 @@ public enum RouteQuality {
     /// removes those, and only those: a street genuinely walked twice has the
     /// same edge id twice and is still charged for it.
     ///
-    /// The doorstep is skipped at both ends for the same reason as the
-    /// geometric measure — every loop shares the way out and the way back.
+    /// The doorstep is skipped at both ends — keyed on where a pass starts,
+    /// as the reference does — for the same reason as the geometric measure:
+    /// every loop shares the way out and the way back.
     public static func edgeRepeatReport(
         _ traversals: [EdgeTraversal], totalMetres: Double, ignoreStartMetres: Double = startIgnoreMetres
     ) -> RepeatReport {
@@ -343,14 +344,11 @@ public enum RouteQuality {
         var longestRepeatedRun = 0.0
 
         for traversal in traversals {
-            // Symmetric on purpose, where the reference tests only where a
-            // pass *starts*. A pass is at the doorstep if any part of it lies
-            // in the opening or closing window — otherwise the leg that walks
-            // back up to the door is excused only when it happens to begin
-            // past the boundary, which the returning half of a stem never
-            // does: it begins exactly on it.
+            // Keyed on where the pass *starts*, at both ends, exactly as the
+            // reference's `edgeRepeatReport` does: `along < ignoreStart` at the
+            // opening, `along > total - ignoreStart` at the close.
             let atDoorstep = traversal.along < ignoreStartMetres
-                || traversal.along + traversal.metres > totalMetres - ignoreStartMetres
+                || traversal.along > totalMetres - ignoreStartMetres
             let seen = covered[traversal.id]
             // A pass repeats only as much of the edge as an earlier pass
             // already covered, so the second full traversal of a street counts
@@ -530,27 +528,6 @@ public enum RouteQuality {
     ///     network rather than from the line — see `edgeRepeatReport`. The
     ///     remote engine does exactly this whenever GraphHopper gives it
     ///     traversals, so supplying them is parity, not leniency.
-    ///   - excusedRetraceMetres: retracing the walker asked for, rather than
-    ///     retracing the engine chose.
-    ///
-    ///     A pin dropped at the end of a lane, on a pier, at a viewpoint, can
-    ///     only be visited by walking in and walking out again. That is not a
-    ///     routing defect and it is not noise: it is the walk that was
-    ///     requested, and the ground offers no other way to honour it. Judged
-    ///     without this the gate refuses the walk for doing exactly what it
-    ///     was told, and the only escape is to delete the visit — which is the
-    ///     escape the remote engine takes, and why more than half its waypoint
-    ///     walks no longer pass their own pins.
-    ///
-    ///     Measured, never assumed: the caller supplies only ground it can
-    ///     show is the mirrored approach to and retreat from a pin. Every
-    ///     other metre of retracing is still charged in full.
-    ///   - stemMetres: an out-and-back at the door that the *engine* imposed
-    ///     rather than the walk choosing it. The on-device search must root a
-    ///     circuit at a node inside the 2-core, so a walk from a cul-de-sac
-    ///     address carries the same stem out and back whatever it does in
-    ///     between. It is not a spur the walker would recognise as one, and no
-    ///     remote route has one, so it is not charged as one.
     ///   - maxDistanceError: how far off the requested length a walk may be.
     ///     Only ever passed by the waypoint path, and it is the service's own
     ///     waypoint tolerance rather than a relaxation invented here: a walk
@@ -565,10 +542,7 @@ public enum RouteQuality {
         distanceMetres: Double,
         targetMetres: Double,
         traversals: [EdgeTraversal]? = nil,
-        stemMetres: Double = 0,
         maxDistanceError: Double = RouteQuality.maxDistanceError,
-        excusedRetraceMetres: Double = 0,
-        excusedUTurns: Int = 0,
         /// What share of the walk each of its legs is, where a leg is one
         /// corner-to-corner stretch. Absent from an engine that never cut the
         /// walk into legs, which is why the two rules and the score term below
@@ -576,33 +550,20 @@ public enum RouteQuality {
         legShares: [Double]? = nil
     ) -> Report {
         var rejections: [String] = []
-        // The stem is the same edges out and back, so on the network it reads
-        // as retracing — which is exactly what it is, and exactly what the
-        // walker did not choose. It is excused the same way the doorstep is,
-        // by widening the window rather than by discounting afterwards: the
-        // doorstep simply reaches as far as the circuit does.
-        let doorstep = Swift.max(startIgnoreMetres, stemMetres)
-        let repeats = traversals.map { edgeRepeatReport($0, totalMetres: distanceMetres, ignoreStartMetres: doorstep) }
+        let repeats = traversals.map { edgeRepeatReport($0, totalMetres: distanceMetres) }
             ?? findRepeatedCorridors(coordinates)
         let uTurnCount = countUTurns(coordinates)
         let shape = compactness(coordinates)
         let sides = boundingBoxSides(coordinates)
         let boundingBoxRatio = sides.shortMetres > 0 ? sides.longMetres / sides.shortMetres : .infinity
-        // The stem is walked at both ends and is measured as part of the stub,
-        // so it comes off the measurement rather than being added to the limit.
-        let stub = Swift.max(0, startStubMetres(coordinates) - stemMetres)
+        let stub = startStubMetres(coordinates)
         let startStubLimit = spurLimitMetres(routeMetres: distanceMetres)
 
         /// Long enough that it can only be a real feature, not an accident.
         let longEnoughBacktrack = repeats.longestReverseRunMetres >= minBacktrackMetres
-        /// What is left of the longest backtrack once the ground a pin forced
-        /// the walk to cover twice is taken off it. A walk whose only
-        /// backtracking is the lane to the viewpoint the walker chose has
-        /// nothing here to answer for.
-        let unaskedReverseRun = Swift.max(0, repeats.longestReverseRunMetres - excusedRetraceMetres)
         /// Some ground retraced, but not enough of it to be the walk's own
         /// feature rather than a corner that turned out to be a dead end.
-        let shortBacktrack = unaskedReverseRun > 0 && !longEnoughBacktrack
+        let shortBacktrack = repeats.longestReverseRunMetres > 0 && !longEnoughBacktrack
         /// A walk that is essentially there-and-back — a promenade, a pier, a
         /// headland with one road in — legitimately encloses almost no area
         /// and runs long and thin. That is what the walk is, not a failure.
@@ -613,41 +574,18 @@ public enum RouteQuality {
             0,
             repeats.repeatedMetres
                 - (longEnoughBacktrack ? repeats.longestReverseRunMetres : 0)
-                - excusedRetraceMetres
         )
-        /// A walk that genuinely goes somewhere. It may be long and thin and
-        /// enclose little area, and that is a shape a walker asked for as much
-        /// as a circle is — a river out and a street back, a ridge, a
-        /// seafront. What it may not be is a knot of little loops near the
-        /// door, and reach is exactly the measurement that tells the two
-        /// apart. See `elongationReachRatio`.
-        /// Measured only when it can change the verdict. It is a pass over
-        /// every vertex of the walk, and the walks it would change the verdict
-        /// for are the minority that one of the two shape rules is about to
-        /// refuse.
-        let shapeInDoubt = boundingBoxRatio > maxBoundingBoxRatio || shape < minCompactness
-        let reaches = !wholeWalkOutAndBack && shapeInDoubt && reachRatio(
-            maxRadiusMetres: maxRadiusMetres(coordinates, start: start), distanceMetres: distanceMetres
-        ) >= elongationReachRatio
 
         let distanceErrorFraction = targetMetres > 0 ? abs(distanceMetres - targetMetres) / targetMetres : 0
 
         if distanceErrorFraction > maxDistanceError { rejections.append("distance") }
         if scribbleMetres > distanceMetres * maxRepeatedFraction { rejections.append("repeated-corridor") }
         if shortBacktrack { rejections.append("out-and-back-spur") }
-        // Turning round at the tip of a lane a pin sits on is the same fact as
-        // the retracing excused above, counted a second way: the walk went in
-        // and came out, so it turned. Charging it once is right and charging it
-        // twice refuses the walk outright, because two pins on lanes exhaust
-        // the allowance on their own. Only pins whose mirrored ground was
-        // actually measured buy an excuse here.
-        if uTurnCount > maxUTurns + excusedUTurns { rejections.append("u-turns") }
-        if !wholeWalkOutAndBack
-            && boundingBoxRatio > (reaches ? elongatedBoundingBoxRatio : maxBoundingBoxRatio) {
+        if uTurnCount > maxUTurns { rejections.append("u-turns") }
+        if !wholeWalkOutAndBack && boundingBoxRatio > maxBoundingBoxRatio {
             rejections.append("elongated")
         }
-        if !wholeWalkOutAndBack
-            && shape < (reaches ? elongatedMinCompactness : minCompactness) {
+        if !wholeWalkOutAndBack && shape < minCompactness {
             rejections.append("shapeless")
         }
         // The doorstep stub is judged in the same band as the mid-route

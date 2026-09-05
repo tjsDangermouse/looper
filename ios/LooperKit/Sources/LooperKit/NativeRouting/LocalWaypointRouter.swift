@@ -253,14 +253,11 @@ extension LocalLoopRouter {
             var physical: [Int32: Double] = [:]
             for leg in legs where leg.physical >= 0 { physical[leg.physical, default: 0] += leg.metres }
 
-            let spur = LocalLoopRouter.spurForced(by: request.waypoints, in: legs)
             let report = RouteQuality.analyse(
                 coordinates: coordinates, start: start, distanceMetres: metres,
                 targetMetres: request.targetMetres,
                 traversals: traversals(of: legs, origin: start),
-                maxDistanceError: LocalLoopRouter.waypointDistanceTolerance,
-                excusedRetraceMetres: spur.metres,
-                excusedUTurns: spur.turns
+                maxDistanceError: LocalLoopRouter.waypointDistanceTolerance
             )
             diagnostics.closedWalks += 1
             guard report.pass else {
@@ -596,54 +593,6 @@ extension LocalLoopRouter {
             return WaypointResult(routes: [], diagnostics: diagnostics)
         }
         return WaypointResult(routes: passing, diagnostics: diagnostics)
-    }
-
-    /// The ground a pin left the walk no choice but to cover twice.
-    ///
-    /// A pin at the end of a lane, on a pier, at a viewpoint is reached by
-    /// walking in and walking out, and the way out is the way in reversed.
-    /// That is the walk the walker asked for, and charging it as retracing
-    /// refuses them the thing they requested for the crime of requesting it.
-    ///
-    /// Measured, not assumed. The walk is scanned outward from each pin, and
-    /// only ground that genuinely mirrors — the same base edge, immediately
-    /// either side of the pin, walked opposite ways — is counted. A pin in the
-    /// middle of a proper loop mirrors nothing and is excused nothing, which
-    /// is right: it forced no retracing, so there is none to forgive.
-    static func spurForced(by pins: [Point], in legs: [WalkLeg]) -> (metres: Double, turns: Int) {
-        guard !pins.isEmpty, legs.count >= 2 else { return (0, 0) }
-        // Where each leg begins, so a pin can be located on the walk.
-        var boundary: [Point] = legs.compactMap(\.coordinates.first)
-        guard boundary.count == legs.count, let end = legs.last?.coordinates.last else { return (0, 0) }
-        boundary.append(end)
-
-        var excused = 0.0
-        var turns = 0
-        for pin in pins {
-            var at = 0
-            var nearest = Double.infinity
-            for (index, point) in boundary.enumerated() {
-                let away = LocalGeo.distance(lat1: point.lat, lon1: point.lng, lat2: pin.lat, lon2: pin.lng)
-                if away < nearest { nearest = away; at = index }
-            }
-            guard nearest <= LocalLoopRouter.waypointHitToleranceMetres else { continue }
-            // Legs `at - 1` and `at` are the approach and the retreat. Walk
-            // outward while they keep mirroring.
-            var out = at - 1, back = at
-            var mirrored = false
-            while out >= 0, back < legs.count,
-                  legs[out].physical >= 0, legs[out].physical == legs[back].physical {
-                excused += legs[out].metres + legs[back].metres
-                mirrored = true
-                out -= 1
-                back += 1
-            }
-            // One turn per pin that genuinely turned the walk round, and never
-            // more than one: the excuse is for the shape the pin forced, not a
-            // general allowance.
-            if mirrored { turns += 1 }
-        }
-        return (excused, turns)
     }
 
     /// True when a route passes every pin, in the order they were dropped.

@@ -325,8 +325,7 @@ public struct LocalLoopRouter: Sendable {
             guard coordinates.count >= 4 else { continue }
             let report = RouteQuality.analyse(
                 coordinates: coordinates, start: start, distanceMetres: metres, targetMetres: request.targetMetres,
-                traversals: traversals(of: legs, origin: start),
-                stemMetres: stem?.metres ?? 0
+                traversals: traversals(of: legs, origin: start)
             )
             guard report.pass else {
                 diagnostics.gateRejected += 1
