@@ -40,9 +40,9 @@ Status key: ✅ verified against current code · 🔍 needs a verification read 
 | 2.5 | **relaxed-penalty retry** (`RELAXED_AVOID_PRIORITY=0.2`) when a leg is unroutable under the strong penalty | `routing.ts:216-229` | absent; `LocalLegRouter.relaxedAvoidPenalty` defined, called by nothing | **A3** | ✅ |
 | 2.6 | **leg-budget cheaper reroute** — overshoot + detour → reroute at relaxed penalty, keep if shorter | `routing.ts:240-255` | absent | **A3** | ✅ |
 | 2.7 | **in-leg spike reroute** — `findLegSpike` + `buildSpikeAvoidanceArea` disc, reroute once | `routing.ts:257-275` | only global post-assembly `LocalSpikeTrim.trimming` at `LocalRingRouter.swift:293` (geometry splice); no reroute | **A3** | ✅ |
-| 2.8 | **German bridleway rule** `country==DEU && road_class==BRIDLEWAY && foot_road_access!=YES → 0` | `looper_foot.json:50` | not ported; `bridleway` in `walkableHighways` | **A5** | ✅ |
-| 2.9 | **`mtb_rating` source** — GraphHopper encoded value vs raw `mtb:scale` tag only | `looper_foot.json:51` | `PedestrianAccessPolicy.swift:148,162-164` | **A6** | ✅ |
-| 2.10 | **access-restricted ways** — remote penalises (`foot_road_access`), iOS deletes the edge (`access` in `noValues` unless exactly `private`) | `looper_foot.json:52` | `PedestrianAccessPolicy.swift:217-221` | **A4** | ✅ |
+| 2.8 | German bridleway rule — NOT PORTED: needs a country encoded value the Overpass graph has no source for, and cannot fire on the Isle of Man. Documented, deferred. //
+| 2.9 | mtb_rating — NO MATERIAL DIVERGENCE: GraphHopper's `mtb_rating` encoded value is the same leading-integer parse of `mtb:scale` that `mtbRating()` does. //
+| 2.10 | ~~access-restricted deleted~~ **DONE** — `private/restricted/delivery/customers` priced x10 (`foot_road_access==PRIVATE`), only `no`/`military` refused. //
 | 2.11 | `hike_rating>=2` — remote: weight 0; iOS: hard block in `decide` | `looper_foot.json:49` | `PedestrianAccessPolicy.swift:179-181` | — (same net effect) | ✅ |
 | 2.12 | **snap preventions** `tunnel, bridge, ferry` | `config.yml:47`, `graphhopper.ts:95` | none — `LocalEdgeIndex.snap` (`:145`) has no tunnel/bridge/ferry awareness. Also check `OSMData` retains those tags | **A10** | ✅ |
 | 2.13 | **tie-breaking** on equal-weight paths | GraphHopper edge-id order | `LocalLegRouter` heap order | **C1** | 🔍 |
@@ -160,6 +160,21 @@ Highest priority for a verification read before Phase 1:
 4. **9.4** — which selector the default iOS ring path uses.
 5. **5.1** — whether `trueLowerBound` matters once C1 changes the cost model to match GraphHopper (if the iOS A* stops being a pure-metres lower bound, the backbone-refusal logic needs the pass).
 6. **8.5 / 8.6 / 8.7** — motorway/trunk, barriers, areas.
+
+## Instructions (Area 10) — C3-bound, deferred
+
+B11 / 10.4 / 10.5 / 10.6: the remote passes GraphHopper's step objects
+(`text`, `sign`, `street_name`, `interval`, apportioned duration) straight
+through; on-device there are no signs, so `LocalInstructions` synthesises turns
+from geometry. This cannot be made byte-identical without the signs (C3). A
+focused instructions pass would: align the turn taxonomy and thresholds to
+GraphHopper's `maneuverName` mapping where geometry supports the distinction,
+drop the always-appended "back where you started" step in favour of a
+`sign 4`-style finish, and reconcile `tidySteps` with `joinLegGeometries` +
+`trimTinySpikes` step remapping. Route geometry is unaffected by any of this.
+11.2 (`cancellingReversals`) is kept: it compensates for `LocalLegRouter`
+routing through several guides in one call (which GraphHopper never does), not
+for anything the remote engine also has.
 
 ## Class rollup
 

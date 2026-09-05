@@ -99,16 +99,19 @@ public struct PedestrianAccessPolicy: Sendable {
         "services", "busway",
     ]
 
-    static let noValues: Set<String> = ["no", "private", "restricted", "military", "delivery", "customers"]
+    static let noValues: Set<String> = [
+        "no", "private", "restricted", "military", "delivery", "customers",
+    ]
     /// Refusals that are really prices.
     ///
-    /// GraphHopper does not refuse a walker a private way — `looper_foot.json`
-    /// gives it a priority of 0.1, which is ten times the cost and not a wall.
-    /// Refusing it here instead cost about a tenth of the graph and, with it,
-    /// agreement with the golden oracle: a private drive is very often the only
-    /// link between two streets, and deleting it cuts the network rather than
-    /// avoiding the drive.
-    static let pricedValues: Set<String> = ["private"]
+    /// GraphHopper's foot profile does not refuse a walker any of these: its
+    /// access parser leaves the way routable and `looper_foot.json` gives
+    /// `foot_road_access == PRIVATE` a priority of 0.1 — ten times the cost and
+    /// not a wall. Deleting them instead cost about a tenth of the graph and
+    /// agreement with the golden oracle: a private drive or a customers-only
+    /// service road is very often the only link between two streets. Only `no`
+    /// and `military` are genuine refusals under the foot profile.
+    static let pricedValues: Set<String> = ["private", "restricted", "delivery", "customers"]
 
     // MARK: - Weighting
 

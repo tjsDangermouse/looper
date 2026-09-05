@@ -111,6 +111,16 @@ final class LocalRoutingDataTests: XCTestCase {
         XCTAssertTrue(policy.decide(tags: ["highway": "service", "access": "private", "foot": "yes"]).isWalkable)
         XCTAssertTrue(policy.decide(tags: ["highway": "track", "access": "permissive"]).isWalkable)
         XCTAssertTrue(policy.decide(tags: ["highway": "service", "access": "destination"]).isWalkable)
+        // customers / delivery service roads are priced like private, not
+        // deleted — GraphHopper's foot profile routes them. LOOPER_PARITY_AUDIT A4.
+        for value in ["customers", "delivery", "restricted"] {
+            let way = policy.decide(tags: ["highway": "service", "access": value])
+            XCTAssertTrue(way.isWalkable, "access=\(value) is priced, not refused")
+            XCTAssertEqual(way.weight, 12.5, accuracy: 0.001, "access=\(value): 0.1 priced, 0.8 non-pedestrian")
+        }
+        // ...but access=no and access=military are genuine refusals.
+        XCTAssertFalse(policy.decide(tags: ["highway": "service", "access": "no"]).isWalkable)
+        XCTAssertFalse(policy.decide(tags: ["highway": "service", "access": "military"]).isWalkable)
         // ...except on a motorway, where foot=yes is a tagging error.
         XCTAssertFalse(policy.decide(tags: ["highway": "motorway", "foot": "yes"]).isWalkable)
         // A trunk road in a country that permits walking, tagged to say so.
