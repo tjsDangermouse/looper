@@ -275,6 +275,38 @@ final class LocalRoutingDataTests: XCTestCase {
         XCTAssertFalse(snap?.isAtNode ?? true, "the middle of a 400 m street is not a junction")
     }
 
+    /// `routing.snap_preventions`: a walker over a river is snapped to the
+    /// street, not to the bridge a metre away — but the bridge is still
+    /// routable. LOOPER_PARITY_AUDIT A10.
+    func testASnapPrefersTheStreetOverABridgeRightNextToIt() {
+        let o = SyntheticOSM.douglas
+        func p(east: Double, north: Double) -> OSMNode {
+            let m = LocalGeo.destination(lat: o.lat, lon: o.lng, metres: north, bearing: 0)
+            let q = LocalGeo.destination(lat: m.lat, lon: m.lon, metres: east, bearing: 90)
+            return OSMNode(id: Int64(1_000 + Int(east) * 10 + Int(north)), lat: q.lat, lon: q.lon)
+        }
+        // A street along y=0, and a bridge 8 m north of it running parallel.
+        let street = [p(east: 0, north: 0), p(east: 200, north: 0)]
+        let bridge = [p(east: 0, north: 8), p(east: 200, north: 8)]
+        let data = OSMData(
+            nodes: street + bridge,
+            ways: [
+                OSMWay(id: 1, nodes: street.map(\.id), tags: ["highway": "residential"]),
+                OSMWay(id: 2, nodes: bridge.map(\.id), tags: ["highway": "footway", "bridge": "yes"]),
+            ]
+        )
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: data)
+        let index = LocalEdgeIndex(graph: graph)
+        // Standing 3 m north of the street — so 5 m south of the bridge, i.e.
+        // closer to the bridge.
+        let here = LocalGeo.destination(lat: o.lat, lon: o.lng, metres: 3, bearing: 0)
+        let atMid = LocalGeo.destination(lat: here.lat, lon: here.lon, metres: 100, bearing: 90)
+        let snap = index.snap(lat: atMid.lat, lon: atMid.lon, graph: graph)
+        XCTAssertEqual(graph.edgeWayID[Int(snap!.edge)], 1, "snapped to the street, not the bridge")
+        // The bridge is still in the graph and routable.
+        XCTAssertTrue(graph.edgeWayID.contains(2))
+    }
+
     func testSnappingFindsTheNearestOfManyEdges() {
         let (graph, _) = LocalWalkingGraphBuilder.build(from: SyntheticOSM.grid(size: 8, spacingMetres: 200))
         let index = LocalEdgeIndex(graph: graph)

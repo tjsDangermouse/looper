@@ -153,13 +153,18 @@ public struct LocalEdgeIndex: Sendable {
         let y = Int((lat - minLat) / cellSizeLat)
         let cellMetres = cellSizeLat * LocalGeo.metresPerDegreeLatitude
         let maximumRing = Swift.max(columns, rows)
+        // `snap_preventions`: the nearest ordinary edge is preferred over any
+        // tunnel/bridge, however much closer the bridge is. A prevented edge is
+        // only returned when nothing else is within `maximumMetres`.
         var best: EdgeSnap?
+        var bestPrevented: EdgeSnap?
         var seen = Set<Int32>()
 
         var ring = 0
         while ring <= maximumRing {
             // Everything in this ring is at least `(ring - 1)` cells away, so
-            // once the best find is nearer than that, no later ring can beat it.
+            // once the best *ordinary* find is nearer than that, no later ring
+            // can beat it.
             if let best, best.distanceMetres <= Double(ring - 1) * cellMetres { break }
             if Double(ring - 1) * cellMetres > maximumMetres { break }
             var examined = false
@@ -175,15 +180,22 @@ public struct LocalEdgeIndex: Sendable {
                         let edge = cellEdge[slot]
                         guard seen.insert(edge).inserted else { continue }
                         guard let candidate = project(lat: lat, lon: lon, onto: Int(edge), graph: graph) else { continue }
-                        if best == nil || candidate.distanceMetres < best!.distanceMetres { best = candidate }
+                        if graph.edgeSnapPrevented[Int(edge)] {
+                            if bestPrevented == nil || candidate.distanceMetres < bestPrevented!.distanceMetres {
+                                bestPrevented = candidate
+                            }
+                        } else if best == nil || candidate.distanceMetres < best!.distanceMetres {
+                            best = candidate
+                        }
                     }
                 }
             }
             if !examined && ring > Swift.max(columns, rows) { break }
             ring += 1
         }
-        guard let best, best.distanceMetres <= maximumMetres else { return nil }
-        return best
+        if let best, best.distanceMetres <= maximumMetres { return best }
+        if let bestPrevented, bestPrevented.distanceMetres <= maximumMetres { return bestPrevented }
+        return nil
     }
 
     /// Perpendicular projection onto every segment of one edge.

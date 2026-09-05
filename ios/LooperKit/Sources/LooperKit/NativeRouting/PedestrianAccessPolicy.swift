@@ -165,6 +165,18 @@ public struct PedestrianAccessPolicy: Sendable {
     func mtbRating(_ value: String) -> Int {
         Int(value.prefix { $0.isNumber }) ?? 0
     }
+
+    /// `routing.snap_preventions: tunnel, bridge, ferry`. GraphHopper keeps
+    /// these fully routable but will not snap a request point onto one — a
+    /// walker standing on a bridge over a river should be put on the street,
+    /// not the bridge. Ferries are not `highway=*` and so are absent from the
+    /// Overpass query entirely (see the parity audit, C4).
+    static let notPreventedValues: Set<String> = ["no", "false", "0"]
+    public static func isSnapPrevented(_ tags: [String: String]) -> Bool {
+        if let tunnel = tags["tunnel"], !notPreventedValues.contains(tunnel) { return true }
+        if let bridge = tags["bridge"], !notPreventedValues.contains(bridge) { return true }
+        return false
+    }
     static let yesValues: Set<String> = ["yes", "designated", "official", "permissive", "destination", "public", "use_sidepath"]
 
     // MARK: - Decisions
