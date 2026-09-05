@@ -113,7 +113,7 @@ Thresholds verified identical: `maxDistanceError 0.12`, `maxRepeatedFraction
 | 8.1 | source — planet OSM import vs `way["highway"](bbox);(._;>;)` chunk fetch | `config.yml` | `RoutingDataSource.swift:234-243` | **C2** | ✅ |
 | 8.2 | **partial ways at chunk seams** — way cut where a node is in an unloaded chunk → dead-end | n/a (one graph) | `LocalWalkingGraph.swift:178-198` | **C2** | ✅ |
 | 8.3 | ~~subnetwork pruning~~ **DONE** — `LocalWalkingGraphBuilder.build(minNetworkSize:)`, prod passes 200, union-find drops sub-200-edge components. //
-| 8.4 | **ferries** — GraphHopper foot model routes `route=ferry`; Overpass query fetches only `highway=*` | | | **C4** | ✅ |
+| 8.4 | ~~ferries~~ **DONE** — Overpass query fetches `way[route=ferry][foot!=no]`, parser keeps them, policy routes them at length 1, snapper prevents snapping onto them. //
 | 8.5 | `ignored_highways: motorway,trunk` at import | `config.yml:36` | `PedestrianAccessPolicy` motorway/trunk handling | 🔍 (confirm equivalent) | 🔍 |
 | 8.6 | barrier nodes — GraphHopper barrier handling vs `PedestrianAccessPolicy.canPass` way-split | | `LocalWalkingGraph.swift:186-196` | 🔍 | 🔍 |
 | 8.7 | `area=yes` / `indoor` | GraphHopper area handling | blocked (`PedestrianAccessPolicy.swift:202-203`) | 🔍 | 🔍 |

@@ -55,6 +55,9 @@ final class LocalRoutingDataTests: XCTestCase {
         let query = OverpassRoutingDataSource.query(for: bounds, timeoutSeconds: 90)
         XCTAssertTrue(query.contains("[out:json][timeout:90]"))
         XCTAssertTrue(query.contains(#"way["highway"](54.100000,-4.500000,54.200000,-4.400000)"#))
+        // Passenger ferries too — GraphHopper's foot profile routes them and a
+        // coastal loop can cross one. LOOPER_PARITY_AUDIT C4.
+        XCTAssertTrue(query.contains(#"way["route"="ferry"]"#))
         // The recursion is what brings back nodes outside the box, so a way
         // leaving the area is not cut in half at its edge.
         XCTAssertTrue(query.contains("(._;>;)"))

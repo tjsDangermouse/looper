@@ -78,7 +78,7 @@ public struct OSMData: Equatable, Sendable {
 /// against data already on the phone.
 public enum OSMTags {
     public static let wayKeys: Set<String> = [
-        "highway", "foot", "access", "service", "motor_vehicle", "motorcar", "vehicle",
+        "highway", "route", "foot", "access", "service", "motor_vehicle", "motorcar", "vehicle",
         "bicycle", "oneway", "oneway:foot", "sidewalk", "footway", "path", "area",
         "indoor", "tunnel", "bridge", "name", "ref", "surface", "informal",
         "crossing", "junction", "public_transport", "construction", "proposed",
@@ -142,7 +142,9 @@ public enum OverpassJSON {
             case "way":
                 guard let refs = element.nodes, refs.count >= 2 else { continue }
                 let tags = OSMTags.keep(element.tags ?? [:], allowed: OSMTags.wayKeys)
-                guard tags["highway"] != nil else { continue }
+                // A passenger ferry is kept though it has no `highway` — the
+                // access policy routes it (parity audit C4).
+                guard tags["highway"] != nil || tags["route"] == "ferry" else { continue }
                 ways.append(OSMWay(id: element.id, nodes: refs, tags: tags))
             default:
                 continue

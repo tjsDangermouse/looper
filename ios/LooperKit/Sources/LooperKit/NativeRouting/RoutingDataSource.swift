@@ -226,11 +226,13 @@ public struct OverpassRoutingDataSource: RoutingDataSource {
     /// The query.
     ///
     /// `way["highway"](bbox)` selects the ways whose geometry intersects the
-    /// area. `(._;>;)` then adds every node those ways reference — crucially
-    /// *including nodes outside the bounding box*, because a lane that leaves
-    /// the area and comes back must not arrive as two disconnected stubs. The
-    /// `qt` ordering is Overpass's cheapest, and nothing here depends on
-    /// element order.
+    /// area; `way["route"="ferry"]` adds the passenger ferries, which are not
+    /// `highway=*` but which GraphHopper's foot profile routes across — a
+    /// coastal loop can legitimately cross one. `(._;>;)` then adds every node
+    /// those ways reference — crucially *including nodes outside the bounding
+    /// box*, because a lane that leaves the area and comes back must not arrive
+    /// as two disconnected stubs. The `qt` ordering is Overpass's cheapest, and
+    /// nothing here depends on element order.
     public static func query(for bounds: GeographicBounds, timeoutSeconds: Int) -> String {
         let box = String(
             format: "%.6f,%.6f,%.6f,%.6f",
@@ -238,7 +240,10 @@ public struct OverpassRoutingDataSource: RoutingDataSource {
         )
         return """
         [out:json][timeout:\(timeoutSeconds)];
-        way["highway"](\(box));
+        (
+          way["highway"](\(box));
+          way["route"="ferry"]["foot"!="no"](\(box));
+        );
         (._;>;);
         out body qt;
         """

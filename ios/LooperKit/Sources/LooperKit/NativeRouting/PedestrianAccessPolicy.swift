@@ -175,6 +175,7 @@ public struct PedestrianAccessPolicy: Sendable {
     public static func isSnapPrevented(_ tags: [String: String]) -> Bool {
         if let tunnel = tags["tunnel"], !notPreventedValues.contains(tunnel) { return true }
         if let bridge = tags["bridge"], !notPreventedValues.contains(bridge) { return true }
+        if tags["route"] == "ferry" { return true }
         return false
     }
     static let yesValues: Set<String> = ["yes", "designated", "official", "permissive", "destination", "public", "use_sidepath"]
@@ -184,6 +185,13 @@ public struct PedestrianAccessPolicy: Sendable {
     public func decide(way: OSMWay) -> Decision { decide(tags: way.tags) }
 
     public func decide(tags: [String: String]) -> Decision {
+        // A passenger ferry is not `highway=*` but GraphHopper's foot profile
+        // routes it: walkable unless `foot=no`, at its own length (not a
+        // carriageway, so no 0.8 tie-break against it).
+        if tags["route"] == "ferry" {
+            guard foot(tags) != .denied else { return .blocked("ferry-foot-no", .other) }
+            return oneway(tags: tags, roadClass: .other, reason: "ferry", weight: 1)
+        }
         guard let highway = tags["highway"] else { return .blocked("no-highway-tag") }
         let roadClass = RoadClass(highway: highway)
         let cost = weight(tags: tags, roadClass: roadClass)
