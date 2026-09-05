@@ -1,5 +1,6 @@
 # Looper
 
+Hi.
 Finding circular walks that bring you back to where you started, as a native iPhone and
 Apple Watch app and as a mobile-first web PWA.
 
