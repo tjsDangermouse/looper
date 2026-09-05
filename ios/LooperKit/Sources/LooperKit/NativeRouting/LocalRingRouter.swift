@@ -66,6 +66,9 @@ extension LocalLoopRouter {
     /// real choice, and not so much that a walker waits for candidates that
     /// will not be offered.
     public static let ringEarlyStopPassing = 5
+    /// `EARLY_STOP_RESERVE`. The diversity-satisfied stop is not asked until the
+    /// pool is at least `wanted + this`, so it is asked of a real sample.
+    public static let ringEarlyStopReserve = 1
     /// `clampScale`. A re-aim may not ask for a wildly different walk.
     public static let ringReAimClamp = (low: 0.55, high: 1.5)
     /// Below this the first pass was aimed well enough that re-aiming would
@@ -545,19 +548,15 @@ extension LocalLoopRouter {
             return true
         }
 
-        /// Enough of a pool that the selector has a real choice — counting
-        /// only walks the walker has not already been offered.
-        ///
-        /// Counting all of them is what makes a refresh worse than the first
-        /// ask: the sweep stops as soon as five walks exist, and on the second
-        /// press four of those are ones the walker just rejected, so the pool
-        /// the selector draws from is one walk deep and empties within a few
-        /// presses. A walker leaning on the button is asking for ground they
-        /// have not seen, and that is the thing to have five of.
+        /// Can this pool already give the walker three genuinely different
+        /// walks? `enoughAlready` in the reference, with `diversityAwareEarlyStop`
+        /// on: counts *every* passing candidate, and asks the selector's own
+        /// preferred (octant-first) pass so the sweep never stops on a set the
+        /// selector will then refuse. Exclusion is applied later, in `choose`.
         func enough() -> Bool {
-            let unseen = candidates.indices.filter { fresh[$0] }
-            return unseen.count >= LocalLoopRouter.ringEarlyStopPassing
-                && RouteDiversity.select(unseen.map { candidates[$0] }, limit: request.wanted).count >= request.wanted
+            if candidates.count >= LocalLoopRouter.ringEarlyStopPassing { return true }
+            if candidates.count < 3 + LocalLoopRouter.ringEarlyStopReserve { return false }
+            return RouteDiversity.selectPreferred(candidates, limit: request.wanted).count >= request.wanted
         }
 
         /// One sweep of the compass. `aimMetres` is what the legs are planned
@@ -623,23 +622,35 @@ extension LocalLoopRouter {
         }
 
         let searchBegan = Date()
-        for batch in 0..<LocalLoopRouter.ringMaxBatches {
-            sweep(
-                variation: request.variation + batch,
-                aimMetres: request.targetMetres, targetMetres: request.targetMetres
+
+        /// Clean loops first, exclusion applied to the *pool* and not the
+        /// answer, then the selector. `choose()` in the reference.
+        func choose() -> RouteDiversity.Selection {
+            let selectable = candidates.indices.filter { fresh[$0] }
+            var picked = RouteDiversity.selecting(
+                selectable.map { candidates[$0] }, limit: request.wanted
             )
-            diagnostics.batchesRun += 1
-            if enough() { break }
+            picked.chosen = picked.chosen.map { selectable[$0] }
+            return picked
         }
 
-        // One re-aim. A pass whose walks all came back short was not unlucky,
-        // it was aimed short: the legs are planned in crow-flight metres and
-        // walked in street metres, and the ratio between those is a property of
-        // the ground rather than of the attempt. Re-planning against the miss
-        // costs one more sweep and is judged against the original target, so a
-        // re-aimed walk is never held to an easier standard.
-        if candidates.count < request.wanted, observed.count >= 3 {
-            let median = observed.sorted()[observed.count / 2]
+        // Batch 0.
+        sweep(
+            variation: request.variation,
+            aimMetres: request.targetMetres, targetMetres: request.targetMetres
+        )
+        diagnostics.batchesRun += 1
+
+        // One re-aim, before the discovery batches. A batch whose walks all
+        // came back the wrong length was aimed wrong, not unlucky: the legs are
+        // planned in crow-flight metres and walked in street metres, and the
+        // ratio is a property of the ground. Re-plan against the miss once,
+        // measuring from every walk that routed (not just the near misses),
+        // and judge the result against the original target. `passing.length < 3`
+        // in the reference.
+        if candidates.count < request.wanted, !observed.isEmpty {
+            let sorted = observed.sorted()
+            let median = sorted[sorted.count / 2]
             if median > 0 {
                 let scale = Swift.min(
                     LocalLoopRouter.ringReAimClamp.high,
@@ -651,33 +662,35 @@ extension LocalLoopRouter {
                         variation: request.variation, aimMetres: request.targetMetres * scale,
                         targetMetres: request.targetMetres
                     )
+                    diagnostics.batchesRun += 1
                 }
             }
         }
+
+        var selection = choose()
+        // Discovery batches, only while the selector still cannot fill the
+        // answer. `for batch = 1; chosen.length < 3 && batch < MAX`.
+        var batch = 1
+        while selection.chosen.count < request.wanted, batch < LocalLoopRouter.ringMaxBatches {
+            sweep(
+                variation: request.variation + batch,
+                aimMetres: request.targetMetres, targetMetres: request.targetMetres
+            )
+            diagnostics.batchesRun += 1
+            batch += 1
+            selection = choose()
+        }
+
         diagnostics.sweepMs = Date().timeIntervalSince(searchBegan) * 1000
         diagnostics.passedGate = candidates.count
         diagnostics.poolElongated = candidates.filter(RouteDiversity.isElongated).count
 
-        // Exclusion belongs on the pool and not on the answer — filtering what
-        // the selector returned means a refresh re-offers the same walks or
-        // nothing at all. The same argument, and the same code, as `findLoops`.
         let unseen = candidates.indices.filter { fresh[$0] }
-        let seen = candidates.indices.filter { !fresh[$0] }
         if !request.exclude.isEmpty {
-            diagnostics.excludedAsAlreadySeen = seen.count
+            diagnostics.excludedAsAlreadySeen = candidates.count - unseen.count
             diagnostics.excludeExhausted = unseen.isEmpty
         }
-
-        let selection = RouteDiversity.selecting(unseen.map { candidates[$0] }, limit: request.wanted)
-        var chosen = selection.chosen.map { unseen[$0] }
-        if chosen.count < request.wanted && !seen.isEmpty {
-            let topUp = RouteDiversity.selecting(
-                seen.map { candidates[$0] }, limit: request.wanted - chosen.count,
-                alreadyTaken: chosen.map { candidates[$0] }
-            )
-            chosen += topUp.chosen.map { seen[$0] }
-            diagnostics.toppedUpFromSeen = topUp.chosen.count
-        }
+        let chosen = selection.chosen
         diagnostics.diversityRejected = selection.rejectedShared
         diagnostics.diversityNoRoom = selection.noRoom
 

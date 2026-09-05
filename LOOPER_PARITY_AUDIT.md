@@ -24,10 +24,10 @@ Status key: ✅ verified against current code · 🔍 needs a verification read 
 | 1.3 | seed = `hashString(lon.toFixed(4)\|lat.toFixed(4)\|round(target)\|variation)` | `random.ts` / `seedFor` | `LocalRingRouter.swift:100-119` | — (matches) | ✅ |
 | 1.4 | attempt count 24 | `config.ts:56` | `LocalRingRouter.swift:41` | — (matches) | ✅ |
 | 1.5 | network-probe seeding (`biasAttemptsToNetwork`) / skeleton screening (`screenAttempts`) | `candidates.ts`, `generate.ts` | absent | — (off in prod flags) | ✅ |
-| 1.6 | **batch / re-aim ordering** — remote: batch 0 → re-aim (if `passing<3`) → `choose()` → discovery loop *gated on `chosen.length<3`*. iOS: sweeps 0,1,2 unconditionally (break on `enough()`) → re-aim | `generate.ts:346-447` | `LocalRingRouter.swift:604-635` | **B7** | ✅ |
-| 1.7 | **re-aim trigger & basis** — remote: `passing.length < 3` after batch 0 only; radius branch needs `first.analysed.length` and `\|scale-1\|>0.05`; median over batch-0 `distanceMeters`. iOS: `candidates.count < wanted && observed.count >= 3`; median over `observed` (all built walks' metres, `LocalRingRouter.swift:478-489`). Formula `clampScale(target/median)` + threshold 0.05 match. Re-aim call args (aim=scaled, target=orig, variation=base) match | `generate.ts:360-392` | `LocalRingRouter.swift:620-635` | **B7** | ✅ |
+| 1.6 | ~~batch / re-aim ordering~~ **DONE** — batch 0 -> re-aim -> discovery loop gated on selector, matching `generateLoops`. //
+| 1.7 | ~~re-aim trigger~~ **DONE** — `candidates.count < wanted` (was `&& observed>=3`), median over all built. //
 | 1.8 | **time-mode re-aim** — remote re-aims distance from `clampScale(targetSeconds/observed)` over `durationOnly` misses | `generate.ts:363-372` | absent | **C5** | ✅ |
-| 1.9 | **discovery-batch gate** — remote loop runs only while `chosen.length < 3` (selector result); iOS runs all `ringMaxBatches` unless `enough()` (unseen≥5 AND selector≥wanted) | `generate.ts:440-447` | `LocalRingRouter.swift:605-612` | **B4/B7** | ✅ |
+| 1.9 | ~~discovery-batch gate~~ **DONE** — loop runs while selector can't fill `wanted`. //
 
 ## Area 2 — leg routing (`routing.ts` + `graphhopper.ts` ↔ `LocalLegRouter`)
 
@@ -124,8 +124,8 @@ Thresholds verified identical: `maxDistanceError 0.12`, `maxRepeatedFraction
 | # | Divergence | remote | iOS | class | status |
 |---|---|---|---|---|---|
 | 9.1 | `MAX_SHARED_FRACTION 0.55`, `INITIAL_BEARING_METRES 500` / `FRACTION 0.2`, `bearingOctant` | `diversity.ts` | `RouteDiversity.swift` | — (matches) | 🔍 |
-| 9.2 | **unseen-aware early stop** — iOS `enough()` counts only fresh candidates vs `ringEarlyStopPassing=5`; remote `passingCount` counts all | `generate.ts:538,588-596` | `LocalRingRouter.swift:536-540` | **B4** | ✅ |
-| 9.3 | **top-up from already-seen** — iOS back-fills the offer from the excluded pool; remote returns fewer | `generate.ts:402-404` | `LocalRingRouter.swift:652-658`, `RouteDiversity.selecting(...alreadyTaken:)` | **B4** | ✅ |
+| 9.2 | ~~unseen-aware early stop~~ **DONE** — `enough()` counts all passing, uses `selectPreferred` (octant pass), stops on 5 OR diversity-satisfied. //
+| 9.3 | ~~top-up from already-seen~~ **DONE** — removed; exclusion filters the pool, selector returns fewer. //
 | 9.4 | selector passes — 3 (octant+shape / octant / drop) vs remote's 2 (octant / drop) | `diversity.ts:102-138` | ~~`RouteDiversity.swift`~~ **DONE** — `selecting` is now the reference's 2 passes | **B1** | ✅ done |
 | 9.5 | pareto/octant archive — `paretoArchive` off in prod; iOS omits `choose()` octant-Pareto branch | `generate.ts:405-433` | — | — (correct) | ✅ |
 

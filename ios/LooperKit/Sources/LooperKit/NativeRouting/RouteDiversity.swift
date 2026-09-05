@@ -141,8 +141,17 @@ public enum RouteDiversity {
     /// already taken. Two passes: the first insists on a different way out of
     /// the door, the second accepts a same-bearing loop that is nonetheless
     /// different ground, because two good loops beat one good loop and a rule.
+    /// `selectDiverseRoutes` in the reference.
     public static func select(_ candidates: [Candidate], limit: Int = 3, maxShared: Double = maxSharedFraction) -> [Int] {
         selecting(candidates, limit: limit, maxShared: maxShared).chosen
+    }
+
+    /// The first pass on its own: only loops that leave by genuinely different
+    /// streets. `selectPreferredDiverseRoutes` in the reference — the stricter
+    /// question a stopping rule asks, so the generator never stops on a set the
+    /// full selector would then have to rescue with its second pass.
+    public static func selectPreferred(_ candidates: [Candidate], limit: Int = 3, maxShared: Double = maxSharedFraction) -> [Int] {
+        selecting(candidates, limit: limit, maxShared: maxShared, passes: [true]).chosen
     }
 
     /// `select`, with the reasons. The choosing is identical — this is the
@@ -154,17 +163,17 @@ public enum RouteDiversity {
     ///   and the ones they have not seen should come first.
     public static func selecting(
         _ candidates: [Candidate], limit: Int = 3, maxShared: Double = maxSharedFraction,
-        alreadyTaken: [Candidate] = []
+        alreadyTaken: [Candidate] = [], passes: [Bool] = [true, false]
     ) -> Selection {
         let ranked = candidates.indices.sorted { candidates[$0].score > candidates[$1].score }
         var chosen: [Int] = []
         var taken = alreadyTaken
         var octants = Set(alreadyTaken.map { LocalGeo.bearingOctant($0.bearing) })
-        // Two passes, exactly as the reference's `selectDiverseRoutes`: the
-        // first insists on a different way out of the door, the second accepts
-        // a same-bearing loop that is nonetheless different ground, because two
-        // good loops beat one good loop and a rule.
-        for requireNewOctant in [true, false] {
+        // `selectDiverseRoutes` passes `[true, false]`: the first pass insists
+        // on a different way out of the door, the second accepts a same-bearing
+        // loop that is nonetheless different ground. `selectPreferredDiverseRoutes`
+        // passes `[true]` — the first pass alone.
+        for requireNewOctant in passes {
             for index in ranked {
                 if chosen.count >= limit { break }
                 if chosen.contains(index) { continue }
