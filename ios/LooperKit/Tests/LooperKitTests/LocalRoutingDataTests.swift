@@ -235,6 +235,30 @@ final class LocalRoutingDataTests: XCTestCase {
         XCTAssertFalse(graph.names.contains("Bypass"))
     }
 
+    /// `prepare.min_network_size`: a disconnected fragment smaller than the bar
+    /// is dropped, so the snapper can never land a walker on it. The main
+    /// network is untouched. LOOPER_PARITY_AUDIT A9.
+    func testSubnetworkPruningDropsDetachedFragments() {
+        var data = SyntheticOSM.grid(size: 12, spacingMetres: 80) // one big component
+        // A lone 3-node island 5 km away — well under any real bar.
+        let far = LocalGeo.destination(lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng, metres: 5000, bearing: 0)
+        let island = (0..<3).map { step -> OSMNode in
+            let p = LocalGeo.destination(lat: far.lat, lon: far.lon, metres: Double(step) * 40, bearing: 90)
+            return OSMNode(id: 900_000 + Int64(step), lat: p.lat, lon: p.lon)
+        }
+        data = OSMData(
+            nodes: data.nodes + island,
+            ways: data.ways + [OSMWay(id: 90_000, nodes: island.map(\.id), tags: ["highway": "footway"])]
+        )
+        let (withoutPruning, _) = LocalWalkingGraphBuilder.build(from: data, minNetworkSize: 0)
+        let (pruned, report) = LocalWalkingGraphBuilder.build(from: data, minNetworkSize: 200)
+        XCTAssertGreaterThan(report.subnetworkEdgesDropped, 0, "the island was pruned")
+        XCTAssertLessThan(pruned.edgeCount, withoutPruning.edgeCount)
+        // The island is gone; nothing near it snaps.
+        XCTAssertNil(LocalEdgeIndex(graph: pruned).snap(lat: far.lat, lon: far.lon, graph: pruned, maximumMetres: 100))
+        XCTAssertNotNil(LocalEdgeIndex(graph: withoutPruning).snap(lat: far.lat, lon: far.lon, graph: withoutPruning, maximumMetres: 100))
+    }
+
     // MARK: - Snapping
 
     func testSnappingReachesTheInteriorOfAnEdge() {

@@ -143,12 +143,24 @@ public enum LocalWalkingGraphBuilder {
         public var nodesLoaded = 0
         public var graphNodes = 0
         public var graphEdges = 0
+        /// Edges discarded by `prepare.min_network_size` subnetwork pruning.
+        public var subnetworkEdgesDropped = 0
         public var buildMs: Double = 0
     }
 
+    /// `prepare.min_network_size`. GraphHopper drops any connected component of
+    /// the routable graph smaller than this before it serves a single request,
+    /// so the snapper can never land a walker on a detached fragment it cannot
+    /// route out of. Small islands legitimately have detached path networks;
+    /// 200 edges keeps real coastal paths and discards survey debris. The
+    /// production graph build passes this; fixtures leave it at 0 (off), the
+    /// way a synthetic grid is not subject to `prepare.*` either.
+    public static let minNetworkSize = 200
+
     public static func build(
         from data: OSMData,
-        policy: PedestrianAccessPolicy = .standard
+        policy: PedestrianAccessPolicy = .standard,
+        minNetworkSize: Int = 0
     ) -> (graph: LocalWalkingGraph, report: Report) {
         let began = Date()
         var report = Report()
@@ -287,6 +299,47 @@ public enum LocalWalkingGraphBuilder {
                 segmentStart = position
                 metres = 0
                 pending = [node.lon, node.lat]
+            }
+        }
+
+        // `prepare.min_network_size`: drop every connected component of the
+        // graph smaller than `minNetworkSize` edges. Union-find over the
+        // undirected graph, count edges per component, then compact every
+        // per-edge array (geometry included). Orphaned nodes are left in place —
+        // the snapper works on edges, and a node with no arcs costs nothing.
+        if minNetworkSize > 1, !edgeFrom.isEmpty {
+            var parent = Array(0..<nodeOSMID.count)
+            func find(_ x: Int) -> Int {
+                var x = x
+                while parent[x] != x { parent[x] = parent[parent[x]]; x = parent[x] }
+                return x
+            }
+            for edge in 0..<edgeFrom.count {
+                let a = find(Int(edgeFrom[edge])), b = find(Int(edgeTo[edge]))
+                if a != b { parent[a] = b }
+            }
+            var edgesInComponent: [Int: Int] = [:]
+            for edge in 0..<edgeFrom.count { edgesInComponent[find(Int(edgeFrom[edge])), default: 0] += 1 }
+            let keep = (0..<edgeFrom.count).map { edgesInComponent[find(Int(edgeFrom[$0]))]! >= minNetworkSize }
+
+            if keep.contains(false) {
+                report.subnetworkEdgesDropped = keep.lazy.filter { !$0 }.count
+                var nFrom: [Int32] = [], nTo: [Int32] = [], nMetres: [Double] = [], nWeight: [Double] = []
+                var nForward: [Bool] = [], nBackward: [Bool] = []
+                var nGeomStart: [Int32] = [0], nGeom: [Double] = []
+                var nName: [Int32] = [], nRoadClass: [UInt8] = [], nWayID: [Int64] = []
+                for edge in 0..<edgeFrom.count where keep[edge] {
+                    nFrom.append(edgeFrom[edge]); nTo.append(edgeTo[edge])
+                    nMetres.append(edgeMetres[edge]); nWeight.append(edgeWeight[edge])
+                    nForward.append(edgeForward[edge]); nBackward.append(edgeBackward[edge])
+                    nName.append(edgeName[edge]); nRoadClass.append(edgeRoadClass[edge]); nWayID.append(edgeWayID[edge])
+                    nGeom.append(contentsOf: geometry[Int(geometryStart[edge])..<Int(geometryStart[edge + 1])])
+                    nGeomStart.append(Int32(nGeom.count))
+                }
+                edgeFrom = nFrom; edgeTo = nTo; edgeMetres = nMetres; edgeWeight = nWeight
+                edgeForward = nForward; edgeBackward = nBackward
+                geometryStart = nGeomStart; geometry = nGeom
+                edgeName = nName; edgeRoadClass = nRoadClass; edgeWayID = nWayID
             }
         }
 

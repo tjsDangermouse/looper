@@ -372,7 +372,9 @@ public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
         let key = chunks.map(\.key).joined(separator: ",")
         if key == cachedKey, let graph = cachedGraph, let index = cachedIndex { return (graph, index) }
         let merged = await store.merged(chunks)
-        let (graph, _) = LocalWalkingGraphBuilder.build(from: merged, policy: policy)
+        let (graph, _) = LocalWalkingGraphBuilder.build(
+            from: merged, policy: policy, minNetworkSize: LocalWalkingGraphBuilder.minNetworkSize
+        )
         let index = LocalEdgeIndex(graph: graph)
         cachedKey = key
         cachedGraph = graph

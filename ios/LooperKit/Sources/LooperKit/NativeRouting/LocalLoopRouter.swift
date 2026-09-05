@@ -220,7 +220,9 @@ public struct LocalLoopRouter: Sendable {
         let began = Date()
         var diagnostics = Diagnostics()
 
-        let (graph, buildReport) = LocalWalkingGraphBuilder.build(from: data)
+        let (graph, buildReport) = LocalWalkingGraphBuilder.build(
+            from: data, minNetworkSize: LocalWalkingGraphBuilder.minNetworkSize
+        )
         diagnostics.graphNodes = buildReport.graphNodes
         diagnostics.graphEdges = buildReport.graphEdges
         diagnostics.buildMs = buildReport.buildMs
