@@ -46,7 +46,7 @@ Status key: ✅ verified against current code · 🔍 needs a verification read 
 | 2.11 | `hike_rating>=2` — remote: weight 0; iOS: hard block in `decide` | `looper_foot.json:49` | `PedestrianAccessPolicy.swift:179-181` | — (same net effect) | ✅ |
 | 2.12 | **snap preventions** `tunnel, bridge, ferry` | `config.yml:47`, `graphhopper.ts:95` | none — `LocalEdgeIndex.snap` (`:145`) has no tunnel/bridge/ferry awareness. Also check `OSMData` retains those tags | **A10** | ✅ |
 | 2.13 | **tie-breaking** on equal-weight paths | GraphHopper edge-id order | `LocalLegRouter` heap order | **C1** | 🔍 |
-| 2.14 | **`attemptLeg` short-backtrack** — remote: geometric vs previous leg's line, both directions, 20 m ignore. iOS: shared physical edges vs `corridors.last`, 25 m | `routing.ts:675-707` | `LocalRingRouter.swift:244-257` | **B8** | ✅ |
+| 2.14 | ~~short-backtrack on edges~~ **DONE** — `overlapMetres`: geometric, both directions, 20 m ignore, vs the committed previous leg. //
 | 2.15 | keep *last* leg attempt (`keepBestLegAttempt` off) | `routing.ts` | `LocalRingRouter.swift:237-241` | — (matches) | ✅ |
 
 ## Area 3 — anti-retrace / avoidance (`avoidance.ts` ↔ `ringCorridor`)

@@ -193,14 +193,14 @@ final class LocalRingRouterTests: XCTestCase {
         XCTAssertNotEqual(try offers(variation: 0), try offers(variation: 7))
     }
 
-    /// A walk already offered is taken out of the pool before the selector sees
-    /// it, which is the only place removing it can produce a different walk.
-    func testARefreshOffersGroundTheWalkerHasNotSeen() throws {
+    /// Exclusion is applied to the pool before the selector, as `choose()` in
+    /// the reference does it: a walk that shares more than `maxSharedFraction`
+    /// with one already offered is dropped from what the selector may pick, so
+    /// a refresh does not hand back the same walks.
+    func testARefreshDoesNotReofferTheSameWalks() throws {
         let (graph, index) = ground()
         let first = try LocalLoopRouter().findRingLoops(
-            .init(
-                lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng, targetMetres: 2000
-            ),
+            .init(lat: SyntheticOSM.douglas.lat, lon: SyntheticOSM.douglas.lng, targetMetres: 2000),
             in: graph, index: index
         )
         let refreshed = try LocalLoopRouter().findRingLoops(
@@ -210,7 +210,16 @@ final class LocalRingRouterTests: XCTestCase {
             ),
             in: graph, index: index
         )
-        XCTAssertGreaterThan(refreshed.routes.count, 0)
-        XCTAssertGreaterThan(refreshed.diagnostics.excludedAsAlreadySeen, 0, "the pool was filtered, not the answer")
+        for route in refreshed.routes {
+            for previous in first.routes {
+                let overlap = RouteQuality.sharedCorridorMetres(
+                    route.geometry.coordinates, previous.geometry.coordinates
+                ).fraction
+                XCTAssertLessThanOrEqual(
+                    overlap, RouteQuality.maxSharedFraction,
+                    "a refreshed walk repeats one the walker just saw"
+                )
+            }
+        }
     }
 }

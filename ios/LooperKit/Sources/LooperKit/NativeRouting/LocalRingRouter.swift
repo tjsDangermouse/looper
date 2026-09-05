@@ -249,12 +249,16 @@ extension LocalLoopRouter {
                 // A leg that shares ground with the one before it, but not
                 // enough of it to be a real feature, is a corner that turned out
                 // to be a dead end — worth a different aim rather than accepted.
-                // Measured on edges here rather than on geometry, which is both
-                // exact and cheaper than the thing it replaces.
-                let previous = corridors.last ?? []
-                let backtrack = leg.legs.reduce(0.0) {
-                    previous.contains($1.physical) ? $0 + $1.metres : $0
-                }
+                // `overlapMetres` in the reference: geometric, both directions,
+                // 20 m of doorstep ignored, against the committed leg this one
+                // starts on.
+                let previousLine = routed.last?.coordinates ?? []
+                let backtrack = previousLine.count >= 2
+                    ? Swift.max(
+                        RouteQuality.sharedCorridorMetres(previousLine, leg.coordinates, ignoreStartMetres: 20).metres,
+                        RouteQuality.sharedCorridorMetres(leg.coordinates, previousLine, ignoreStartMetres: 20).metres
+                    )
+                    : 0
                 let shortBacktrack = backtrack > 0 && backtrack < RouteQuality.minBacktrackMetres
                 if fitsBudget && !shortBacktrack { break }
             }
@@ -265,7 +269,9 @@ extension LocalLoopRouter {
             // make standing in the street, and the gate refuses more than one.
             if routed.count >= 1,
                let repair = repairRingJoin(
-                   previousCorner: points[points.count - 2], corner: from, next: chosen.target,
+                   previousCorner: points[points.count - 2],
+                   previousLine: routed[routed.count - 1].coordinates,
+                   corner: from, next: chosen.target, currentLine: chosen.leg.coordinates,
                    start: start, avoiding: spent(keeping: routed.count - 1),
                    graph: graph, index: index
                ) {
@@ -313,17 +319,20 @@ extension LocalLoopRouter {
 
     /// Pull a hairpin corner in towards the door and route through it again.
     ///
-    /// `applyJoinPullback`. A corner the walk arrives at and leaves on nearly
-    /// the same bearing is one it has to turn round in. Moving that corner two
-    /// thirds of the way back towards the start usually finds a different street
-    /// to come back on. Both legs either side of it are re-routed, and the pair
-    /// is kept only if the turn actually straightened — a repair that makes
-    /// things no better is not a repair.
+    /// `applyJoinPullback` with `pullbackTurnOnly` on. A corner the walk arrives
+    /// at and leaves on nearly the same bearing is one it has to turn round in.
+    /// Moving that corner two thirds of the way back towards the start usually
+    /// finds a different street to come back on. Both legs either side of it are
+    /// re-routed, and the pair is kept only if `redoneTurn < turn` — the turn
+    /// measured on the *routed* geometry after, against the routed turn before.
+    /// No straight-line pre-check: the reference routes first, then compares.
     func repairRingJoin(
-        previousCorner: Point, corner: Point, next: Point, start: Point,
+        previousCorner: Point, previousLine: [Point], corner: Point,
+        next: Point, currentLine: [Point], start: Point,
         avoiding: Set<Int32>, graph: LocalWalkingGraph, index: LocalEdgeIndex
     ) -> (corner: Point, previous: LocalLegRouter.Leg, next: LocalLegRouter.Leg)? {
-        guard turnAt(previousCorner, corner, next) >= LocalLoopRouter.ringJoinTurnDegrees else { return nil }
+        let turn = joinTurn(previousLine, currentLine)
+        guard turn > LocalLoopRouter.ringJoinTurnDegrees else { return nil }
 
         let home = LocalGeo.distance(lat1: start.lat, lon1: start.lng, lat2: corner.lat, lon2: corner.lng)
         let outward = LocalGeo.bearing(lat1: start.lat, lon1: start.lng, lat2: corner.lat, lon2: corner.lng)
@@ -332,7 +341,6 @@ extension LocalLoopRouter {
             metres: home * LocalLoopRouter.ringPullbackScale, bearing: outward
         )
         let pulled = Point(placed.lon, placed.lat)
-        guard turnAt(previousCorner, pulled, next) < turnAt(previousCorner, corner, next) else { return nil }
         guard let before = try? LocalLegRouter.route(
             graph: graph, index: index, from: previousCorner, to: pulled,
             penalising: avoiding, penalty: LocalLegRouter.avoidPenalty, weighted: true
@@ -343,6 +351,8 @@ extension LocalLoopRouter {
             graph: graph, index: index, from: pulled, to: next,
             penalising: after, penalty: LocalLegRouter.avoidPenalty, weighted: true
         ), onward.metres > 0 else { return nil }
+        // Kept only if the pulled-in point actually straightened the join.
+        guard joinTurn(before.coordinates, onward.coordinates) < turn else { return nil }
         return (pulled, before, onward)
     }
 
@@ -471,6 +481,40 @@ extension LocalLoopRouter {
         let outgoing = LocalGeo.bearing(lat1: corner.lat, lon1: corner.lng, lat2: to.lat, lon2: to.lng)
         let deviation = LocalGeo.normaliseBearing(outgoing - incoming)
         return Swift.min(deviation, 360 - deviation)
+    }
+
+    /// `EDGE_BEARING_WINDOW_METRES`. The direction a leg travels right at one
+    /// end of it, over a short window, rather than the whole leg's bearing
+    /// which a winding street blurs into nothing. `edgeBearing` in the reference.
+    static let ringEdgeBearingWindowMetres = 30.0
+    func edgeBearing(_ line: [Point], atStart: Bool) -> Double {
+        guard line.count >= 2 else { return 0 }
+        let window = LocalLoopRouter.ringEdgeBearingWindowMetres
+        if atStart {
+            var index = 1
+            while index < line.count - 1,
+                  LocalGeo.distance(lat1: line[0].lat, lon1: line[0].lng, lat2: line[index].lat, lon2: line[index].lng) < window {
+                index += 1
+            }
+            return LocalGeo.bearing(lat1: line[0].lat, lon1: line[0].lng, lat2: line[index].lat, lon2: line[index].lng)
+        }
+        let last = line.count - 1
+        var index = last - 1
+        while index > 0,
+              LocalGeo.distance(lat1: line[last].lat, lon1: line[last].lng, lat2: line[index].lat, lon2: line[index].lng) < window {
+            index -= 1
+        }
+        return LocalGeo.bearing(lat1: line[index].lat, lon1: line[index].lng, lat2: line[last].lat, lon2: line[last].lng)
+    }
+
+    /// The turn a walker makes crossing from one routed leg to the next,
+    /// measured from the direction of travel at each end. `turnAngleDegrees` of
+    /// two `edgeBearing`s in the reference.
+    func joinTurn(_ previous: [Point], _ next: [Point]) -> Double {
+        let a = edgeBearing(previous, atStart: false)
+        let b = edgeBearing(next, atStart: true)
+        let diff = abs(LocalGeo.normaliseBearing(a) - LocalGeo.normaliseBearing(b))
+        return diff > 180 ? 360 - diff : diff
     }
 
     // MARK: - The answer
