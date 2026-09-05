@@ -136,8 +136,13 @@ public enum RoutingCoverage {
     public static let maxDistanceError = 0.12
     /// The exploration bound as a share of the target.
     public static let explorationShare = (1 + maxDistanceError) / 2
-    /// Slack for the fact that a chunk edge is not a network edge.
-    public static let boundaryMarginMetres: Double = 300
+    /// The halo fetched beyond the exploration bound so a way is never cut at a
+    /// chunk seam inside the area a walk can reach (parity audit C2). GraphHopper
+    /// routes the whole planet and never truncates a way; the on-device graph
+    /// cuts one where a referenced node is in an unloaded chunk, so the fetched
+    /// region has to extend far enough past the search that no such node lies
+    /// within reach. 500 m clears a long rural segment spanning the boundary.
+    public static let boundaryMarginMetres: Double = 500
 
     /// The network-distance bound the exploration runs to.
     public static func explorationRadiusMetres(targetMetres: Double) -> Double {

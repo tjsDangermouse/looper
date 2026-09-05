@@ -389,8 +389,10 @@ extension LocalLoopRouter {
     /// `CORRIDOR_HALF_WIDTH_METRES`. The service buffers a walked leg by this
     /// much and makes everything inside expensive.
     public static let ringCorridorHalfWidth = 25.0
-    /// How finely both sides of the comparison are sampled. `SAMPLE_METRES`.
-    public static let ringCorridorSampleMetres = 12.0
+    /// How finely the walked line is sampled before edges near it are marked.
+    /// `SAMPLE_METRES` (15) — the same rate the gate resamples at, so the two
+    /// measures of "this ground was walked" agree.
+    public static let ringCorridorSampleMetres = RouteQuality.sampleMetres
     /// `START_EXCLUSION_RADIUS_METRES`. The circle around the start is cut out
     /// of every corridor: the first street of a walk is very often the only
     /// street off the walker's doorstep, and every leg — the closing one most

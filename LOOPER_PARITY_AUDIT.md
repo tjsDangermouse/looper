@@ -55,7 +55,7 @@ Status key: ✅ verified against current code · 🔍 needs a verification read 
 |---|---|---|---|---|---|
 | 3.1 | **start exclusion** — `START_EXCLUSION_RADIUS_METRES=75` circle cut out of every corridor before widening | `avoidance.ts:20-21,88` | ~~none~~ **DONE** `d3834ef` — `ringCorridor(around:from:)` drops samples within 100 m of start | **A1** | ✅ done |
 | 3.2 | `MAX_AVOIDANCE_AREAS=12` cap + polygon simplification | `avoidance.ts` | iOS unions all prior legs' edges, exact | — (iOS stricter but exact; leave) | ✅ |
-| 3.3 | corridor half-width 25 m, sample 15 m (remote) vs 12 m (iOS) | `quality.ts` `SAMPLE_METRES` | `LocalRingRouter.swift:352` | 🔍 (check sample spacing) | 🔍 |
+| 3.3 | ~~corridor sample rate~~ **DONE** — `ringCorridorSampleMetres` is now `RouteQuality.sampleMetres` (15), the rate the gate uses. //
 | 3.4 | penalty magnitude — `AVOID_PRIORITY=0.05` (20×) both sides | `avoidance.ts` | `LocalLegRouter.swift:37` | — (matches) | ✅ |
 | 3.5 | spike avoidance disc — see 2.7 (partial). //
 
@@ -111,7 +111,7 @@ Thresholds verified identical: `maxDistanceError 0.12`, `maxRepeatedFraction
 | # | Divergence | remote | iOS | class | status |
 |---|---|---|---|---|---|
 | 8.1 | source — planet OSM import vs `way["highway"](bbox);(._;>;)` chunk fetch | `config.yml` | `RoutingDataSource.swift:234-243` | **C2** | ✅ |
-| 8.2 | **partial ways at chunk seams** — way cut where a node is in an unloaded chunk → dead-end | n/a (one graph) | `LocalWalkingGraph.swift:178-198` | **C2** | ✅ |
+| 8.2 | ~~partial ways at chunk seams~~ **MITIGATED** — `boundaryMarginMetres` halo raised 300 -> 500 m so no in-reach node is ever unloaded; a way is only cut well beyond any walk. //
 | 8.3 | ~~subnetwork pruning~~ **DONE** — `LocalWalkingGraphBuilder.build(minNetworkSize:)`, prod passes 200, union-find drops sub-200-edge components. //
 | 8.4 | ~~ferries~~ **DONE** — Overpass query fetches `way[route=ferry][foot!=no]`, parser keeps them, policy routes them at length 1, snapper prevents snapping onto them. //
 | 8.5 | `ignored_highways: motorway,trunk` at import | `config.yml:36` | `PedestrianAccessPolicy` motorway/trunk handling | 🔍 (confirm equivalent) | 🔍 |
