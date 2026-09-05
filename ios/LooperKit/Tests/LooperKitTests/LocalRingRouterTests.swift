@@ -94,7 +94,12 @@ final class LocalRingRouterTests: XCTestCase {
         let index = LocalEdgeIndex(graph: graph)
 
         let walked = aNodes.map { Point($0.lon, $0.lat) }
-        let corridor = LocalLoopRouter().ringCorridor(around: walked, graph: graph, index: index)
+        // The start is well clear of this leg, so the doorstep exclusion does
+        // not come into it — that is its own test below.
+        let farStart = LocalGeo.destination(lat: centre.lat, lon: centre.lng, metres: 2000, bearing: 180)
+        let corridor = LocalLoopRouter().ringCorridor(
+            around: walked, from: Point(farStart.lon, farStart.lat), graph: graph, index: index
+        )
 
         func edges(ofWay way: Int64) -> Set<Int32> {
             Set((0..<graph.edgeMetres.count).filter { graph.edgeWayID[$0] == way }.map(Int32.init))
@@ -108,6 +113,41 @@ final class LocalRingRouterTests: XCTestCase {
         XCTAssertTrue(
             edges(ofWay: 3).isDisjoint(with: corridor),
             "a street 300 m away is a different street"
+        )
+    }
+
+    /// `avoidance.ts` cuts a `START_EXCLUSION_RADIUS_METRES` circle out of every
+    /// corridor before it is widened: every leg begins and ends at the door, so
+    /// penalising the doorstep street makes the closing leg lap the block to
+    /// find another way in. Ground beyond the circle is still corridor.
+    func testTheDoorstepStreetIsNotPenalisedByAnyLegsCorridor() {
+        let centre = SyntheticOSM.douglas
+        // 60 m grid: the edge leaving the centre junction sits wholly inside the
+        // 75 m + 25 m exclusion radius, the edges three junctions out do not.
+        let data = SyntheticOSM.grid(centre: centre, size: 9, spacingMetres: 60)
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: data)
+        let index = LocalEdgeIndex(graph: graph)
+
+        // A leg setting off east from the door, as the first leg of a loop does.
+        let walked = (4...8).map { column -> Point in
+            let node = data.nodes.first { $0.id == Int64(4 * 1000 + column + 1) }!
+            return Point(node.lon, node.lat)
+        }
+        let corridor = LocalLoopRouter().ringCorridor(
+            around: walked, from: centre, graph: graph, index: index
+        )
+
+        func edge(eastMetres metres: Double) -> Int32 {
+            let mid = LocalGeo.destination(lat: centre.lat, lon: centre.lng, metres: metres, bearing: 90)
+            return Int32(index.snap(lat: mid.lat, lon: mid.lon, graph: graph, maximumMetres: 40)!.edge)
+        }
+        XCTAssertFalse(
+            corridor.contains(edge(eastMetres: 30)),
+            "the street off the door is left unpenalised — the closing leg comes home this way"
+        )
+        XCTAssertTrue(
+            corridor.contains(edge(eastMetres: 150)),
+            "ground the leg actually walked, clear of the door, is still corridor"
         )
     }
 

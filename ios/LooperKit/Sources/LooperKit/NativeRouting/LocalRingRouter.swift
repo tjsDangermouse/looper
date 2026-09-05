@@ -271,7 +271,7 @@ extension LocalLoopRouter {
                 points.removeLast()
                 points.append(repair.corner)
                 routed.append(repair.previous)
-                corridors.append(ringCorridor(around: repair.previous.coordinates, graph: graph, index: index))
+                corridors.append(ringCorridor(around: repair.previous.coordinates, from: start, graph: graph, index: index))
                 running += repair.previous.metres
                 chosen = (chosen.target, repair.next)
             }
@@ -280,7 +280,7 @@ extension LocalLoopRouter {
             if running > abandonAbove { return nil }
             points.append(chosen.target)
             routed.append(chosen.leg)
-            corridors.append(ringCorridor(around: chosen.leg.coordinates, graph: graph, index: index))
+            corridors.append(ringCorridor(around: chosen.leg.coordinates, from: start, graph: graph, index: index))
             if !closing {
                 heading = LocalGeo.normaliseBearing(heading + turn * 360 / Double(corners + 1))
             }
@@ -350,6 +350,14 @@ extension LocalLoopRouter {
     public static let ringCorridorHalfWidth = 25.0
     /// How finely both sides of the comparison are sampled. `SAMPLE_METRES`.
     public static let ringCorridorSampleMetres = 12.0
+    /// `START_EXCLUSION_RADIUS_METRES`. The circle around the start is cut out
+    /// of every corridor: the first street of a walk is very often the only
+    /// street off the walker's doorstep, and every leg — the closing one most
+    /// of all — begins and ends there, so penalising it makes the closing leg
+    /// lap the block to find another way in. `buildAvoidanceAreas` cuts the
+    /// line at `exclusion + halfWidth` before buffering, so that is the radius
+    /// applied to the sampled line here.
+    public static let ringStartExclusionMetres = 75.0
 
     /// Every edge running within `ringCorridorHalfWidth` of ground already
     /// walked, including the ground itself.
@@ -370,7 +378,8 @@ extension LocalLoopRouter {
     /// simplification the service has to do to express the same idea to a
     /// routing engine over HTTP.
     func ringCorridor(
-        around coordinates: [Point], graph: LocalWalkingGraph, index: LocalEdgeIndex
+        around coordinates: [Point], from start: Point,
+        graph: LocalWalkingGraph, index: LocalEdgeIndex
     ) -> Set<Int32> {
         guard coordinates.count >= 2 else { return [] }
         let halfWidth = LocalLoopRouter.ringCorridorHalfWidth
@@ -378,7 +387,19 @@ extension LocalLoopRouter {
         // One frame for both sides of the comparison, so the whole thing is
         // done in metres on a plane rather than in degrees on a sphere.
         let origin = coordinates[0]
+        let frame = MetricFrame(originLon: origin.lng, originLat: origin.lat)
+        let startXY = frame.project(lon: start.lng, lat: start.lat)
+        // The ground near the start is dropped from the *line*, before it is
+        // widened, exactly as `buildAvoidanceAreas` drops it before buffering:
+        // a sample within `exclusion + halfWidth` of the start contributes no
+        // corridor. A leg with nothing left outside the circle contributes
+        // nothing at all, which is the right answer for a very short first leg.
+        let exclusionRadius = LocalLoopRouter.ringStartExclusionMetres + halfWidth
         let walked = RouteQuality.resample(coordinates, spacingMetres: spacing, origin: origin).samples
+            .filter { sample in
+                let dx = sample.midX - startXY.x, dy = sample.midY - startXY.y
+                return dx * dx + dy * dy >= exclusionRadius * exclusionRadius
+            }
         guard !walked.isEmpty else { return [] }
 
         // A hash at the corridor's own width, so a lookup only ever has to
