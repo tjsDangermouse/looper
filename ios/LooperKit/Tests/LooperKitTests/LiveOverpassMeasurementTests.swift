@@ -110,6 +110,52 @@ final class LiveOverpassMeasurementTests: XCTestCase {
                     ))
                 }
 
+                // One machine-readable line per fixture, to sit next to the
+                // same fixture put to the remote engine (parity plan, Phase 4).
+                // Capture the remote row with, against a running route-service:
+                //   curl -s localhost:PORT/api/loops -d '{"start":{...},"distanceKm":N}' \
+                //     | jq -c '{pave, hopsPerKm, distErr, uTurns, compact}'
+                // and diff the two. Parity is reached when every difference is
+                // attributable to C2 (OSM currency) or C3 (no turn signs).
+                let lines = result.routes.map(\.geometry.coordinates)
+                let paves = (0..<result.routes.count).map { i -> RouteQuality.PavementReport in
+                    i < result.diagnostics.offeredPavement.count
+                        ? result.diagnostics.offeredPavement[i] : RouteQuality.PavementReport()
+                }
+                let meanPave = paves.isEmpty ? 0 : paves.reduce(0) { $0 + $1.share } / Double(paves.count) * 100
+                let meanHopsKm = paves.isEmpty ? 0 : paves.reduce(0) { $0 + $1.hopsPerKm } / Double(paves.count)
+                let meanDistErr = result.routes.isEmpty ? 0 : result.routes.reduce(0.0) {
+                    $0 + abs($1.distanceMeters - target) / target
+                } / Double(result.routes.count) * 100
+                let uTurns = lines.reduce(0) { $0 + RouteQuality.countUTurns($1) }
+                let meanCompact = lines.isEmpty ? 0 : lines.reduce(0.0) { $0 + RouteQuality.compactness($1) } / Double(lines.count)
+                var worstOverlap = 0.0
+                for a in 0..<lines.count {
+                    for b in (a + 1)..<lines.count {
+                        worstOverlap = Swift.max(worstOverlap, RouteQuality.sharedCorridorMetres(lines[a], lines[b]).fraction)
+                    }
+                }
+                // A "block-lap loop near the start": a turn near 180 within the
+                // start-exclusion radius of the door, the A1 symptom.
+                let door = Point(result.diagnostics.snappedLon, result.diagnostics.snappedLat)
+                let blockLaps = lines.reduce(0) { count, line in
+                    var hits = 0
+                    for i in 1..<Swift.max(1, line.count - 1) {
+                        guard LocalGeo.distance(lat1: line[i].lat, lon1: line[i].lng, lat2: door.lat, lon2: door.lng)
+                            < LocalLoopRouter.ringStartExclusionMetres else { continue }
+                        let a = LocalGeo.bearing(lat1: line[i - 1].lat, lon1: line[i - 1].lng, lat2: line[i].lat, lon2: line[i].lng)
+                        let c = LocalGeo.bearing(lat1: line[i].lat, lon1: line[i].lng, lat2: line[i + 1].lat, lon2: line[i + 1].lng)
+                        var d = abs(a - c); if d > 180 { d = 360 - d }
+                        if d > 150 { hits += 1 }
+                    }
+                    return count + (hits > 0 ? 1 : 0)
+                }
+                print(String(
+                    format: "[parity] %@ %dkm offered=%d pave=%.0f%% hops/km=%.1f distErr=%.1f%% uTurns=%d compact=%.2f worstOverlap=%.0f%% blockLaps=%d",
+                    name, Int(targetKm), result.routes.count,
+                    meanPave, meanHopsKm, meanDistErr, uTurns, meanCompact, worstOverlap * 100, blockLaps
+                ))
+
                 // The second press, which is the one a walker actually waits
                 // on: everything already offered is handed back as `exclude`,
                 // and every candidate in the pool is compared against every

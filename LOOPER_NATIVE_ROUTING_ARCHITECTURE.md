@@ -433,3 +433,73 @@ make the traffic acceptable, and it is not a licence to generate more of it.
 
 The path to a commercial endpoint is a configuration change. It is not, and
 must not become, a Looper proxy.
+
+## Parity with the remote route-service engine
+
+`a618a89` was meant to be a direct port of the remote loop engine. It had
+drifted in ~40 places; the parity project (`LOOPER_PARITY_AUDIT.md`) closed
+them so the on-device engine matches `route-service` decision for decision.
+Every candidate-generation rule, gate check, selector pass, fixup, re-aim and
+graph-preparation step is now the reference's. What could not be made identical,
+and why:
+
+### C1 — leg engine: `LocalLegRouter` A* vs GraphHopper
+
+The cost model is GraphHopper's in *shape*: `metres × edgeWeight` is
+`distance / priority`, and GraphHopper's custom weighting is
+`distance / speed / priority + distance_influence · distance/1000`. With
+`foot_average_speed` roughly constant the first terms agree up to a factor the
+argmin never sees, so the same path is chosen. Tie-breaking now matches
+(lower edge id wins). Two constants are **not** pinned to GraphHopper's and are
+the residual: a real per-way `foot_average_speed` (GraphHopper makes steps and
+rough surfaces slower; on-device every way walks at one speed) and the
+profile's default `distance_influence`. Both are measurable against a
+GraphHopper reference run — see Phase 4 below — and were not guessed.
+
+### C2 — graph source: Overpass fetch vs planet import
+
+Subnetwork pruning (`prepare.min_network_size: 200`), snap preventions
+(`tunnel, bridge, ferry`) and ferries are ported. What remains is OSM
+*currency*: the on-device graph is whatever Overpass served when the chunk was
+last fetched, which can lag the planet import GraphHopper was built from. The
+fetch halo (`boundaryMarginMetres`, 500 m) is wide enough that a way is never
+cut at a seam within reach of a walk.
+
+### C3 — no turn signs
+
+GraphHopper emits maneuver signs that the remote gate's u-turn cross-check and
+the remote's instruction text both consume. On-device there is only geometry.
+`RouteQuality.countUTurns` is geometry-only, and `LocalInstructions` synthesises
+turns from angles with its own taxonomy and wording. This cannot be closed
+without the signs. A focused instructions pass (audit item B11) can align the
+taxonomy and thresholds as far as geometry allows.
+
+### Remaining un-ported items (small, tracked in the audit)
+
+- Time-mode re-aim in the ring search and the backbone `assemble` (1.8, 5.2),
+  and second-unit slack allocation (4.3) — the displayed duration and time-mode
+  percent are pace-aware, but the *search* does not yet re-aim on a duration
+  miss.
+- The pre-assembly reroute around an in-leg spike (2.7) — the post-assembly
+  `LocalSpikeTrim`, which the reference also runs, still catches these.
+- The German bridleway priority-0 rule (2.8) — needs a country encoded value
+  the Overpass graph has no source for and cannot fire on the Isle of Man.
+
+### Phase 4 — the parity benchmark
+
+`LiveOverpassMeasurementTests` (run with `LOOPER_LIVE_OVERPASS=1`) prints a
+`[parity]` line per fixture: `pave%`, `hops/km`, `distErr%`, `uTurns`,
+`compact`, `worstOverlap%`, `blockLaps`. Put the same fixtures to a running
+`route-service` and diff the rows. Parity is confirmed when every difference is
+attributable to C2 (OSM currency) or C3 (no turn signs), and the leg-routing
+ceiling — established by routing identical point-to-point fixtures through
+GraphHopper and `LocalLegRouter` on the same extracted graph — is met.
+
+## Improvements deferred until parity is field-tested
+
+These measured well on-device and were reverted for parity; each returns
+individually, measured against the locked baseline: the elongation "reach"
+gate escape hatch, the `spurForced` cul-de-sac excusals, the unseen-aware
+refresh and top-up-from-seen, dual-trim pin preservation, the `hitsPins`
+ranking, the join-reversal repair, and a pavement-adherence score term in the
+gate (which the remote gate does not have either).

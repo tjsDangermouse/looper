@@ -26,7 +26,7 @@ Status key: ✅ verified against current code · 🔍 needs a verification read 
 | 1.5 | network-probe seeding (`biasAttemptsToNetwork`) / skeleton screening (`screenAttempts`) | `candidates.ts`, `generate.ts` | absent | — (off in prod flags) | ✅ |
 | 1.6 | ~~batch / re-aim ordering~~ **DONE** — batch 0 -> re-aim -> discovery loop gated on selector, matching `generateLoops`. //
 | 1.7 | ~~re-aim trigger~~ **DONE** — `candidates.count < wanted` (was `&& observed>=3`), median over all built. //
-| 1.8 | **time-mode re-aim** — remote re-aims distance from `clampScale(targetSeconds/observed)` over `durationOnly` misses | `generate.ts:363-372` | absent | **C5** | ✅ |
+| 1.8 | time-mode re-aim — NOT DONE (C5 remainder): displayed duration & percent are pace-aware, the search does not re-aim on a duration miss. Tracked. //
 | 1.9 | ~~discovery-batch gate~~ **DONE** — loop runs while selector can't fill `wanted`. //
 
 ## Area 2 — leg routing (`routing.ts` + `graphhopper.ts` ↔ `LocalLegRouter`)
@@ -65,14 +65,14 @@ Status key: ✅ verified against current code · 🔍 needs a verification read 
 |---|---|---|---|---|---|
 | 4.1 | `DETOUR_SHARES`, `guideForDetour`, `planSegmentOptions`, `allocateSlack` DP, four-tier ordering, `spreadAllocations`, `FEASIBILITY_TOLERANCE` | `waypoints.ts` | `LocalWaypointPlanner.swift` | — (near-exact port) | 🔍 |
 | 4.2 | `formatShare` / option-id string forms drive an id-sorted tie-break | `waypoints.ts:96` | `LocalWaypointPlanner.swift:106-108` | 🔍 (fragile; add test) | 🔍 |
-| 4.3 | allocation `measure` in seconds vs always metres | `generate.ts:1370-1373` | `LocalWaypointPlanner.swift:142` | **C5** | 🔍 |
+| 4.3 | allocation measure in seconds — NOT DONE (C5 remainder); allocation is always in metres. Tracked. //
 
 ## Area 5 — waypoint/backbone router (`generate.ts generateBackboneWaypointLoops` ↔ `LocalWaypointRouter`)
 
 | # | Divergence | remote | iOS | class | status |
 |---|---|---|---|---|---|
 | 5.1 | ~~trueLowerBound~~ **DONE** — needed once the backbone is weighted: where the weighted backbone misses the plan, re-route each gap on pure metres and refuse only if that floor misses too. //
-| 5.2 | **time-mode re-aim** of `assemble()` | `generate.ts:1449-1458` | absent | **C5** | 🔍 |
+| 5.2 | time-mode re-aim of assemble() — NOT DONE (C5 remainder). Tracked. //
 | 5.3 | ~~backbone legs unweighted~~ **DONE** — see 2.4. //
 | 5.4 | ~~join-reversal repair~~ **DONE** — removed; gaps assembled with no cross-gap avoidance, gate rejects u-turns, as `assemble`+`joinAndTrimLegs`. //
 | 5.5 | ~~both trims judged~~ **DONE** — single `LocalSpikeTrim.trimming(_, protecting: [])`, `keepPinnedSpurs` off. //
