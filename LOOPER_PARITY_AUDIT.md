@@ -37,9 +37,9 @@ Status key: ✅ verified against current code · 🔍 needs a verification read 
 | 2.2 | **cost model** — GraphHopper custom weighting `time/priority + distance_influence·d` vs `metres × (1/priority) × penalty` | `looper_foot.json`, `config.yml` | `LocalLegRouter.swift:174-177` | **C1** | ✅ |
 | 2.3 | **per-way speed** — GraphHopper `foot_average_speed` per edge vs fixed 5 km/h | `looper_foot.json:59-61` | `LocalInstructions.swift:40` | **C1/C5** | ✅ |
 | 2.4 | ~~waypoint legs unweighted~~ **DONE** — every waypoint-path leg now `weighted: true`; return-leg avoidance is `avoidPenalty` (20x = AVOID_PRIORITY), not 4. //
-| 2.5 | **relaxed-penalty retry** (`RELAXED_AVOID_PRIORITY=0.2`) when a leg is unroutable under the strong penalty | `routing.ts:216-229` | absent; `LocalLegRouter.relaxedAvoidPenalty` defined, called by nothing | **A3** | ✅ |
-| 2.6 | **leg-budget cheaper reroute** — overshoot + detour → reroute at relaxed penalty, keep if shorter | `routing.ts:240-255` | absent | **A3** | ✅ |
-| 2.7 | **in-leg spike reroute** — `findLegSpike` + `buildSpikeAvoidanceArea` disc, reroute once | `routing.ts:257-275` | only global post-assembly `LocalSpikeTrim.trimming` at `LocalRingRouter.swift:293` (geometry splice); no reroute | **A3** | ✅ |
+| 2.5 | ~~relaxed retry~~ **DONE** — a leg unroutable under the 20x corridor retries once at `relaxedAvoidPenalty` (5x). //
+| 2.6 | ~~leg-budget reroute~~ **DONE** — a leg over budget that detoured (>2x straight line) re-routes at 5x, keeps whichever is shorter. //
+| 2.7 | in-leg spike reroute — PARTIAL: relies on post-assembly LocalSpikeTrim (which the reference also runs); the reference's extra pre-assembly reroute-around-the-spike is not ported (needs findLegSpike + a spike edge-set). Small remaining gap. //
 | 2.8 | German bridleway rule — NOT PORTED: needs a country encoded value the Overpass graph has no source for, and cannot fire on the Isle of Man. Documented, deferred. //
 | 2.9 | mtb_rating — NO MATERIAL DIVERGENCE: GraphHopper's `mtb_rating` encoded value is the same leading-integer parse of `mtb:scale` that `mtbRating()` does. //
 | 2.10 | ~~access-restricted deleted~~ **DONE** — `private/restricted/delivery/customers` priced x10 (`foot_road_access==PRIVATE`), only `no`/`military` refused. //
@@ -57,7 +57,7 @@ Status key: ✅ verified against current code · 🔍 needs a verification read 
 | 3.2 | `MAX_AVOIDANCE_AREAS=12` cap + polygon simplification | `avoidance.ts` | iOS unions all prior legs' edges, exact | — (iOS stricter but exact; leave) | ✅ |
 | 3.3 | corridor half-width 25 m, sample 15 m (remote) vs 12 m (iOS) | `quality.ts` `SAMPLE_METRES` | `LocalRingRouter.swift:352` | 🔍 (check sample spacing) | 🔍 |
 | 3.4 | penalty magnitude — `AVOID_PRIORITY=0.05` (20×) both sides | `avoidance.ts` | `LocalLegRouter.swift:37` | — (matches) | ✅ |
-| 3.5 | spike avoidance disc (`buildSpikeAvoidanceArea`) | `avoidance.ts` | absent (ties to 2.7) | **A3** | 🔍 |
+| 3.5 | spike avoidance disc — see 2.7 (partial). //
 
 ## Area 4 — waypoint planning (`waypoints.ts` ↔ `LocalWaypointPlanner`)
 

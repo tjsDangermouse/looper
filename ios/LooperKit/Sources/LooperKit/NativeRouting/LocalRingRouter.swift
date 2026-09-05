@@ -71,6 +71,10 @@ extension LocalLoopRouter {
     public static let ringEarlyStopReserve = 1
     /// `clampScale`. A re-aim may not ask for a wildly different walk.
     public static let ringReAimClamp = (low: 0.55, high: 1.5)
+    /// `BUDGET_DETOUR_RATIO`. A leg only gets shorter under a weaker penalty if
+    /// the penalty is what made it long; one running near the straight line
+    /// between its ends did not go round anything.
+    public static let ringBudgetDetourRatio = 2.0
     /// Below this the first pass was aimed well enough that re-aiming would
     /// only reshuffle it.
     public static let ringReAimThreshold = 0.05
@@ -232,10 +236,34 @@ extension LocalLoopRouter {
                     let placed = LocalGeo.destination(lat: from.lat, lon: from.lng, metres: reach, bearing: swung)
                     aim = Point(placed.lon, placed.lat)
                 }
-                guard let leg = try? LocalLegRouter.route(
+                // `routeLegAttempt`: route under the strong penalty; if the
+                // corridor makes the leg unroutable, retry once at the relaxed
+                // penalty; and if it routed but ran a long way round its budget
+                // to dodge the corridor, try the relaxed penalty once more and
+                // keep whichever is shorter.
+                var leg: LocalLegRouter.Leg
+                if let strong = try? LocalLegRouter.route(
                     graph: graph, index: index, from: from, to: aim,
                     penalising: avoiding, penalty: LocalLegRouter.avoidPenalty, weighted: true
-                ), leg.metres > 0 else { continue }
+                ), strong.metres > 0 {
+                    leg = strong
+                    let straightLine = LocalGeo.distance(lat1: from.lat, lon1: from.lng, lat2: aim.lat, lon2: aim.lng)
+                    let detoursRoundSomething = leg.metres > straightLine * LocalLoopRouter.ringBudgetDetourRatio
+                    if !closing, !avoiding.isEmpty, detoursRoundSomething, leg.metres > legBudget,
+                       let cheaper = try? LocalLegRouter.route(
+                           graph: graph, index: index, from: from, to: aim,
+                           penalising: avoiding, penalty: LocalLegRouter.relaxedAvoidPenalty, weighted: true
+                       ), cheaper.metres > 0, cheaper.metres < leg.metres {
+                        leg = cheaper
+                    }
+                } else if !avoiding.isEmpty, let relaxed = try? LocalLegRouter.route(
+                    graph: graph, index: index, from: from, to: aim,
+                    penalising: avoiding, penalty: LocalLegRouter.relaxedAvoidPenalty, weighted: true
+                ), relaxed.metres > 0 {
+                    leg = relaxed
+                } else {
+                    continue
+                }
 
                 // Overwriting on every attempt keeps the *last* one, which is
                 // the shortest and most swung guess the leg made rather than its
