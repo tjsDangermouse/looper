@@ -203,12 +203,6 @@ extension LocalLoopRouter {
         let assembleBegan = Date()
         let start = request.start
         var candidates: [RouteDiversity.Candidate] = []
-        /// Per candidate, whether it still passes every pin in order.
-        var hitsPins: [Bool] = []
-        /// Repairs are shared across allocations: the same gap option meeting
-        /// the same arriving edge has the same answer however many
-        /// combinations it appears in.
-        var repaired: [String: LocalLegRouter.Leg] = [:]
         var assembled: [(legs: [WalkLeg], coordinates: [Point], metres: Double, report: RouteQuality.Report)] = []
 
         /// One assembled walk, trimmed, measured and judged — the same way
@@ -216,27 +210,11 @@ extension LocalLoopRouter {
         /// this, so a walk is never offered on easier terms because of which
         /// generator happened to produce it.
         func judge(_ assembledLegs: [WalkLeg]) {
-            // Judged under both trims, because the choice between them is not
-            // one answer for every walk.
-            //
-            // The trim is what makes waypoint walks offerable at all — without
-            // it the gate refuses seven in eight. But it is also allowed to cut
-            // through a pin, and a pin at the tip of a lane is exactly the
-            // shape it hunts for: measured on Douglas, the unprotected trim
-            // left two of eight walks still passing their own pins, and the
-            // protected trim left all eight. Production picks one of these
-            // once and for all (`keepPinnedSpurs`, off) and pays for its offer
+            // One trim, nothing protected — `joinAndTrimLegs(legs, [])` with
+            // `keepPinnedSpurs` off, which is what production ships. The trim is
+            // allowed to cut through a pin, and production pays for its offer
             // rate with walks that do not go where they were asked.
-            //
-            // There is no need to choose. Both are cheap, both are judged on
-            // the same terms, and the selection below prefers a walk that
-            // still passes its pins. Where the protected trim leaves an
-            // offerable walk the walker gets the one they asked for; where it
-            // does not, they still get a walk rather than nothing.
-            for protecting in [request.waypoints, []] {
-                judgeOne(LocalSpikeTrim.trimming(assembledLegs, protecting: protecting))
-                if protecting.isEmpty { break }
-            }
+            judgeOne(LocalSpikeTrim.trimming(assembledLegs, protecting: []))
         }
 
         func judgeOne(_ legs: [WalkLeg]) {
@@ -266,17 +244,6 @@ extension LocalLoopRouter {
                 return
             }
             assembled.append((legs, coordinates, metres, report))
-            // Whether the finished walk still goes where it was asked to.
-            //
-            // It is a question worth asking because the trim above is allowed
-            // to cut through a pin — production ships that way because the
-            // alternative is no walks at all — and a walk that lost its pin
-            // is still a perfectly good loop, just not the one requested. So
-            // rather than refuse it or pretend it hit, it is ranked below the
-            // ones that did. Measured on Douglas the remote engine offers a
-            // walk that misses a pin more often than not; this does not have
-            // to inherit that just because it inherited the trim.
-            hitsPins.append(LocalLoopRouter.route(coordinates, hits: request.waypoints))
             candidates.append(RouteDiversity.Candidate(
                 coordinates: coordinates,
                 score: report.quality.score,
@@ -291,74 +258,16 @@ extension LocalLoopRouter {
         }
 
         for allocation in allocations {
-            // Each gap's legs are trimmed on their own and then concatenated,
-            // never trimmed across a join. That is what makes it structurally
-            // impossible for the trim to cut out a pin: a pin is only ever a
-            // boundary between two lists, never inside one.
+            // Each gap was routed on its own, with no cross-gap avoidance —
+            // exactly as `assemble` in the reference builds `routed` — so two
+            // gaps meeting at a pin can each be shortest and together a U-turn.
+            // The reference does not repair that: it assembles, trims tiny
+            // spikes, and lets the gate reject what U-turns. So do we.
             var legs: [WalkLeg] = []
-            for (gap, option) in allocation.chosen.enumerated() {
-                guard var leg = routed[option.id] else { continue }
-                // Each gap was routed on its own, so two legs meeting at a pin
-                // are each individually shortest and together a U-turn: the
-                // departure simply reverses the edge the arrival came in on.
-                // That is not a walk anyone would choose, and it was refusing
-                // every candidate on real ground — one U-turn per anchor,
-                // exactly. So where a join reverses, the departing gap is
-                // routed again with that edge penalised.
-                //
-                // A penalty rather than a prohibition, and so a pin at the end
-                // of a cul-de-sac still gets its honest turn-around. And the
-                // pin does not move: the leg still runs anchor to anchor. The
-                // allocation's arithmetic drifts a little when this fires,
-                // which is why the walk is measured after assembly and not
-                // before — the plan was always a plan.
-                if let arrival = legs.last, arrival.physical >= 0,
-                   let departure = leg.legs.first, departure.physical == arrival.physical {
-                    let key = "\(option.id)@\(arrival.physical)"
-                    if let cached = repaired[key] {
-                        leg = cached
-                    } else if let fresh = try? LocalLegRouter.route(
-                        graph: graph, index: index,
-                        through: [anchors[gap]] + option.guides + [anchors[gap + 1]],
-                        avoiding: [arrival.physical]
-                    ) {
-                        repaired[key] = fresh
-                        leg = fresh
-                    }
-                    if leg.legs.first?.physical != arrival.physical { diagnostics.waypointJoinsRepaired += 1 }
-                }
+            for option in allocation.chosen {
+                guard let leg = routed[option.id] else { continue }
                 legs.append(contentsOf: leg.legs)
             }
-            // The closing join is the same problem at the door: the last gap
-            // arrives on the edge the first gap left on, which reads as a
-            // U-turn at the start rather than a loop closing.
-            if let arrival = legs.last, let departure = legs.first,
-               arrival.physical >= 0, arrival.physical == departure.physical,
-               let last = allocation.chosen.last,
-               let fresh = try? LocalLegRouter.route(
-                   graph: graph, index: index,
-                   through: [anchors[gapCount - 1]] + last.guides + [anchors[gapCount]],
-                   avoiding: [departure.physical]
-               ), fresh.legs.last?.physical != departure.physical {
-                let keep = legs.count - (routed[last.id]?.legs.count ?? 0)
-                if keep > 0 {
-                    legs = Array(legs.prefix(keep)) + fresh.legs
-                    diagnostics.waypointJoinsRepaired += 1
-                }
-            }
-            // The trim the service applies to every walk it assembles from
-            // legs, and for the same reason: without it the gate refuses the
-            // whole walk for a forty-metre duck into a driveway.
-            //
-            // Nothing is protected from it, which looks wrong and is what
-            // production measured and chose. Holding the trim off the walker's
-            // pins is `keepPinnedSpurs`, and it ships **off**: with it on,
-            // "waypoint requests went from 2-3 walks to none, with
-            // `out-and-back-spur` refusing 20 of every 24 assembled". A pin at
-            // the tip of a cul-de-sac is exactly the shape the trim looks for,
-            // so protecting pins protects precisely the spikes that cost the
-            // walker every walk. A spike is at most 80 m round trip, so a walk
-            // still passes close to the pin; the alternative is no walk.
             judge(legs)
         }
 
@@ -387,40 +296,23 @@ extension LocalLoopRouter {
             return WaypointResult(routes: [], diagnostics: diagnostics)
         }
 
-        // Pins constrain a walk in a way a plain loop is not: every
-        // alternative has to visit the same places, and between two pins there
-        // is often only one sensible way. So where the ordinary separation
-        // cannot be met, the bar is lowered once — and then stops. Three walks
-        // that are ninety per cent the same walk are one walk with two extra
-        // taps to dismiss.
-        // Walks that still pass every pin fill the answer first, and the rest
-        // of the places are filled from the ones that do not — because a
-        // walker who asked to go somewhere would rather be offered one walk
-        // that goes there and two that nearly do than three that nearly do.
-        // The same shape as the exclusion in the ring search: choose from the
-        // preferred pool, then top up, rather than filtering the answer.
-        func pick(_ pool: [Int], limit: Int, taken: [Int]) -> (chosen: [Int], selection: RouteDiversity.Selection) {
-            var selection = RouteDiversity.selecting(
-                pool.map { candidates[$0] }, limit: limit, alreadyTaken: taken.map { candidates[$0] }
+        // Pins constrain a walk in a way a plain loop is not: every alternative
+        // has to visit the same places, and between two pins there is often only
+        // one sensible way. So where the ordinary separation cannot be met, the
+        // bar is lowered once — and then stops. `pickWithFallbackSeparation` in
+        // the reference: `selectDiverseRoutes` at the normal bar, and if that
+        // cannot fill three, once more at `WAYPOINT_RELAXED_SHARED`.
+        var selection = RouteDiversity.selecting(
+            candidates.indices.map { candidates[$0] }, limit: request.wanted
+        )
+        if selection.chosen.count < request.wanted {
+            let relaxed = RouteDiversity.selecting(
+                candidates.indices.map { candidates[$0] }, limit: request.wanted,
+                maxShared: LocalLoopRouter.waypointRelaxedShared
             )
-            if selection.chosen.count < limit {
-                let relaxed = RouteDiversity.selecting(
-                    pool.map { candidates[$0] }, limit: limit,
-                    maxShared: LocalLoopRouter.waypointRelaxedShared,
-                    alreadyTaken: taken.map { candidates[$0] }
-                )
-                if relaxed.chosen.count > selection.chosen.count { selection = relaxed }
-            }
-            return (selection.chosen.map { pool[$0] }, selection)
+            if relaxed.chosen.count > selection.chosen.count { selection = relaxed }
         }
-        let hitting = candidates.indices.filter { hitsPins[$0] }
-        let missing = candidates.indices.filter { !hitsPins[$0] }
-        diagnostics.waypointOfferedHittingPins = hitting.count
-        var (chosen, selection) = pick(hitting, limit: request.wanted, taken: [])
-        if chosen.count < request.wanted && !missing.isEmpty {
-            let topUp = pick(missing, limit: request.wanted - chosen.count, taken: chosen)
-            chosen += topUp.chosen
-        }
+        let chosen = selection.chosen
         diagnostics.diversityRejected = selection.rejectedShared
         diagnostics.diversityNoRoom = selection.noRoom
         let labels = RouteDiversity.labels(for: chosen.map {
@@ -503,19 +395,28 @@ extension LocalLoopRouter {
         let targetCrow = request.targetMetres / stretch
         let scales = [0.78, 0.9, 1.0, 1.0, 1.1, 1.22]
 
-        for attempt in 0..<LocalLoopRouter.waypointGuideCount {
-            let bearing = LocalGeo.normaliseBearing(
-                Double(attempt) * 360 / Double(LocalLoopRouter.waypointGuideCount)
-                    + Double(request.variation) * 11
-            )
-            let insertion = 1 + (attempt % (anchors.count - 1))
+        // `generateLoopAttempts(seedFor(start, target, variation), WAYPOINT_GUIDE_COUNT * 2)`
+        // filtered to the clockwise half — the same mirrored-pair, jittered
+        // bearings the ring search sweeps, not a plain dial sweep.
+        let seed = LocalLoopRouter.ringSeed(
+            lon: request.start.lng, lat: request.start.lat,
+            targetMetres: request.targetMetres, variation: request.variation
+        )
+        let guideAttempts = LocalLoopRouter.ringAttempts(
+            seed: seed, count: LocalLoopRouter.waypointGuideCount * 2
+        ).filter { $0.direction == .clockwise }
+
+        for attempt in guideAttempts {
+            let variant = attempt.pair
+            let bearing = attempt.initialBearing
+            let insertion = 1 + (variant % (anchors.count - 1))
             let radius = guideRadius(
                 anchors: anchors, insertion: insertion, start: request.start,
                 bearing: bearing, targetCrowMetres: targetCrow
             )
             let placed = LocalGeo.destination(
                 lat: request.start.lat, lon: request.start.lng,
-                metres: radius * scales[attempt % scales.count], bearing: bearing
+                metres: radius * scales[variant % scales.count], bearing: bearing
             )
             var shaped = anchors
             shaped.insert(Point(placed.lon, placed.lat), at: insertion)

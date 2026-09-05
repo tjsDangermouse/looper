@@ -74,11 +74,11 @@ Status key: ✅ verified against current code · 🔍 needs a verification read 
 | 5.1 | **`trueLowerBound` pass** — remote re-routes every gap on `shortestPathCustomModel` before refusing | `generate.ts:1300-1305,1526-1544` | absent (A* on metres already is the bound) | — (correct given C1; revisit after C1 changes the cost model) | 🔍 |
 | 5.2 | **time-mode re-aim** of `assemble()` | `generate.ts:1449-1458` | absent | **C5** | 🔍 |
 | 5.3 | backbone legs unweighted (see 2.4) | | | **A2** | ✅ |
-| 5.4 | **join-reversal repair** — iOS adds per-join + closing-join reroute `avoiding:[arrival.physical]`; remote relies on `routeThrough`/`joinAndTrimLegs` | — | `LocalWaypointRouter.swift:296-351` | **B?** (iOS extra) | 🔍 |
-| 5.5 | **both trims judged**, pin-preserving preferred | `generate.ts:1390` picks one, never protects pins | `LocalWaypointRouter.swift:218-240` | **B5** | ✅ |
+| 5.4 | ~~join-reversal repair~~ **DONE** — removed; gaps assembled with no cross-gap avoidance, gate rejects u-turns, as `assemble`+`joinAndTrimLegs`. //
+| 5.5 | ~~both trims judged~~ **DONE** — single `LocalSpikeTrim.trimming(_, protecting: [])`, `keepPinnedSpurs` off. //
 | 5.6 | **`spurForced` / `excusedRetraceMetres` / `excusedUTurns` / `stemMetres`** gate params | `quality.ts:329-352` has none | `LocalWaypointRouter.swift:256-264,613-647` + `RouteQuality.swift` | **B2** | ✅ |
-| 5.7 | **`hitsPins` ranking** — fill offer from pin-hitting walks first | remote: only in legacy path, not backbone | `LocalWaypointRouter.swift:419-426,655-675` | **B6** | ✅ |
-| 5.8 | **guided fallback bearing set** — `generateLoopAttempts` (mirrored+jitter) vs plain sweep `attempt*360/16 + variation*11` | `generate.ts:1050-1074` | `LocalWaypointRouter.swift:480-532` | **B10** | ✅ |
+| 5.7 | ~~hitsPins ranking~~ **DONE** — removed; `pickWithFallbackSeparation` (strict then WAYPOINT_RELAXED_SHARED). //
+| 5.8 | ~~guided fallback bearings~~ **DONE** — `generateLoopAttempts(seedFor(...), guideCount*2)` clockwise half; variant=pair. //
 | 5.9 | guide-radius samples 48 both sides | `WAYPOINT_GUIDE_RADIUS_SAMPLES` | `LocalWaypointRouter.swift` | 🔍 | 🔍 |
 
 ## Area 6 — duration / units
