@@ -42,10 +42,14 @@ extension LocalLoopRouter {
         public var wanted: Int
         public var variation: Int
         public var exclude: [[Point]]
+        /// The walker's pace, for the quoted duration and the time-mode percent.
+        public var paceMinutesPerKm: Double
+        public var targetSeconds: Double?
 
         public init(
             start: Point, waypoints: [Point], targetMetres: Double,
-            wanted: Int = 3, variation: Int = 0, exclude: [[Point]] = []
+            wanted: Int = 3, variation: Int = 0, exclude: [[Point]] = [],
+            paceMinutesPerKm: Double = 12, targetSeconds: Double? = nil
         ) {
             self.start = start
             self.waypoints = waypoints
@@ -53,6 +57,8 @@ extension LocalLoopRouter {
             self.wanted = wanted
             self.variation = variation
             self.exclude = exclude
+            self.paceMinutesPerKm = paceMinutesPerKm
+            self.targetSeconds = targetSeconds
         }
     }
 
@@ -334,17 +340,21 @@ extension LocalLoopRouter {
         let labels = RouteDiversity.labels(for: chosen.map {
             (bearing: candidates[$0].bearing, distanceMetres: assembled[$0].metres)
         })
+        let mps = LocalInstructions.metresPerSecond(paceMinutesPerKm: request.paceMinutesPerKm)
         var routes: [Route] = []
         for (position, index) in chosen.enumerated() {
             let entry = assembled[index]
+            let seconds = entry.metres / mps
+            let actual = request.targetSeconds != nil ? seconds : entry.metres
+            let requested = request.targetSeconds ?? request.targetMetres
             routes.append(Route(
                 id: UUID().uuidString,
                 name: labels[position],
                 distanceMeters: entry.metres.rounded(),
-                durationSeconds: (entry.metres / LocalInstructions.walkingMetresPerSecond).rounded(),
-                targetDifferencePercent: ((entry.metres / request.targetMetres - 1) * 100).rounded(),
+                durationSeconds: seconds.rounded(),
+                targetDifferencePercent: requested > 0 ? ((actual / requested - 1) * 100).rounded() : 0,
                 geometry: LineGeometry(coordinates: entry.coordinates),
-                steps: tidySteps(LocalInstructions.steps(for: entry.legs)),
+                steps: tidySteps(LocalInstructions.steps(for: entry.legs, paceMinutesPerKm: request.paceMinutesPerKm)),
                 routingEngine: .onDevice
             ))
         }

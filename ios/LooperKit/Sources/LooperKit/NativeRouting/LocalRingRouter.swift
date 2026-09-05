@@ -769,19 +769,24 @@ extension LocalLoopRouter {
         let labels = RouteDiversity.labels(for: chosen.map {
             (bearing: candidates[$0].bearing, distanceMetres: assembled[$0].metres)
         })
+        let mps = LocalInstructions.metresPerSecond(paceMinutesPerKm: request.paceMinutesPerKm)
         var routes: [Route] = []
         for (position, index) in chosen.enumerated() {
             let entry = assembled[index]
             diagnostics.offeredPavement.append(RouteQuality.pavement(of: entry.legs))
-            let seconds = entry.metres / LocalInstructions.walkingMetresPerSecond
+            let seconds = entry.metres / mps
+            // In time mode the walker asked in seconds, so the quoted percent
+            // is the duration ratio; in distance mode it is the distance ratio.
+            let actual = request.targetSeconds != nil ? seconds : entry.metres
+            let requested = request.targetSeconds ?? request.targetMetres
             routes.append(Route(
                 id: UUID().uuidString,
                 name: labels[position],
                 distanceMeters: entry.metres.rounded(),
                 durationSeconds: seconds.rounded(),
-                targetDifferencePercent: ((entry.metres / request.targetMetres - 1) * 100).rounded(),
+                targetDifferencePercent: requested > 0 ? ((actual / requested - 1) * 100).rounded() : 0,
                 geometry: LineGeometry(coordinates: entry.coordinates),
-                steps: tidySteps(LocalInstructions.steps(for: entry.legs)),
+                steps: tidySteps(LocalInstructions.steps(for: entry.legs, paceMinutesPerKm: request.paceMinutesPerKm)),
                 routingEngine: .onDevice
             ))
         }

@@ -74,11 +74,19 @@ public struct LocalLoopRouter: Sendable {
         /// already seen. That is why this has to reach the selector rather
         /// than filtering what the selector returned.
         public var exclude: [[Point]]
+        /// The walker's own pace, used for the quoted duration and — in time
+        /// mode — for the `targetDifferencePercent`. `walkingPaceMinutesPerKm`
+        /// in the reference; 12 min/km is the 5 km/h the fixed estimate assumed.
+        public var paceMinutesPerKm: Double
+        /// Set in time mode: what the walker actually asked for, in seconds.
+        /// The gate still judges distance; this only moves the quoted percent.
+        public var targetSeconds: Double?
 
         public init(
             lat: Double, lon: Double, targetMetres: Double, wanted: Int = 3,
             candidateWalks: Int = LocalLoopRouter.defaultCandidateWalks, searchBudget: Int = 4_000_000,
-            variation: Int = 0, exclude: [[Point]] = []
+            variation: Int = 0, exclude: [[Point]] = [],
+            paceMinutesPerKm: Double = 12, targetSeconds: Double? = nil
         ) {
             self.lat = lat
             self.lon = lon
@@ -88,6 +96,8 @@ public struct LocalLoopRouter: Sendable {
             self.searchBudget = searchBudget
             self.variation = variation
             self.exclude = exclude
+            self.paceMinutesPerKm = paceMinutesPerKm
+            self.targetSeconds = targetSeconds
         }
     }
 

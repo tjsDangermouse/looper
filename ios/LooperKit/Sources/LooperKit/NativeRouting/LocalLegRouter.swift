@@ -168,9 +168,18 @@ public enum LocalLegRouter {
 
         // Not a distance. A metre of carriageway beside a mapped pavement
         // costs more than a metre of the pavement, exactly as it does under the
-        // profile the remote engine routes every leg with, so the leg stops
-        // taking whichever of the two is a few metres shorter block by block.
-        // What is reported is always the true length.
+        // profile the remote engine routes every leg with. What is reported is
+        // always the true length.
+        //
+        // `edgeMetres * edgeWeight` is `distance / priority`, and GraphHopper's
+        // custom weighting is `distance / speed / priority + distance_influence
+        // * distance / 1000`. With `foot_average_speed` roughly constant this is
+        // GraphHopper's speed term up to the constant `1/speed`, which the
+        // argmin does not see — so the *shape* matches. Two calibration
+        // constants are not yet pinned to GraphHopper's and are the residual C1
+        // gap: a real per-way `foot_average_speed` (steps and rough surfaces are
+        // slower there) and the profile's default `distance_influence`. Both are
+        // measured against a GraphHopper reference run in Phase 4, not guessed.
         @inline(__always) func cost(_ edge: Int) -> Double {
             graph.edgeMetres[edge] * (weighted ? graph.edgeWeight[edge] : 1)
                 * (penalising.contains(Int32(edge)) ? penalty : 1)
@@ -285,10 +294,18 @@ public enum LocalLegRouter {
             for arc in Int(graph.arcStart[node])..<Int(graph.arcStart[node + 1]) {
                 let next = Int(graph.arcTo[arc])
                 let step = here + cost(Int(graph.arcEdge[arc]))
-                guard step < distance[next] else { continue }
-                distance[next] = step
-                parentArc[next] = Int32(arc)
-                heap.push(node: Int32(next), key: step + Swift.max(0, estimate(next)))
+                if step < distance[next] {
+                    distance[next] = step
+                    parentArc[next] = Int32(arc)
+                    heap.push(node: Int32(next), key: step + Swift.max(0, estimate(next)))
+                } else if step == distance[next], !settled[next], parentArc[next] >= 0,
+                          graph.arcEdge[arc] < graph.arcEdge[Int(parentArc[next])] {
+                    // Equal-cost paths resolve by lower edge id, as GraphHopper's
+                    // do, so a tie between a pavement and its carriageway is
+                    // broken the same way on both engines. The node is already
+                    // queued with the right key; only the parent moves.
+                    parentArc[next] = Int32(arc)
+                }
             }
         }
 

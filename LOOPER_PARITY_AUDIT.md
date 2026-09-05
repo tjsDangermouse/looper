@@ -45,7 +45,7 @@ Status key: ✅ verified against current code · 🔍 needs a verification read 
 | 2.10 | ~~access-restricted deleted~~ **DONE** — `private/restricted/delivery/customers` priced x10 (`foot_road_access==PRIVATE`), only `no`/`military` refused. //
 | 2.11 | `hike_rating>=2` — remote: weight 0; iOS: hard block in `decide` | `looper_foot.json:49` | `PedestrianAccessPolicy.swift:179-181` | — (same net effect) | ✅ |
 | 2.12 | ~~snap preventions~~ **DONE (tunnel/bridge)** — `edgeSnapPrevented` + `isSnapPrevented`; `snap()` returns a prevented edge only when no ordinary edge is in range. Ferry is C4. | `config.yml:47` | | **A10** | ✅ done |
-| 2.13 | **tie-breaking** on equal-weight paths | GraphHopper edge-id order | `LocalLegRouter` heap order | **C1** | 🔍 |
+| 2.13 | ~~tie-breaking~~ **DONE** — A* relaxation resolves equal cost by lower edge id, as GraphHopper does. //
 | 2.14 | ~~short-backtrack on edges~~ **DONE** — `overlapMetres`: geometric, both directions, 20 m ignore, vs the committed previous leg. //
 | 2.15 | keep *last* leg attempt (`keepBestLegAttempt` off) | `routing.ts` | `LocalRingRouter.swift:237-241` | — (matches) | ✅ |
 
@@ -85,7 +85,7 @@ Status key: ✅ verified against current code · 🔍 needs a verification read 
 
 | # | Divergence | remote | iOS | class | status |
 |---|---|---|---|---|---|
-| 6.1 | **displayed duration** — remote: client pace or GraphHopper `path.time`; iOS: fixed 5 km/h, saved pace ignored for display | `generate.ts:917-921` | `LocalRingRouter.swift:670`, `LocalInstructions.swift:40` | **C5 / A7-adjacent** | ✅ |
+| 6.1 | ~~displayed duration~~ **DONE** — `LocalInstructions.metresPerSecond(paceMinutesPerKm:)`; ring + waypoint routers and steps quote the walker's pace. //
 | 6.2 | `targetDifferencePercent` — duration ratio in time mode vs always distance ratio | `generate.ts:1154` | `LocalRingRouter.swift:676` | **C5** | ✅ |
 
 ## Area 7 — quality gate (`quality.ts` ↔ `RouteQuality.swift`)

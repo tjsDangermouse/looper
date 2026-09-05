@@ -35,9 +35,16 @@ public struct WalkLeg: Sendable {
 /// the Watch both depend on: a step's instruction is the manoeuvre at its
 /// *start*, and the step carries the name of the road it then walks.
 public enum LocalInstructions {
-    /// GraphHopper's foot profile speed, so a locally-found walk and a
-    /// remotely-found one of the same length quote the same duration.
+    /// The 5 km/h the fixed estimate assumed — 12 min/km. Kept as the default
+    /// wherever a pace is not threaded through yet.
     public static let walkingMetresPerSecond = 5000.0 / 3600.0
+
+    /// Metres per second for a walker's own pace. `walkingPaceMinutesPerKm` in
+    /// the reference's `durationFor`; the quoted duration is
+    /// `distanceKm * paceMinutesPerKm * 60`.
+    public static func metresPerSecond(paceMinutesPerKm: Double) -> Double {
+        paceMinutesPerKm > 0 ? 1000 / (paceMinutesPerKm * 60) : walkingMetresPerSecond
+    }
 
     /// Below this a junction is the road bending, not a turn to call out.
     static let continueDegrees: Double = 20
@@ -45,7 +52,8 @@ public enum LocalInstructions {
     static let turnDegrees: Double = 120
     static let sharpDegrees: Double = 160
 
-    public static func steps(for legs: [WalkLeg]) -> [Step] {
+    public static func steps(for legs: [WalkLeg], paceMinutesPerKm: Double = 12) -> [Step] {
+        let mps = metresPerSecond(paceMinutesPerKm: paceMinutesPerKm)
         guard !legs.isEmpty else { return [] }
         var steps: [Step] = []
         var coordinateIndex = 0
@@ -81,7 +89,7 @@ public enum LocalInstructions {
             steps.append(Step(
                 instruction: pending.instruction,
                 distanceMeters: pending.metres.rounded(),
-                durationSeconds: (pending.metres / walkingMetresPerSecond).rounded(),
+                durationSeconds: (pending.metres / mps).rounded(),
                 startIndex: pending.startIndex,
                 endIndex: coordinateIndex,
                 maneuver: .name(pending.maneuver),
@@ -100,7 +108,7 @@ public enum LocalInstructions {
         steps.append(Step(
             instruction: pending.instruction,
             distanceMeters: pending.metres.rounded(),
-            durationSeconds: (pending.metres / walkingMetresPerSecond).rounded(),
+            durationSeconds: (pending.metres / mps).rounded(),
             startIndex: pending.startIndex,
             endIndex: coordinateIndex,
             maneuver: .name(pending.maneuver),

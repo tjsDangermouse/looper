@@ -259,7 +259,10 @@ public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
         // different search — but the same graph, the same gate and the same
         // guarantee: no routing call leaves this device either way.
         if !request.waypoints.isEmpty {
-            return try waypointLoops(request, targetMetres: targetMetres, graph: graph, index: index)
+            return try waypointLoops(
+                request, targetMetres: targetMetres, paceMinutesPerKm: paceMinutesPerKm,
+                graph: graph, index: index
+            )
         }
 
         // The generator the service itself answers walkers with, ported. The
@@ -271,7 +274,9 @@ public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
             .init(
                 lat: request.start.lat, lon: request.start.lng, targetMetres: targetMetres,
                 wanted: 3, variation: request.variation,
-                exclude: request.excludeRoutes.map(\.geometry.coordinates)
+                exclude: request.excludeRoutes.map(\.geometry.coordinates),
+                paceMinutesPerKm: paceMinutesPerKm,
+                targetSeconds: request.mode == .time ? (request.durationMinutes ?? 0) * 60 : nil
             ),
             in: graph, index: index
         )
@@ -299,14 +304,16 @@ public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
     /// words the service would use, because an engine that quietly changes
     /// under a comparison is not a comparison.
     private func waypointLoops(
-        _ request: LoopRequest, targetMetres: Double,
+        _ request: LoopRequest, targetMetres: Double, paceMinutesPerKm: Double,
         graph: LocalWalkingGraph, index: LocalEdgeIndex
     ) throws -> LoopResponse {
         let result = try router.findWaypointLoops(
             .init(
                 start: request.start, waypoints: request.waypoints, targetMetres: targetMetres,
                 variation: request.variation,
-                exclude: request.excludeRoutes.map(\.geometry.coordinates)
+                exclude: request.excludeRoutes.map(\.geometry.coordinates),
+                paceMinutesPerKm: paceMinutesPerKm,
+                targetSeconds: request.mode == .time ? (request.durationMinutes ?? 0) * 60 : nil
             ),
             in: graph, index: index
         )
