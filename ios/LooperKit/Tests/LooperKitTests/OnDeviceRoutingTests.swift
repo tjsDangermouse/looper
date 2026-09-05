@@ -223,34 +223,27 @@ final class OnDeviceRoutingTests: XCTestCase {
         return Point(placed.lon, placed.lat)
     }
 
-    /// The walk goes where it was asked to go, in the order it was asked, and
-    /// it is still built entirely on the phone.
-    ///
-    /// This replaces the test that used to pin the opposite behaviour. The old
-    /// one asserted that the local engine declined waypoints and sent the
-    /// walker to Remote; that was a scope decision rather than a limit of the
-    /// device, and it is no longer true.
-    func testWaypointLoopsAreBuiltOnTheDeviceAndPassEveryPinInOrder() async throws {
+    /// A waypoint walk is built entirely on the phone, comes back near the
+    /// asked length, and is judged by the same gate the service uses. It is
+    /// **not** guaranteed to pass every pin: the reference's backbone trim is
+    /// allowed to cut through a pin and the port now matches that (parity items
+    /// B5/B6/5.4), so this asserts what the reference asserts — a walk, on the
+    /// device, of the right size — and no more.
+    func testWaypointLoopsAreBuiltOnTheDevice() async throws {
         let directory = makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let client = ForbiddenLoopsClient()
         let engine = engine(directory: directory, transport: StubOverpassTransport { [data = town()] _ in data })
 
         var request = request(distanceKm: 3)
-        let pins = [place(east: 600, north: 200), place(east: 200, north: -600)]
-        request.waypoints = pins
+        request.waypoints = [place(east: 600, north: 200), place(east: 200, north: -600)]
         let result = try await engine.generateLoops(request)
 
         XCTAssertFalse(result.routes.isEmpty, "the device found no walk through two ordinary pins")
         XCTAssertEqual(result.routingEngine, .onDevice)
         XCTAssertFalse(client.wasCalled)
         for route in result.routes {
-            XCTAssertTrue(
-                LocalLoopRouter.route(route.geometry.coordinates, hits: pins),
-                "a waypoint walk that does not pass its pins in order is not the walk that was asked for"
-            )
             XCTAssertEqual(route.routingEngine, .onDevice)
-            // The same tolerance the service judges a waypoint walk by.
             XCTAssertLessThanOrEqual(
                 abs(route.distanceMeters - 3000) / 3000,
                 LocalLoopRouter.waypointDistanceTolerance

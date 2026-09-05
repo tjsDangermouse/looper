@@ -98,14 +98,16 @@ extension LocalLoopRouter {
         guard gapCount >= 2, request.targetMetres > 0 else { throw Failure.noLoopFound }
 
         // ---------------------------------------------------------- backbone
-        // One direct route per gap. These are the floor that says whether the
-        // walk is possible at all, and they are also the "spend nothing here"
-        // option, so nothing is paid for twice.
+        // One direct route per gap, routed under the pavement-weighted profile
+        // exactly as `routeSegment` routes it in the reference — every leg the
+        // remote engine builds goes through `looper_foot.json`. These are also
+        // the "spend nothing here" option, so nothing is paid for twice.
         var directs: [LocalLegRouter.Leg] = []
         for gap in 0..<gapCount {
             do {
                 directs.append(try LocalLegRouter.route(
-                    graph: graph, index: index, from: anchors[gap], to: anchors[gap + 1]
+                    graph: graph, index: index, from: anchors[gap], to: anchors[gap + 1],
+                    weighted: true
                 ))
             } catch {
                 diagnostics.failure = "waypoint-unreachable"
@@ -132,15 +134,28 @@ extension LocalLoopRouter {
         }
 
         // ------------------------------------------------------- feasibility
-        // Refusing costs the walker their walk, so the floor is a genuine
-        // lower bound and not a preference — see `fitsInPlan`.
-        guard LocalWaypointPlanner.fitsInPlan(
-            backbone: backbone, target: request.targetMetres,
-            maxErrorFraction: LocalLoopRouter.waypointDistanceTolerance
-        ) else {
-            diagnostics.failure = "waypoint-over-plan"
-            diagnostics.totalMs = Date().timeIntervalSince(began) * 1000
-            return WaypointResult(routes: [], diagnostics: diagnostics, minimumMetres: backbone)
+        // The weighted backbone is the profile's *preferred* route, which can be
+        // longer than the shortest one — so it is not a lower bound, and
+        // refusing on it would refuse walks that fit. `trueLowerBound` in the
+        // reference: where the preferred backbone does not fit, re-route every
+        // gap on pure metres (the genuine floor) and refuse only if that misses.
+        func fits(_ metres: Double) -> Bool {
+            LocalWaypointPlanner.fitsInPlan(
+                backbone: metres, target: request.targetMetres,
+                maxErrorFraction: LocalLoopRouter.waypointDistanceTolerance
+            )
+        }
+        if !fits(backbone) {
+            let floor = (0..<gapCount).reduce(0.0) { total, gap in
+                total + ((try? LocalLegRouter.route(
+                    graph: graph, index: index, from: anchors[gap], to: anchors[gap + 1]
+                ))?.metres ?? directs[gap].metres)
+            }
+            if !fits(floor) {
+                diagnostics.failure = "waypoint-over-plan"
+                diagnostics.totalMs = Date().timeIntervalSince(began) * 1000
+                return WaypointResult(routes: [], diagnostics: diagnostics, minimumMetres: floor)
+            }
         }
 
         // ---------------------------------------------- options for each gap
@@ -167,7 +182,8 @@ extension LocalLoopRouter {
                 // does not offer; there are eight others.
                 guard let leg = try? LocalLegRouter.route(
                     graph: graph, index: index,
-                    through: [anchors[gap]] + plan.guides + [anchors[gap + 1]]
+                    through: [anchors[gap]] + plan.guides + [anchors[gap + 1]],
+                    retracePenalty: LocalLegRouter.avoidPenalty, weighted: true
                 ) else { continue }
                 routed[plan.id] = leg
                 forThisGap.append(.init(
@@ -376,7 +392,8 @@ extension LocalLoopRouter {
         // into two perfectly good paths, and forcing an extra corner into that
         // only makes it less likely to fit.
         if let pinOnly = try? LocalLegRouter.route(
-            graph: graph, index: index, through: anchors, protecting: request.waypoints
+            graph: graph, index: index, through: anchors, protecting: request.waypoints,
+            retracePenalty: LocalLegRouter.avoidPenalty, weighted: true
         ) {
             built.append(pinOnly)
         }
@@ -388,7 +405,7 @@ extension LocalLoopRouter {
         // a metre of crow flight — which put the guide well outside the ring
         // and had otherwise available loops refused as too long.
         let direct = zip(anchors, anchors.dropFirst()).compactMap {
-            try? LocalLegRouter.route(graph: graph, index: index, from: $0, to: $1)
+            try? LocalLegRouter.route(graph: graph, index: index, from: $0, to: $1, weighted: true)
         }
         guard direct.count == anchors.count - 1 else { return built }
         let stretch = Swift.min(3, Swift.max(0.8, direct.reduce(0) { $0 + $1.metres } / crow))
@@ -421,7 +438,8 @@ extension LocalLoopRouter {
             var shaped = anchors
             shaped.insert(Point(placed.lon, placed.lat), at: insertion)
             if let leg = try? LocalLegRouter.route(
-                graph: graph, index: index, through: shaped, protecting: request.waypoints
+                graph: graph, index: index, through: shaped, protecting: request.waypoints,
+                retracePenalty: LocalLegRouter.avoidPenalty, weighted: true
             ) {
                 built.append(leg)
             }

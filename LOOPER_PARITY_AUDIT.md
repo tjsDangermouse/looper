@@ -36,7 +36,7 @@ Status key: ✅ verified against current code · 🔍 needs a verification read 
 | 2.1 | **engine** — GraphHopper landmark A* over planet import vs custom Swift A* over Overpass graph | `graphhopper.ts:79-99` | `LocalLegRouter.swift:236-293` | **C1/C2** | ✅ |
 | 2.2 | **cost model** — GraphHopper custom weighting `time/priority + distance_influence·d` vs `metres × (1/priority) × penalty` | `looper_foot.json`, `config.yml` | `LocalLegRouter.swift:174-177` | **C1** | ✅ |
 | 2.3 | **per-way speed** — GraphHopper `foot_average_speed` per edge vs fixed 5 km/h | `looper_foot.json:59-61` | `LocalInstructions.swift:40` | **C1/C5** | ✅ |
-| 2.4 | **ring legs weighted, waypoint legs NOT** — remote routes every leg pavement-weighted | `routing.ts` (all legs via `avoidanceCustomModel`) | `LocalWaypointRouter.swift:107-109,168-171` (`weighted:false`, penalty 4) | **A2** | ✅ |
+| 2.4 | ~~waypoint legs unweighted~~ **DONE** — every waypoint-path leg now `weighted: true`; return-leg avoidance is `avoidPenalty` (20x = AVOID_PRIORITY), not 4. //
 | 2.5 | **relaxed-penalty retry** (`RELAXED_AVOID_PRIORITY=0.2`) when a leg is unroutable under the strong penalty | `routing.ts:216-229` | absent; `LocalLegRouter.relaxedAvoidPenalty` defined, called by nothing | **A3** | ✅ |
 | 2.6 | **leg-budget cheaper reroute** — overshoot + detour → reroute at relaxed penalty, keep if shorter | `routing.ts:240-255` | absent | **A3** | ✅ |
 | 2.7 | **in-leg spike reroute** — `findLegSpike` + `buildSpikeAvoidanceArea` disc, reroute once | `routing.ts:257-275` | only global post-assembly `LocalSpikeTrim.trimming` at `LocalRingRouter.swift:293` (geometry splice); no reroute | **A3** | ✅ |
@@ -71,9 +71,9 @@ Status key: ✅ verified against current code · 🔍 needs a verification read 
 
 | # | Divergence | remote | iOS | class | status |
 |---|---|---|---|---|---|
-| 5.1 | **`trueLowerBound` pass** — remote re-routes every gap on `shortestPathCustomModel` before refusing | `generate.ts:1300-1305,1526-1544` | absent (A* on metres already is the bound) | — (correct given C1; revisit after C1 changes the cost model) | 🔍 |
+| 5.1 | ~~trueLowerBound~~ **DONE** — needed once the backbone is weighted: where the weighted backbone misses the plan, re-route each gap on pure metres and refuse only if that floor misses too. //
 | 5.2 | **time-mode re-aim** of `assemble()` | `generate.ts:1449-1458` | absent | **C5** | 🔍 |
-| 5.3 | backbone legs unweighted (see 2.4) | | | **A2** | ✅ |
+| 5.3 | ~~backbone legs unweighted~~ **DONE** — see 2.4. //
 | 5.4 | ~~join-reversal repair~~ **DONE** — removed; gaps assembled with no cross-gap avoidance, gate rejects u-turns, as `assemble`+`joinAndTrimLegs`. //
 | 5.5 | ~~both trims judged~~ **DONE** — single `LocalSpikeTrim.trimming(_, protecting: [])`, `keepPinnedSpurs` off. //
 | 5.6 | **`spurForced` / `excusedRetraceMetres` / `excusedUTurns` / `stemMetres`** gate params | `quality.ts:329-352` has none | `LocalWaypointRouter.swift:256-264,613-647` + `RouteQuality.swift` | **B2** | ✅ |
