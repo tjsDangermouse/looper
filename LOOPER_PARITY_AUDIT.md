@@ -44,7 +44,7 @@ Status key: ✅ verified against current code · 🔍 needs a verification read 
 | 2.9 | mtb_rating — NO MATERIAL DIVERGENCE: GraphHopper's `mtb_rating` encoded value is the same leading-integer parse of `mtb:scale` that `mtbRating()` does. //
 | 2.10 | ~~access-restricted deleted~~ **DONE** — `private/restricted/delivery/customers` priced x10 (`foot_road_access==PRIVATE`), only `no`/`military` refused. //
 | 2.11 | `hike_rating>=2` — remote: weight 0; iOS: hard block in `decide` | `looper_foot.json:49` | `PedestrianAccessPolicy.swift:179-181` | — (same net effect) | ✅ |
-| 2.12 | **snap preventions** `tunnel, bridge, ferry` | `config.yml:47`, `graphhopper.ts:95` | none — `LocalEdgeIndex.snap` (`:145`) has no tunnel/bridge/ferry awareness. Also check `OSMData` retains those tags | **A10** | ✅ |
+| 2.12 | ~~snap preventions~~ **DONE (tunnel/bridge)** — `edgeSnapPrevented` + `isSnapPrevented`; `snap()` returns a prevented edge only when no ordinary edge is in range. Ferry is C4. | `config.yml:47` | | **A10** | ✅ done |
 | 2.13 | **tie-breaking** on equal-weight paths | GraphHopper edge-id order | `LocalLegRouter` heap order | **C1** | 🔍 |
 | 2.14 | ~~short-backtrack on edges~~ **DONE** — `overlapMetres`: geometric, both directions, 20 m ignore, vs the committed previous leg. //
 | 2.15 | keep *last* leg attempt (`keepBestLegAttempt` off) | `routing.ts` | `LocalRingRouter.swift:237-241` | — (matches) | ✅ |
