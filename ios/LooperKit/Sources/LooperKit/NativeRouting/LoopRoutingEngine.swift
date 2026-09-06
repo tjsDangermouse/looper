@@ -270,6 +270,7 @@ public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
         // `LocalLoopRouter.findLoops` — because the two want measuring against
         // each other on the same ground, and because a walker's answer should
         // not depend on which of them was easier to reach for.
+        RoutingLog.search.info("local ring REQUEST start=\(request.start.lat, privacy: .public),\(request.start.lng, privacy: .public) targetMetres=\(Int(targetMetres), privacy: .public) variation=\(request.variation, privacy: .public) mode=\(String(describing: request.mode), privacy: .public) excludes=\(request.excludeRoutes.count, privacy: .public) waypoints=\(request.waypoints.count, privacy: .public)")
         let result = try router.findRingLoops(
             .init(
                 lat: request.start.lat, lon: request.start.lng, targetMetres: targetMetres,

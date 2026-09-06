@@ -542,8 +542,11 @@ final class Phase4ParityTests: XCTestCase {
         let index = LocalEdgeIndex(graph: graph)
         let waysByID = Dictionary(data.ways.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
 
+        let variations = (env["LOOPER_VARIATIONS"] ?? "0").split(separator: ",").compactMap { Int($0) }
+        for variation in variations {
+        print("=== variation \(variation) ===")
         let result = try LocalLoopRouter().findRingLoops(
-            .init(lat: start.lat, lon: start.lng, targetMetres: target), in: graph, index: index
+            .init(lat: start.lat, lon: start.lng, targetMetres: target, variation: variation), in: graph, index: index
         )
         for (i, route) in result.routes.enumerated() {
             let pave = i < result.diagnostics.offeredPavement.count
@@ -551,6 +554,9 @@ final class Phase4ParityTests: XCTestCase {
             print("[loop] route \(i) \(Int(route.distanceMeters))m pave=\(Int(pave.share * 100))% hops=\(pave.hops)")
         }
         for (ri, best) in result.diagnostics.offeredLegs.enumerated() {
+        var bucksPrimary = 0.0
+        for leg in best where !leg.roadClass.isPedestrianWay && (leg.name == "Bucks Road" || leg.name == "Woodbourne Road") { bucksPrimary += leg.metres }
+        if bucksPrimary > 10 { print("[loop] route \(ri): \(Int(bucksPrimary))m on Bucks/Woodbourne Road CARRIAGEWAY") }
         // Collapse consecutive legs on the same class+name so a run reads as one
         // line; a carriageway run beside its own pavement then stands out.
         var runs: [(ped: Bool, name: String, metres: Double)] = []
@@ -568,8 +574,11 @@ final class Phase4ParityTests: XCTestCase {
         for i in 1..<max(1, runs.count) where runs[i].ped != runs[i - 1].ped { hops += 1 }
         let carriage = runs.filter { !$0.ped }.reduce(0.0) { $0 + $1.metres }
         print("[loop] route \(ri): \(runs.count) runs, \(hops) transitions, carriageway \(Int(carriage))m")
-        for r in runs where r.metres > 3 {
-            print("[loop]   \(r.ped ? "  " : "!!") \(String(format: "%4d", Int(r.metres)))m \(r.name)")
+        if carriage > 250 {
+            for r in runs where r.metres > 3 {
+                print("[loop]   \(r.ped ? "  " : "!!") \(String(format: "%4d", Int(r.metres)))m \(r.name)")
+            }
+        }
         }
         }
     }
