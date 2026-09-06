@@ -628,3 +628,39 @@ which is what pushed the "south down Bucks Road" candidate below the distance
 gate. Re-measure those with the kerb fix in before doing any further work on
 them. §8 (`area=yes` promenades) is a separate, real, and much smaller issue —
 not the cause of the screenshots.
+
+---
+
+## §12 — After the kerb fix: systematic scan of what's left
+
+Scanned every offered loop for the real start (`54.154682,-4.484663`), five
+variations, `wanted` raised — every carriageway run ≥ 25 m that has a footway
+within 20 m of both ends — and re-ran each through local GraphHopper.
+
+- **~50 runs match GraphHopper to the metre** (e.g. `121 m on-device / GH
+  121 m`, 0 % footway both) — genuine streets with no separate pavement
+  (Duke's Road, Laureston Grove, Mona Drive, Palace Road, Selborne Road, Mount
+  Bradda, Peel Road stretches, …). Correct, not a bug.
+- **~40 runs are divergences** — GraphHopper walks 65–100 % of them on the
+  pavement where on-device uses the carriageway. Two sub-classes:
+  1. **Promenade** — Loch / Harris / Central Promenade, Castle Mona Avenue.
+     The `area=yes` esplanade of §8.
+  2. **Ordinary streets** — Brunswick Road, Fancy Street, Post Office Lane,
+     Tynwald Street, Withington Road, Marathon Road, Saint George's Walk, and
+     several unnamed. For these the *isolated* pin-to-pin leg is already correct
+     on `weighted:true` (Brunswick Road: 137 m 100 % footway). So the carriageway
+     only appears when the leg is built **inside the ring** — with the corridor
+     penalty, the neighbouring legs' snap points, re-aim and join repair in
+     play. Not yet isolated to one of those; `testCorridorCoversParallel
+     Carriageway` shows the corridor over a walked pavement covers only 1 of 3
+     parallel footway edges and 4 of 14 carriageway edges, so the corridor is
+     sparse — a candidate mechanism but not confirmed.
+
+### Status
+
+- **`ed08bfe` (kerb) shipped and confirmed** — the Bucks Road class is fixed;
+  the user's Circular Road screenshot post-fix is on the pavement.
+- Sub-class 2 (ordinary streets, ring-context only) is the next thing to
+  isolate: build one Brunswick Road leg with the real corridor / snap / re-aim
+  from the offered loop and see which of those turns it onto the carriageway.
+- Sub-class 1 (promenades) is §8, unchanged.

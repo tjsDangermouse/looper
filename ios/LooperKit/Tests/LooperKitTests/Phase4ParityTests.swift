@@ -546,6 +546,48 @@ final class Phase4ParityTests: XCTestCase {
         }
     }
 
+    /// Does the outbound leg's corridor, which the return leg is told to avoid,
+    /// include the carriageway running beside the pavement it walked? If not,
+    /// the return leg jumps onto that carriageway to dodge the penalty.
+    func testCorridorCoversParallelCarriageway() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["LOOPER_LIVE_OVERPASS"] == "1")
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("looper-live-chunks", isDirectory: true)
+        var endpoints = OverpassRoutingDataSource.Configuration.publicOverpassEndpoints
+        if let override = ProcessInfo.processInfo.environment["LOOPER_OVERPASS_ENDPOINT"],
+           let url = URL(string: override) { endpoints = [url] + endpoints }
+        let manager = RoutingDataManager(
+            store: RoutingChunkStore(directory: directory),
+            source: OverpassRoutingDataSource(configuration: .init(endpoints: endpoints, serverTimeoutSeconds: 120))
+        )
+        _ = try await manager.ensureCoverage(lat: 54.159, lon: -4.490, targetMetres: 3000)
+        let data = await manager.storedData(lat: 54.159, lon: -4.490, targetMetres: 3000)
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: data, minNetworkSize: LocalWalkingGraphBuilder.minNetworkSize)
+        let index = LocalEdgeIndex(graph: graph)
+
+        // Walk the Brunswick Road pavement, then ask for its corridor.
+        let leg = try LocalLegRouter.route(
+            graph: graph, index: index, from: Point(-4.49036, 54.15956), to: Point(-4.48935, 54.15849),
+            weighted: true, maximumSnapMetres: 1_000_000)
+        let router = LocalLoopRouter()
+        let corridor = router.ringCorridor(
+            around: leg.coordinates, from: Point(-4.49036, 54.15956), graph: graph, index: index)
+        var footIn = 0, carriageIn = 0, footOut = 0, carriageOut = 0
+        for e in 0..<graph.edgeCount where graph.name(ofEdge: e) == "Brunswick Road" {
+            let ped = graph.roadClass(ofEdge: e).isPedestrianWay
+            let inC = corridor.contains(Int32(e))
+            if ped { inC ? (footIn += 1) : (footOut += 1) } else { inC ? (carriageIn += 1) : (carriageOut += 1) }
+        }
+        print("[corridor] Brunswick Road edges — footway: \(footIn) in / \(footOut) out;  carriageway: \(carriageIn) in / \(carriageOut) out")
+
+        // Now route the return leg with that corridor penalised, as the ring does.
+        let back = try LocalLegRouter.route(
+            graph: graph, index: index, from: Point(-4.48935, 54.15849), to: Point(-4.49036, 54.15956),
+            penalising: corridor, penalty: LocalLegRouter.avoidPenalty, weighted: true, maximumSnapMetres: 1_000_000)
+        let backPed = back.legs.filter { $0.roadClass.isPedestrianWay }.reduce(0.0) { $0 + $1.metres }
+        print("[corridor] return leg with corridor penalised: \(Int(back.legs.reduce(0){$0+$1.metres}))m, \(Int(backPed / max(1, back.legs.reduce(0){$0+$1.metres}) * 100))% footway")
+    }
+
     func testInvestigateBucksRoadLoop() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["LOOPER_LIVE_OVERPASS"] == "1")
         let env = ProcessInfo.processInfo.environment
@@ -631,9 +673,11 @@ final class Phase4ParityTests: XCTestCase {
             if !leg.roadClass.isPedestrianWay && leg.metres > 3 {
                 var j = li, run = leg.metres
                 while j + 1 < best.count && !best[j + 1].roadClass.isPedestrianWay { j += 1; run += best[j].metres }
-                if run > 40, let a = best[li].coordinates.first, let b = best[j].coordinates.last {
-                    print(String(format: "[cwy] route %d  %4dm %@  from %.5f,%.5f  to %.5f,%.5f  footwayNearBothEnds=%@",
-                        ri, Int(run), best[li].name ?? "-", a.lat, a.lng, b.lat, b.lng, (near(a) && near(b)) ? "YES" : "no"))
+                if run > 25, let a = best[li].coordinates.first, let b = best[j].coordinates.last, near(a), near(b) {
+                    // Pad the endpoints a few metres back onto the pavement so a
+                    // GraphHopper re-run isn't forced to start on the centre-line.
+                    print(String(format: "[gap] %.5f,%.5f %.5f,%.5f %dm %@",
+                        a.lat, a.lng, b.lat, b.lng, Int(run), best[li].name ?? "-"))
                 }
                 li = j + 1
             } else { li += 1 }
