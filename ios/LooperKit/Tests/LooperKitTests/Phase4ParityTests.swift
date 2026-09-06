@@ -372,8 +372,14 @@ final class Phase4ParityTests: XCTestCase {
     /// on-device hop-by-hop geometry so the 33m divergence can be attributed.
     func testTraceStep0Leg() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["LOOPER_LIVE_OVERPASS"] == "1")
-        let from = Point(-4.4816, 54.1506)
-        let to = Point(-4.49104, 54.16039)
+        let e = ProcessInfo.processInfo.environment
+        func pt(_ k: String, _ dflt: Point) -> Point {
+            guard let s = e[k]?.split(separator: ","), s.count == 2,
+                  let x = Double(s[0]), let y = Double(s[1]) else { return dflt }
+            return Point(x, y)
+        }
+        let from = pt("LEG_FROM", Point(-4.4816, 54.1506))
+        let to = pt("LEG_TO", Point(-4.49104, 54.16039))
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("looper-live-chunks", isDirectory: true)
         var endpoints = OverpassRoutingDataSource.Configuration.publicOverpassEndpoints
@@ -408,6 +414,62 @@ final class Phase4ParityTests: XCTestCase {
             for r in runs { print("  \(Int(r.m.rounded()))m  \(r.cls)  \(r.name)") }
             print("  first=\(routed.coordinates.first!) last=\(routed.coordinates.last!)")
         }
+    }
+
+    /// Is the Bucks Road pavement a routable chain on-device, or fragmented
+    /// stubs the router has to bridge along the A42 carriageway? Reads the
+    /// built graph and reports, for every "Bucks Road" footway edge, its
+    /// connected component; then for every "Bucks Road" primary edge, whether
+    /// a footway edge sits within 20 m of both its endpoints (pavement present
+    /// but not connected).
+    func testBucksRoadPavementTopology() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["LOOPER_LIVE_OVERPASS"] == "1")
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("looper-live-chunks", isDirectory: true)
+        var endpoints = OverpassRoutingDataSource.Configuration.publicOverpassEndpoints
+        if let override = ProcessInfo.processInfo.environment["LOOPER_OVERPASS_ENDPOINT"],
+           let url = URL(string: override) { endpoints = [url] + endpoints }
+        let manager = RoutingDataManager(
+            store: RoutingChunkStore(directory: directory),
+            source: OverpassRoutingDataSource(configuration: .init(endpoints: endpoints, serverTimeoutSeconds: 120))
+        )
+        _ = try await manager.ensureCoverage(lat: 54.1545, lon: -4.4815, targetMetres: 3000)
+        let data = await manager.storedData(lat: 54.1545, lon: -4.4815, targetMetres: 3000)
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: data, minNetworkSize: LocalWalkingGraphBuilder.minNetworkSize)
+
+        // Union-find over all edges.
+        var parent = Array(0..<graph.nodeCount)
+        func find(_ x: Int) -> Int { var x = x; while parent[x] != x { parent[x] = parent[parent[x]]; x = parent[x] }; return x }
+        for e in 0..<graph.edgeCount {
+            let a = find(Int(graph.edgeFrom[e])), b = find(Int(graph.edgeTo[e]))
+            if a != b { parent[a] = b }
+        }
+        func node(_ i: Int32) -> Point { Point(graph.nodeLon[Int(i)], graph.nodeLat[Int(i)]) }
+        func d(_ a: Point, _ b: Point) -> Double { LocalGeo.distance(lat1: a.lat, lon1: a.lng, lat2: b.lat, lon2: b.lng) }
+
+        var footComps: [Int: Double] = [:]
+        var primaryEndpoints: [(Point, Point)] = []
+        for e in 0..<graph.edgeCount where graph.name(ofEdge: e) == "Bucks Road" {
+            let cls = graph.roadClass(ofEdge: e)
+            let comp = find(Int(graph.edgeFrom[e]))
+            let m = graph.edgeMetres[e]
+            if cls.isPedestrianWay { footComps[comp, default: 0] += m }
+            else { primaryEndpoints.append((node(graph.edgeFrom[e]), node(graph.edgeTo[e]))) }
+        }
+        print("[bucks] footway edges span \(footComps.count) disconnected component(s): \(footComps.map { "c\($0.key)=\(Int($0.value))m" }.sorted())")
+
+        // Every footway edge anywhere, for the proximity test.
+        var footEdges: [(Point, Point)] = []
+        for e in 0..<graph.edgeCount where graph.roadClass(ofEdge: e).isPedestrianWay {
+            footEdges.append((node(graph.edgeFrom[e]), node(graph.edgeTo[e])))
+        }
+        var bridged = 0
+        for (a, b) in primaryEndpoints {
+            let nearA = footEdges.contains { d($0.0, a) < 20 || d($0.1, a) < 20 }
+            let nearB = footEdges.contains { d($0.0, b) < 20 || d($0.1, b) < 20 }
+            if nearA && nearB { bridged += 1 }
+        }
+        print("[bucks] \(primaryEndpoints.count) Bucks Road carriageway edges; \(bridged) have footway within 20 m of BOTH ends (pavement present, not connected)")
     }
 
     func testInvestigateBucksRoadLoop() async throws {
