@@ -403,3 +403,74 @@ legs carry independent ±2–3 % graph error where the remote legs are exact
 - Not worth further chasing: the specific street choice (Sydney Mount vs
   Prospect Terrace) — both are pavement, the metric that matters
   (`offered-loop pave %`) is unaffected by which parallel footway is taken.
+
+---
+
+## §8 — FOUND: `area=yes` pedestrian plazas are not routable on-device
+
+This is the actual "jumps into the road" for the offered Douglas loops (the
+Bucks Road screenshot loop and every seafront loop).
+
+### The measurement
+
+Leg `[-4.4816,54.1506] → [-4.4693,54.1602]` (Finch Road doorstep → Broadway,
+along the seafront), routed pin-to-pin:
+
+| engine | distance | footway/pedestrian | carriageway |
+|---|---|---|---|
+| GraphHopper | 1559 m | **1521 m** (footway 1286 + pedestrian 235) | 52 m |
+| on-device `weighted:true` | 1563 m | 1014 m | **532 m** (`primary Central Promenade` 439 + `secondary` 93) |
+
+Same length, but on-device spends 439 m walking straight down the **Central
+Promenade A-road carriageway** where GraphHopper crosses the pedestrianised
+esplanade. The trace shows it: on-device is on `footway Central Promenade
+[sidewalk]`, hits a `crossing`, then `!! 168 m primary Central Promenade`,
+`!! 58 m`, `!! 28 m`, another `crossing`, back to `footway`. It leaves the
+pavement because the pavement has no continuous routable path there.
+
+### The cause
+
+Douglas's seafront was rebuilt ~2023 and the promenade esplanade is mapped as
+**`highway=pedestrian` + `area=yes` polygons** — confirmed via Overpass: of 14
+pedestrian ways along the front, **12 carry `area=yes`** (only Marina Road and
+Castle Street are linear).
+
+- **GraphHopper** triangulates `area=yes` pedestrian polygons into a routable
+  mesh at import, so a walker can cross them. Its leg uses 235 m of
+  `pedestrian`.
+- **`LocalWalkingGraphBuilder.build`** (`LocalWalkingGraph.swift` ~:194–221)
+  has no area handling. It walks `way.nodes` in order and emits an edge run —
+  for a polygon that traces the **perimeter**, not a crossing. The esplanade
+  becomes a ring of boundary edges connected to the street network only where a
+  perimeter node happens to be shared with a footway/crossing node. The router
+  cannot cross the plaza, so seafront legs fall onto the parallel
+  `Central Promenade` / `Loch Promenade` / `Harris Promenade` carriageway.
+
+`minNetworkSize` pruning is not involved — `prune=0` gives the identical 439 m
+of carriageway.
+
+### Proposed fix (mirror GraphHopper — REVIEW BEFORE IMPLEMENTING)
+
+In the run builder, detect a walkable way that is an area:
+`tags["area"] == "yes"`, or a closed ring (`way.nodes.first == way.nodes.last`)
+with `highway` in `{pedestrian, footway}` and no `area=no`.
+
+For such a way, **do not** emit the perimeter as a travel run. Instead:
+
+1. Collect its boundary nodes that are *also* used by another run (the real
+   connection points — kerb ramps, the ends of adjoining footways).
+2. Add a synthetic node at the polygon centroid.
+3. Emit a short edge from each connection point to the centroid node, class
+   `pedestrian`, weight 1.0, length = true metres.
+
+That is the cheap faithful approximation of GraphHopper's triangulation: it
+makes the plaza a routable hub without a full visibility mesh, and every
+crossing of it is priced as pedestrian ground. A later refinement is a proper
+Delaunay/visibility mesh, but the centroid-hub gets the offered loops back onto
+the front.
+
+Scope check before implementing: how many `area=yes` walkable ways are in a
+typical fetched box outside Douglas seafront (if it's ~always <20, the centroid
+hub is cheap); and whether any are large enough (a park) that a centroid hub
+routes people through a flowerbed — if so, cap by area or fall back to
+perimeter+centroid spokes.

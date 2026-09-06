@@ -86,7 +86,8 @@ extension LocalLoopRouter {
     /// routes there. The 500 m default made those legs fail on-device, so
     /// `buildRingCandidate` retried with a shorter reach and the whole loop
     /// shrank away from the remote's answer.
-    public static let ringLegSnapMetres = 1_000_000.0
+    public static let ringLegSnapMetres =
+        ProcessInfo.processInfo.environment["LOOPER_RING_SNAP_METRES"].flatMap(Double.init) ?? 1_000_000.0
 
     public enum RingDirection: Sendable, Equatable {
         case clockwise, counterClockwise

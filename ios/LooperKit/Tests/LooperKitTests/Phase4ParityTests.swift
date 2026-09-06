@@ -412,8 +412,11 @@ final class Phase4ParityTests: XCTestCase {
 
     func testInvestigateBucksRoadLoop() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["LOOPER_LIVE_OVERPASS"] == "1")
-        let start = Point(-4.4833, 54.1533)   // Bucks Road / Christian Road
-        let target = 4000.0
+        let env = ProcessInfo.processInfo.environment
+        let start = Point(
+            env["LOOPER_START_LNG"].flatMap(Double.init) ?? -4.4833,
+            env["LOOPER_START_LAT"].flatMap(Double.init) ?? 54.1533)   // Bucks Road / Christian Road
+        let target = env["LOOPER_TARGET_M"].flatMap(Double.init) ?? 4000.0
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("looper-live-chunks", isDirectory: true)
         var endpoints = OverpassRoutingDataSource.Configuration.publicOverpassEndpoints
@@ -439,7 +442,7 @@ final class Phase4ParityTests: XCTestCase {
                 ? result.diagnostics.offeredPavement[i] : RouteQuality.PavementReport()
             print("[loop] route \(i) \(Int(route.distanceMeters))m pave=\(Int(pave.share * 100))% hops=\(pave.hops)")
         }
-        guard let best = result.diagnostics.offeredLegs.first else { return }
+        for (ri, best) in result.diagnostics.offeredLegs.enumerated() {
         // Collapse consecutive legs on the same class+name so a run reads as one
         // line; a carriageway run beside its own pavement then stands out.
         var runs: [(ped: Bool, name: String, metres: Double)] = []
@@ -455,9 +458,11 @@ final class Phase4ParityTests: XCTestCase {
         }
         var hops = 0
         for i in 1..<max(1, runs.count) where runs[i].ped != runs[i - 1].ped { hops += 1 }
-        print("[loop] route 0: \(runs.count) runs, \(hops) pavement/carriageway transitions")
+        let carriage = runs.filter { !$0.ped }.reduce(0.0) { $0 + $1.metres }
+        print("[loop] route \(ri): \(runs.count) runs, \(hops) transitions, carriageway \(Int(carriage))m")
         for r in runs where r.metres > 3 {
             print("[loop]   \(r.ped ? "  " : "!!") \(String(format: "%4d", Int(r.metres)))m \(r.name)")
+        }
         }
     }
 }
