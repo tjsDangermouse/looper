@@ -42,7 +42,9 @@ public enum HealthWorkoutOwner: String, Codable, Equatable, Sendable {
 
 /// The loop the Watch should be showing before and during an outing. Sent once
 /// when a loop is prepared or started, and again whenever the Watch asks for
-/// it — never on a timer. It carries no route geometry: the Watch draws no map.
+/// it — never on a timer. The planned geometry is display-only: the Watch
+/// draws it under the phone's guidance, but never derives progress or turns
+/// from it.
 public struct LoopPlanPayload: Codable, Equatable, Sendable {
     /// The session record's id. Every later state update and command quotes
     /// it, so a message left over from the previous outing is ignored rather
@@ -59,6 +61,9 @@ public struct LoopPlanPayload: Codable, Equatable, Sendable {
     public var displayUnit: Unit
     public var plannedDistanceMeters: Double
     public var plannedDurationSeconds: Double
+    /// Optional so a plan stored by an older Watch build still decodes. Route
+    /// geometry is sent once with the plan, not repeated in live state.
+    public var plannedGeometry: [Point]?
     /// When the phone prepared this loop. The Watch shows the most recent
     /// plan, and an older one arriving late must not replace a newer one.
     public var preparedAt: Date
@@ -74,6 +79,7 @@ public struct LoopPlanPayload: Codable, Equatable, Sendable {
         displayUnit: Unit,
         plannedDistanceMeters: Double,
         plannedDurationSeconds: Double,
+        plannedGeometry: [Point]? = nil,
         preparedAt: Date = Date()
     ) {
         self.sessionID = sessionID
@@ -86,6 +92,7 @@ public struct LoopPlanPayload: Codable, Equatable, Sendable {
         self.displayUnit = displayUnit
         self.plannedDistanceMeters = plannedDistanceMeters
         self.plannedDurationSeconds = plannedDurationSeconds
+        self.plannedGeometry = plannedGeometry
         self.preparedAt = preparedAt
     }
 

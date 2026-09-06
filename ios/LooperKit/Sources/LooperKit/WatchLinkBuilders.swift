@@ -47,6 +47,7 @@ public func makeLoopPlanPayload(_ record: LoopSessionRecord, preparedAt: Date = 
         displayUnit: record.displayUnit,
         plannedDistanceMeters: record.plannedDistanceMeters,
         plannedDurationSeconds: record.plannedDurationSeconds,
+        plannedGeometry: record.plannedGeometry,
         preparedAt: preparedAt
     )
 }

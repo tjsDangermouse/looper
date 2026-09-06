@@ -60,7 +60,8 @@ private struct ControlsPage: View {
 }
 
 /// The screen the walk actually happens on. One big number, three supporting
-/// ones, and a ring for how far round the loop they are.
+/// ones, and a ring for how far round the loop they are. The adjacent guidance
+/// page owns the map, keeping this page readable at a glance.
 private struct MetricsPage: View {
     @ObservedObject var model: WatchModel
 
@@ -186,9 +187,8 @@ private struct Metric: View {
     }
 }
 
-/// How far round the loop, as a ring rather than a map. The Watch shows no
-/// route geometry at all — that is the phone's job, and a 2 cm map is no help
-/// mid-stride.
+/// How far round the loop, as a compact complement to the full-screen map on
+/// the guidance page.
 private struct ProgressRing: View {
     let fraction: Double
 

@@ -1,29 +1,71 @@
 import LooperKit
+import MapKit
 import SwiftUI
 
-/// The turn the phone says is next. Big arrow, plain words, one distance.
+/// The route and current position stay visible edge-to-edge, with the turn the
+/// phone says is next in a compact glass panel at the bottom.
 ///
 /// Everything here is rendered exactly as the phone's navigation engine
-/// decided it — no route is recalculated on the wrist, and when the phone
-/// stops being heard the screen says so instead of holding a stale turn up as
-/// if it were still true.
+/// decided it. The route line is only a visual reference: no route is
+/// recalculated on the wrist, and when the phone stops being heard the panel
+/// says so instead of holding a stale turn up as if it were still true.
 struct GuidancePage: View {
     @ObservedObject var model: WatchModel
+    @State private var cameraPosition: MapCameraPosition = .userLocation(
+        followsHeading: true,
+        fallback: .automatic
+    )
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        ZStack(alignment: .bottom) {
+            Map(position: $cameraPosition) {
+                if routeCoordinates.count > 1 {
+                    MapPolyline(coordinates: routeCoordinates)
+                        .stroke(
+                            Color.looperAccent,
+                            style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
+                        )
+                }
+                UserAnnotation()
+            }
+            .mapStyle(.standard(elevation: .flat))
+            .ignoresSafeArea()
+
+            guidancePanel
+                .padding(.horizontal, 7)
+                .padding(.bottom, 8)
+        }
+        .ignoresSafeArea()
+    }
+
+    private var routeCoordinates: [CLLocationCoordinate2D] {
+        (model.plan?.plannedGeometry ?? []).map {
+            CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)
+        }
+    }
+
+    @ViewBuilder
+    private var guidancePanel: some View {
+        Group {
             if !model.isPhoneLive {
                 Disconnected()
             } else if model.state?.offRoute == true {
                 OffRoute()
             } else if let next = model.state?.next, next.turnKind != .arrive {
                 Turning(next: next, then: model.state?.then, unit: model.plan?.displayUnit ?? .km)
-            } else if model.state?.next == nil || model.state?.next?.turnKind == .arrive {
+            } else {
                 Arriving()
             }
-            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .foregroundStyle(.white)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(.white.opacity(0.16), lineWidth: 0.5)
+        }
     }
 }
 
@@ -33,33 +75,33 @@ private struct Turning: View {
     let unit: LooperKit.Unit
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center, spacing: 8) {
                 Image(systemName: turnSymbolName(next.turnKind))
-                    .font(.system(size: 34, weight: .semibold))
+                    .font(.system(size: 30, weight: .bold))
                     .foregroundStyle(Color.looperAccent)
-                VStack(alignment: .leading, spacing: 0) {
+                    .frame(width: 34)
+
+                VStack(alignment: .leading, spacing: 1) {
                     Text(distanceText)
-                        .font(.system(.title2, design: .rounded).weight(.bold))
+                        .font(.system(.title3, design: .rounded).weight(.bold))
                         .minimumScaleFactor(0.6)
                         .lineLimit(1)
-                    Text("ahead")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
+
+                    Text(next.instruction)
+                        .font(.system(.footnote, design: .rounded).weight(.semibold))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.72)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-
-            Text(next.instruction)
-                .font(.headline)
-                .lineLimit(3)
-                .minimumScaleFactor(0.7)
-                .fixedSize(horizontal: false, vertical: true)
 
             if let then {
                 Label(then.instruction, systemImage: turnSymbolName(then.turnKind))
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .foregroundStyle(.white.opacity(0.72))
+                    .lineLimit(1)
+                    .padding(.leading, 42)
                     .accessibilityLabel("Then, \(then.instruction)")
             }
         }
@@ -78,33 +120,37 @@ private struct Turning: View {
 
 private struct OffRoute: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 9) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 30))
+                .font(.system(size: 25))
                 .foregroundStyle(.orange)
-            Text("Off route")
-                .font(.headline)
-            Text("Check your phone to get back on the loop.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Off route")
+                    .font(.headline)
+                Text("Check your iPhone for the route.")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.72))
+                    .lineLimit(2)
+            }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Off route. Check your phone to get back on the loop.")
+        .accessibilityLabel("Off route. Check your iPhone for the route.")
     }
 }
 
 private struct Arriving: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 9) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 30))
+                .font(.system(size: 25))
                 .foregroundStyle(Color.looperAccent)
-            Text("On route")
-                .font(.headline)
-            Text("No turns coming up.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("On route")
+                    .font(.headline)
+                Text("No turns coming up")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.72))
+            }
         }
         .accessibilityElement(children: .combine)
     }
@@ -114,16 +160,19 @@ private struct Arriving: View {
 /// this screen can be trusted until the phone is back.
 private struct Disconnected: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 9) {
             Image(systemName: "iphone.slash")
-                .font(.system(size: 30))
+                .font(.system(size: 25))
                 .foregroundStyle(.orange)
-            Text("No guidance")
-                .font(.headline)
-            Text("Your iPhone isn’t connected. Your workout is still recording.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("No guidance")
+                    .font(.headline)
+                Text("iPhone disconnected · Workout recording")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.72))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("No guidance. Your iPhone isn’t connected. Your workout is still recording.")

@@ -47,8 +47,10 @@ private func turn(at meters: Double, step: Int = 2, kind: Turn = .left) -> Maneu
 
 final class WatchLinkCodecTests: XCTestCase {
     func testPlanSurvivesTheRoundTrip() throws {
-        let decoded = try WatchLinkCodec.decode(try WatchLinkCodec.encode(.plan(plan())))
-        XCTAssertEqual(decoded, .plan(plan()))
+        var sent = plan()
+        sent.plannedGeometry = [Point(-4.48, 54.15), Point(-4.47, 54.16)]
+        let decoded = try WatchLinkCodec.decode(try WatchLinkCodec.encode(.plan(sent)))
+        XCTAssertEqual(decoded, .plan(sent))
     }
 
     func testStateSurvivesTheRoundTrip() throws {
@@ -268,6 +270,12 @@ final class WorkoutStatePayloadTests: XCTestCase {
         )
         record.progressMeters = progress
         return record
+    }
+
+    func testPreparedPlanIncludesDisplayGeometryForTheWatchMap() {
+        var source = record(progress: 0)
+        source.plannedGeometry = [Point(-4.48, 54.15), Point(-4.47, 54.16)]
+        XCTAssertEqual(makeLoopPlanPayload(source).plannedGeometry, source.plannedGeometry)
     }
 
     func testTheNextManoeuvreIsThePhonesAndItsDistanceIsMeasuredFromProgress() {
