@@ -190,6 +190,10 @@ final class LocalRoutingDataTests: XCTestCase {
         XCTAssertFalse(policy.canPass(nodeTags: ["barrier": "wall"]))
         XCTAssertTrue(policy.canPass(nodeTags: ["barrier": "stile"]))
         XCTAssertTrue(policy.canPass(nodeTags: ["barrier": "kissing_gate"]))
+        // A kerb is stepped over, not a barrier — blocking it severs the
+        // pavement at every dropped kerb. See PedestrianAccessPolicy.canPass.
+        XCTAssertTrue(policy.canPass(nodeTags: ["barrier": "kerb"]))
+        XCTAssertTrue(policy.canPass(nodeTags: ["barrier": "kerb", "kerb": "lowered"]))
         XCTAssertFalse(policy.canPass(nodeTags: ["access": "private"]))
     }
 

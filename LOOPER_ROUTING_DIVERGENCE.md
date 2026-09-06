@@ -573,3 +573,58 @@ returns for the same from/to. `attemptLeg`'s retry ladder (aim shorter, swing
   gate/retry logic loosened so a leg that misses its plan by 40 % doesn't sink
   the whole loop. Both are real work and should be designed and measured, not
   guessed.
+
+---
+
+## §11 — ROOT CAUSE FOUND AND FIXED: `barrier=kerb` blocked pedestrians
+
+The user's actual symptom — the loop jumping on and off the Bucks Road
+carriageway "twice in a short distance", "around areas where a side road comes
+in" — reproduced exactly with the real request (`54.154682,-4.484663` / 4 km /
+variation 813, `wanted` raised so the post-`excludes=3` candidates show).
+
+### The isolated leg
+
+Bucks Road, `[-4.48462,54.15461] → [-4.48310,54.15134]` (Rosemount jct → past
+Tynwald Street), pin-to-pin:
+
+| | distance | footway | carriageway |
+|---|---|---|---|
+| GraphHopper | 393 m | **100 %** | 0 |
+| on-device (before) | ~380 m | ~85 % | 3 hops onto the A42 (22 m + 21 m + 6 m + …) |
+| **on-device (after fix)** | **394 m** | **100 %** | **0** |
+
+### The cause
+
+`PedestrianAccessPolicy.canPass` returned **`false` for `barrier=kerb`** (it was
+in the same `case` as `wall`, `fence`, `hedge`). Confirmed on the ground: the
+node at the first carriageway hop (`54.15308,-4.48422`) is
+`barrier=kerb kerb=lowered` + `barrier=kerb kerb=raised` — an ordinary dropped
+kerb at a crossing point.
+
+`LocalWalkingGraphBuilder` ends a pavement run at any node that fails
+`canPass` and starts the next run *after* it, so **every dropped kerb severed
+the pavement into two unconnected pieces.** Kerb nodes are mapped densely on
+modern OSM pavements — at every crossing and every side-street mouth — so the
+on-device Bucks Road pavement was a string of short disconnected stubs, and the
+router bridged each gap along the A42 carriageway. That is precisely "jumps onto
+the road where a side road comes in".
+
+GraphHopper lets foot traffic through a kerb (at most a small kerb-height
+penalty, never a block).
+
+### The fix (commit pending)
+
+`canPass`: `barrier=kerb` → `true`. One line. All 262 Swift tests pass;
+`testBarrierNodes` gains a kerb assertion. The isolated Bucks Road leg goes
+100 % footway, matching GraphHopper. Loop-level pavement for the real request
+rose from ~70–86 % to 76–89 % across the offered set (production: 78/82/78 %).
+
+### Note on §7–§10
+
+§7 (leg-length fidelity) and §10 (candidate collapse) are downstream of this:
+a pavement severed every 30–50 m makes every leg longer and more contorted,
+which is what pushed the "south down Bucks Road" candidate below the distance
+gate. Re-measure those with the kerb fix in before doing any further work on
+them. §8 (`area=yes` promenades) is a separate, real, and much smaller issue —
+not the cause of the screenshots.

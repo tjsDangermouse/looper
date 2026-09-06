@@ -315,8 +315,16 @@ public struct PedestrianAccessPolicy: Sendable {
             // A gate with nothing said about it is assumed openable; a locked
             // one says so.
             return tags["locked"] != "yes"
-        case "wall", "fence", "hedge", "ditch", "guard_rail", "retaining_wall", "kerb", "yes":
+        case "wall", "fence", "hedge", "ditch", "guard_rail", "retaining_wall", "yes":
             return false
+        case "kerb":
+            // A kerb is something a walker steps over or down, not a barrier —
+            // and it is mapped at nearly every crossing and side-street mouth on
+            // a modern OSM pavement. Blocking it severs the pavement at every
+            // dropped kerb and the route falls onto the carriageway to get
+            // round the gap. GraphHopper lets foot traffic through a kerb; so
+            // do we.
+            return true
         default:
             // Stiles, kissing gates, bollards, cattle grids, chicanes: all
             // things a walker steps over or round.

@@ -411,8 +411,36 @@ final class Phase4ParityTests: XCTestCase {
                 } else { runs.append((cls, name, leg.metres)) }
             }
             print("[step0] weighted=\(weighted) total=\(Int(total.rounded()))m legs=\(routed.legs.count)")
-            for r in runs { print("  \(Int(r.m.rounded()))m  \(r.cls)  \(r.name)") }
+            for leg in routed.legs where leg.metres > 1 {
+                let a = leg.coordinates.first!, b = leg.coordinates.last!
+                let mark = leg.roadClass.isPedestrianWay ? "  " : "!!"
+                print(String(format: "  %@ %4dm %-10@ %-16@ %.5f,%.5f -> %.5f,%.5f",
+                    mark, Int(leg.metres), "\(leg.roadClass)", leg.name ?? "-", a.lat, a.lng, b.lat, b.lng))
+            }
             print("  first=\(routed.coordinates.first!) last=\(routed.coordinates.last!)")
+        }
+
+        // Why did it use the carriageway? Union-find; then for the midpoint,
+        // list the nearest footway edges and whether they share the route's
+        // component.
+        var parent = Array(0..<graph.nodeCount)
+        func find(_ x: Int) -> Int { var x = x; while parent[x] != x { parent[x] = parent[parent[x]]; x = parent[x] }; return x }
+        for e in 0..<graph.edgeCount {
+            let a = find(Int(graph.edgeFrom[e])), b = find(Int(graph.edgeTo[e]))
+            if a != b { parent[a] = b }
+        }
+        let routeComp = find(Int(graph.edgeFrom[Int(index.snap(lat: from.lat, lon: from.lng, graph: graph, maximumMetres: 50)?.edge ?? 0)]))
+        let mid = Point((from.lng + to.lng) / 2, (from.lat + to.lat) / 2)
+        var footNear: [(Int, Double, Int, String)] = []
+        for e in 0..<graph.edgeCount where graph.roadClass(ofEdge: e).isPedestrianWay {
+            let fn = graph.edgeFrom[e]
+            let p = Point(graph.nodeLon[Int(fn)], graph.nodeLat[Int(fn)])
+            let d = LocalGeo.distance(lat1: p.lat, lon1: p.lng, lat2: mid.lat, lon2: mid.lng)
+            if d < 60 { footNear.append((e, d, find(Int(fn)), graph.name(ofEdge: e) ?? "-")) }
+        }
+        print("[step0] route component=\(routeComp); footway edges within 60m of midpoint:")
+        for (e, d, comp, nm) in footNear.sorted(by: { $0.1 < $1.1 }).prefix(8) {
+            print("  edge \(e) \(Int(d))m away  \(nm)  component=\(comp)  \(comp == routeComp ? "SAME" : "DIFFERENT — unreachable")")
         }
     }
 
@@ -546,7 +574,8 @@ final class Phase4ParityTests: XCTestCase {
         for variation in variations {
         print("=== variation \(variation) ===")
         let result = try LocalLoopRouter().findRingLoops(
-            .init(lat: start.lat, lon: start.lng, targetMetres: target, variation: variation), in: graph, index: index
+            .init(lat: start.lat, lon: start.lng, targetMetres: target,
+                  wanted: env["LOOPER_WANTED"].flatMap(Int.init) ?? 3, variation: variation), in: graph, index: index
         )
         for (i, route) in result.routes.enumerated() {
             let pave = i < result.diagnostics.offeredPavement.count
@@ -574,10 +603,40 @@ final class Phase4ParityTests: XCTestCase {
         for i in 1..<max(1, runs.count) where runs[i].ped != runs[i - 1].ped { hops += 1 }
         let carriage = runs.filter { !$0.ped }.reduce(0.0) { $0 + $1.metres }
         print("[loop] route \(ri): \(runs.count) runs, \(hops) transitions, carriageway \(Int(carriage))m")
-        if carriage > 250 {
-            for r in runs where r.metres > 3 {
-                print("[loop]   \(r.ped ? "  " : "!!") \(String(format: "%4d", Int(r.metres)))m \(r.name)")
+        for r in runs where r.metres > 3 {
+            print("[loop]   \(r.ped ? "  " : "!!") \(String(format: "%4d", Int(r.metres)))m \(r.name)")
+        }
+        if env["LOOPER_DUMP_ROUTE"].flatMap(Int.init) == ri {
+            for leg in best where leg.metres > 1 {
+                let a = leg.coordinates.first!, b = leg.coordinates.last!
+                print(String(format: "[dump] %@ %4dm %-12@ %-18@ %.5f,%.5f -> %.5f,%.5f",
+                    leg.roadClass.isPedestrianWay ? "  " : "!!", Int(leg.metres),
+                    "\(leg.roadClass)", leg.name ?? "-", a.lat, a.lng, b.lat, b.lng))
             }
+        }
+        // Every carriageway run > 40 m: dump its endpoints so it can be re-run
+        // through GraphHopper, and note whether a footway sits within 20 m.
+        var footEdges2: [(Point, Point)] = []
+        for e in 0..<graph.edgeCount where graph.roadClass(ofEdge: e).isPedestrianWay {
+            footEdges2.append((Point(graph.nodeLon[Int(graph.edgeFrom[e])], graph.nodeLat[Int(graph.edgeFrom[e])]),
+                               Point(graph.nodeLon[Int(graph.edgeTo[e])], graph.nodeLat[Int(graph.edgeTo[e])])))
+        }
+        func near(_ p: Point) -> Bool {
+            footEdges2.contains { LocalGeo.distance(lat1: $0.0.lat, lon1: $0.0.lng, lat2: p.lat, lon2: p.lng) < 20
+                              || LocalGeo.distance(lat1: $0.1.lat, lon1: $0.1.lng, lat2: p.lat, lon2: p.lng) < 20 }
+        }
+        var li = 0
+        while li < best.count {
+            let leg = best[li]
+            if !leg.roadClass.isPedestrianWay && leg.metres > 3 {
+                var j = li, run = leg.metres
+                while j + 1 < best.count && !best[j + 1].roadClass.isPedestrianWay { j += 1; run += best[j].metres }
+                if run > 40, let a = best[li].coordinates.first, let b = best[j].coordinates.last {
+                    print(String(format: "[cwy] route %d  %4dm %@  from %.5f,%.5f  to %.5f,%.5f  footwayNearBothEnds=%@",
+                        ri, Int(run), best[li].name ?? "-", a.lat, a.lng, b.lat, b.lng, (near(a) && near(b)) ? "YES" : "no"))
+                }
+                li = j + 1
+            } else { li += 1 }
         }
         }
         }
