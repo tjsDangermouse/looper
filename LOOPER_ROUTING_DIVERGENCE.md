@@ -321,3 +321,85 @@ The productive next step is **not** another leg-router change — it is (3):
 eyeball `douglas-5km`'s offered loops directly. Everything upstream of the
 offered set (cost, connectivity, access, snapping) has been ruled out or shown
 not to matter to what actually gets offered.
+
+---
+
+## §7 — The trace diff (2026-09-06): the absolute answer
+
+Both loop generators were run locally against the **same** local GraphHopper
+(`:8989`) with matched `LOOPER_TRACE=1` JSON instrumentation, and
+`douglas-5km` was diffed leg by leg, candidate by candidate. Two divergences
+are now proven, and together they fully explain why the offered loops differ.
+
+### 7.1 — Fixed: `maximumSnapMetres` 500 m vs GraphHopper's 1 000 000 m
+
+`LocalLegRouter.route` defaulted to a 500 m snap ceiling; GraphHopper's
+`non_ch.max_waypoint_distance` is 1 000 000. Coastal Douglas ring aims routinely
+land 500–900 m off-network, so on-device those legs threw `nothingToSnapTo`,
+the candidate retried with a shorter/​swung aim, and ~half the candidates that
+pass remotely at corner-count 3 were failing on-device. Fixed with
+`LocalLoopRouter.ringLegSnapMetres = 1_000_000` threaded into all five ring
+`LocalLegRouter.route` calls. After the fix, `ccw-50` and `ccw-3` converge with
+remote (e.g. `ccw-50 c3`: 3764 m FAIL → 4959 m PASS, matching remote's 4930 m).
+
+### 7.2 — Irreducible: the two routing graphs are different builds of OSM
+
+The single leg `[-4.4816,54.1506] → [-4.49104,54.16039]` (ccw-331 step 0),
+routed pin-to-pin through each engine:
+
+| engine | distance | route |
+|---|---|---|
+| GraphHopper (`/route`) | **1422 m** | Hill St → Sydney Mount → Rosemount → Woodbourne Rd → Albany Rd → Brunswick Rd — all footway |
+| on-device `weighted:true` | **1456 m** | Hill St → Bucks Rd footway → Prospect Terrace → Woodbourne Rd → Albany Rd → Brunswick Rd — all footway |
+| on-device `weighted:false` | 1360 m | Hill St → **Bucks Rd carriageway (520 m)** → Woodbourne Rd carriageway → footway |
+
+Two findings:
+
+1. **`weighted:false` is the "jump into the road."** The default cost model
+   walks 520 m straight down the Bucks Road A-road carriageway. The ring router
+   already passes `weighted:true` (correct); the **waypoint / direct router
+   does not** (`LocalWaypointRouter` lines 114/156/189/404 call
+   `LocalLegRouter.route` with the default). Any non-loop on-device routing
+   still jumps into roads. This is the screenshot symptom for point-to-point.
+
+2. **Even `weighted:true` is 2.4 % longer than GraphHopper** and takes a
+   *different chain of footways* (Bucks Rd footway + Prospect Terrace where GH
+   takes Sydney Mount + Rosemount). Both are valid all-pavement routes. The
+   difference is the graph itself: GraphHopper routes over a **compiled binary
+   import of a fixed IoM `.pbf`** with its own edge segmentation, junction
+   resolution and contraction hierarchy; the device routes over a graph
+   **built live from Overpass API responses** with different segmentation and
+   no contraction. Two OSM builds of the same streets differ ~2–3 % per leg in
+   path length and occasionally pick a parallel street. **This is what "can't
+   be copied" — not the algorithm, the map.**
+
+### 7.3 — Why 2–3 % per leg produces a *different loop*, not a slightly-off loop
+
+`buildLoopIncrementally` recomputes `plannedLength = (target − running) /
+legsLeft` after every leg, and each corner aim is
+`destination(from, plannedLength · f(attempt), heading + …)`. A 34 m error on
+leg 0 shifts leg 1's planned length by ~11 m, leg 2's by more, and the errors
+accumulate in `running`. By leg 3 the drift is enough to trip `attemptLeg`'s
+`fitsBudget` check (`legMetres ≤ plannedLength × 1.4`); the retry then swings
+the aim 20° and shortens its reach to 0.8×, landing the corner ~450 m from
+where the remote engine put it. From that corner on the two loops are
+unrelated shapes — traced on `ccw-331 c3`: remote's closing leg is 1204 m,
+on-device's collapsed to 383 m.
+
+So the compounding is the mechanism, but the **root input** is 7.2: the device
+legs carry independent ±2–3 % graph error where the remote legs are exact
+(they *are* GraphHopper).
+
+### 7.4 — What this means for the parity goal
+
+- The loops will **not** be byte-identical to remote while the device builds
+  its graph from Overpass and remote routes a compiled `.pbf`. That gap is
+  structural.
+- Achievable: (a) ship 7.1 (snap ceiling — done, pending commit); (b) give the
+  waypoint router `weighted:true` so point-to-point stops using the
+  carriageway; (c) optionally widen `attemptLeg`'s overshoot tolerance on-device
+  so a 2–3 % leg error can't swing a corner aim — this trades exact-algorithm
+  fidelity for loop-shape stability, and should be measured before adopting.
+- Not worth further chasing: the specific street choice (Sydney Mount vs
+  Prospect Terrace) — both are pavement, the metric that matters
+  (`offered-loop pave %`) is unaffected by which parallel footway is taken.

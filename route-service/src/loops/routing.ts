@@ -459,6 +459,16 @@ export async function buildLoopIncrementally(
     }
 
     running += finalLeg.distanceMeters
+    if (process.env.LOOPER_TRACE) {
+      const end = finalLeg.coordinates[finalLeg.coordinates.length - 1]
+      process.stderr.write('[trace] ' + JSON.stringify({
+        ev: 'leg', id: `${direction === 'clockwise' ? 'cw' : 'ccw'}-${Math.round(initialBearing)}`, cc: cornerCount,
+        step, closing, plannedLength: Math.round(plannedLength), heading: Math.round(heading * 10) / 10,
+        aim: attempted.target.map(v => Math.round(v * 100000) / 100000),
+        endedAt: end.map((v: number) => Math.round(v * 100000) / 100000),
+        legDist: Math.round(finalLeg.distanceMeters), relaxed: finalRelaxed, running: Math.round(running),
+      }) + '\n')
+    }
     if (options.abandonAboveMetres && running > options.abandonAboveMetres) return undefined
     legs.push({ ...finalLeg, relaxed: finalRelaxed, avoidanceAreaCount: walked.length })
     walked.push(finalLeg.coordinates)

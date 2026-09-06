@@ -335,6 +335,81 @@ final class Phase4ParityTests: XCTestCase {
     /// from a Bucks Road doorstep and report how much of each offered walk is
     /// on a carriageway, and on which named ways — so a loop that walks the
     /// A42 past its own pavement shows up by name.
+    /// Run douglas-5km through the ring generator with `LOOPER_TRACE=1` so its
+    /// per-candidate trace can be diffed against the local route-service trace.
+    func testTraceDouglas5km() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["LOOPER_LIVE_OVERPASS"] == "1")
+        let start = Point(-4.4816, 54.1506)
+        let target = 5000.0
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("looper-live-chunks", isDirectory: true)
+        var endpoints = OverpassRoutingDataSource.Configuration.publicOverpassEndpoints
+        if let override = ProcessInfo.processInfo.environment["LOOPER_OVERPASS_ENDPOINT"],
+           let url = URL(string: override) { endpoints = [url] + endpoints }
+        let manager = RoutingDataManager(
+            store: RoutingChunkStore(directory: directory),
+            source: OverpassRoutingDataSource(configuration: .init(endpoints: endpoints, serverTimeoutSeconds: 120))
+        )
+        _ = try await manager.ensureCoverage(lat: start.lat, lon: start.lng, targetMetres: target)
+        let data = await manager.storedData(lat: start.lat, lon: start.lng, targetMetres: target)
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: data, minNetworkSize: LocalWalkingGraphBuilder.minNetworkSize)
+        let index = LocalEdgeIndex(graph: graph)
+        let result = try LocalLoopRouter().findRingLoops(
+            .init(lat: start.lat, lon: start.lng, targetMetres: target), in: graph, index: index
+        )
+        let d = result.diagnostics
+        FileHandle.standardError.write(Data(("[trace] " + (try! String(data: JSONSerialization.data(withJSONObject: [
+            "ev": "summary", "closedWalks": d.closedWalks, "passedGate": d.passedGate,
+            "candidatesBuilt": d.candidatesBuilt, "candidatesAbandoned": d.candidatesAbandoned,
+            "batchesRun": d.batchesRun, "offered": result.routes.count,
+            "gateRejections": d.gateRejectionsByReason,
+            "offers": result.routes.map { Int($0.distanceMeters) },
+        ], options: [.sortedKeys]), encoding: .utf8)!) + "\n").utf8))
+    }
+
+    /// The ccw-331 step-0 leg in isolation: [-4.4816,54.1506] -> [-4.49104,54.16039].
+    /// GraphHopper routes it 1422m, all footway. On-device traced 1455m. Dump the
+    /// on-device hop-by-hop geometry so the 33m divergence can be attributed.
+    func testTraceStep0Leg() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["LOOPER_LIVE_OVERPASS"] == "1")
+        let from = Point(-4.4816, 54.1506)
+        let to = Point(-4.49104, 54.16039)
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("looper-live-chunks", isDirectory: true)
+        var endpoints = OverpassRoutingDataSource.Configuration.publicOverpassEndpoints
+        if let override = ProcessInfo.processInfo.environment["LOOPER_OVERPASS_ENDPOINT"],
+           let url = URL(string: override) { endpoints = [url] + endpoints }
+        let manager = RoutingDataManager(
+            store: RoutingChunkStore(directory: directory),
+            source: OverpassRoutingDataSource(configuration: .init(endpoints: endpoints, serverTimeoutSeconds: 120))
+        )
+        _ = try await manager.ensureCoverage(lat: 54.1506, lon: -4.4816, targetMetres: 5000)
+        let data = await manager.storedData(lat: 54.1506, lon: -4.4816, targetMetres: 5000)
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: data, minNetworkSize: LocalWalkingGraphBuilder.minNetworkSize)
+        let index = LocalEdgeIndex(graph: graph)
+        let waysByID = Dictionary(data.ways.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+
+        for weighted in [false, true] {
+            let routed = try LocalLegRouter.route(
+                graph: graph, index: index, from: from, to: to,
+                weighted: weighted, maximumSnapMetres: 1_000_000
+            )
+            let total = routed.legs.reduce(0.0) { $0 + $1.metres }
+            var runs: [(cls: String, name: String, m: Double)] = []
+            for leg in routed.legs where leg.metres > 0.1 {
+                let way = leg.physical >= 0 ? waysByID[graph.edgeWayID[Int(leg.physical)]] : nil
+                let name = way?.tags["name"] ?? leg.name ?? "-"
+                let cls = "\(leg.roadClass)"
+                if let last = runs.last, last.cls == cls, last.name == name {
+                    runs[runs.count - 1].m += leg.metres
+                } else { runs.append((cls, name, leg.metres)) }
+            }
+            print("[step0] weighted=\(weighted) total=\(Int(total.rounded()))m legs=\(routed.legs.count)")
+            for r in runs { print("  \(Int(r.m.rounded()))m  \(r.cls)  \(r.name)") }
+            print("  first=\(routed.coordinates.first!) last=\(routed.coordinates.last!)")
+        }
+    }
+
     func testInvestigateBucksRoadLoop() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["LOOPER_LIVE_OVERPASS"] == "1")
         let start = Point(-4.4833, 54.1533)   // Bucks Road / Christian Road

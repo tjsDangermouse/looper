@@ -78,6 +78,15 @@ extension LocalLoopRouter {
     /// Below this the first pass was aimed well enough that re-aiming would
     /// only reshuffle it.
     public static let ringReAimThreshold = 0.05
+    /// How far a corner aim may be from the network before its leg is
+    /// unroutable. The remote generator aims corners by bearing and distance,
+    /// and for a coastal town a 1.25 km leg pointing seaward lands well off the
+    /// walkable network — GraphHopper snaps it to the nearest edge regardless
+    /// (`routing.non_ch.max_waypoint_distance: 1_000_000` in `config.yml`) and
+    /// routes there. The 500 m default made those legs fail on-device, so
+    /// `buildRingCandidate` retried with a shorter reach and the whole loop
+    /// shrank away from the remote's answer.
+    public static let ringLegSnapMetres = 1_000_000.0
 
     public enum RingDirection: Sendable, Equatable {
         case clockwise, counterClockwise
@@ -244,7 +253,8 @@ extension LocalLoopRouter {
                 var leg: LocalLegRouter.Leg
                 if let strong = try? LocalLegRouter.route(
                     graph: graph, index: index, from: from, to: aim,
-                    penalising: avoiding, penalty: LocalLegRouter.avoidPenalty, weighted: true
+                    penalising: avoiding, penalty: LocalLegRouter.avoidPenalty, weighted: true,
+                    maximumSnapMetres: LocalLoopRouter.ringLegSnapMetres
                 ), strong.metres > 0 {
                     leg = strong
                     let straightLine = LocalGeo.distance(lat1: from.lat, lon1: from.lng, lat2: aim.lat, lon2: aim.lng)
@@ -252,13 +262,15 @@ extension LocalLoopRouter {
                     if !closing, !avoiding.isEmpty, detoursRoundSomething, leg.metres > legBudget,
                        let cheaper = try? LocalLegRouter.route(
                            graph: graph, index: index, from: from, to: aim,
-                           penalising: avoiding, penalty: LocalLegRouter.relaxedAvoidPenalty, weighted: true
+                           penalising: avoiding, penalty: LocalLegRouter.relaxedAvoidPenalty, weighted: true,
+                           maximumSnapMetres: LocalLoopRouter.ringLegSnapMetres
                        ), cheaper.metres > 0, cheaper.metres < leg.metres {
                         leg = cheaper
                     }
                 } else if !avoiding.isEmpty, let relaxed = try? LocalLegRouter.route(
                     graph: graph, index: index, from: from, to: aim,
-                    penalising: avoiding, penalty: LocalLegRouter.relaxedAvoidPenalty, weighted: true
+                    penalising: avoiding, penalty: LocalLegRouter.relaxedAvoidPenalty, weighted: true,
+                    maximumSnapMetres: LocalLoopRouter.ringLegSnapMetres
                 ), relaxed.metres > 0 {
                     leg = relaxed
                 } else {
@@ -314,6 +326,21 @@ extension LocalLoopRouter {
             }
 
             running += chosen.leg.metres
+            if ProcessInfo.processInfo.environment["LOOPER_TRACE"] != nil {
+                let dir = direction == .clockwise ? "cw" : "ccw"
+                let end = chosen.leg.coordinates.last ?? chosen.target
+                let obj: [String: Any] = [
+                    "ev": "leg", "id": "\(dir)-\(Int(initialBearing.rounded()))", "cc": corners,
+                    "step": step, "closing": closing, "plannedLength": Int(planned.rounded()),
+                    "heading": (heading * 10).rounded() / 10,
+                    "aim": [(chosen.target.lng * 100000).rounded() / 100000, (chosen.target.lat * 100000).rounded() / 100000],
+                    "endedAt": [(end.lng * 100000).rounded() / 100000, (end.lat * 100000).rounded() / 100000],
+                    "legDist": Int(chosen.leg.metres.rounded()), "running": Int(running.rounded()),
+                ]
+                if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys]) {
+                    FileHandle.standardError.write(Data("[trace] ".utf8) + d + Data("\n".utf8))
+                }
+            }
             if running > abandonAbove { return nil }
             points.append(chosen.target)
             routed.append(chosen.leg)
@@ -371,13 +398,15 @@ extension LocalLoopRouter {
         let pulled = Point(placed.lon, placed.lat)
         guard let before = try? LocalLegRouter.route(
             graph: graph, index: index, from: previousCorner, to: pulled,
-            penalising: avoiding, penalty: LocalLegRouter.avoidPenalty, weighted: true
+            penalising: avoiding, penalty: LocalLegRouter.avoidPenalty, weighted: true,
+            maximumSnapMetres: LocalLoopRouter.ringLegSnapMetres
         ), before.metres > 0 else { return nil }
         var after = avoiding
         for walked in before.legs where walked.physical >= 0 { after.insert(walked.physical) }
         guard let onward = try? LocalLegRouter.route(
             graph: graph, index: index, from: pulled, to: next,
-            penalising: after, penalty: LocalLegRouter.avoidPenalty, weighted: true
+            penalising: after, penalty: LocalLegRouter.avoidPenalty, weighted: true,
+            maximumSnapMetres: LocalLoopRouter.ringLegSnapMetres
         ), onward.metres > 0 else { return nil }
         // Kept only if the pulled-in point actually straightened the join.
         guard joinTurn(before.coordinates, onward.coordinates) < turn else { return nil }
@@ -583,7 +612,7 @@ extension LocalLoopRouter {
         var fresh: [Bool] = []
 
         /// One built walk, judged. `true` when it passed and was kept.
-        func consider(_ walk: RingWalk, targetMetres: Double) -> Bool {
+        func consider(_ walk: RingWalk, targetMetres: Double, traceID: String = "?", traceCorners: Int = 0) -> Bool {
             observed.append(walk.metres)
             diagnostics.closedWalks += 1
             var coordinates = walk.coordinates
@@ -594,6 +623,20 @@ extension LocalLoopRouter {
                 traversals: traversals(of: walk.legs, origin: start),
                 legShares: walk.legShares
             )
+            if ProcessInfo.processInfo.environment["LOOPER_TRACE"] != nil {
+                let ped = walk.legs.filter(\.roadClass.isPedestrianWay).reduce(0.0) { $0 + $1.metres }
+                let legRuns = walk.legShares.map { Int(($0 * walk.metres).rounded()) }
+                let obj: [String: Any] = [
+                    "ev": "candidate", "id": traceID, "corners": traceCorners,
+                    "dist": Int(walk.metres.rounded()), "pass": report.pass,
+                    "rejections": report.rejections, "score": report.quality.score,
+                    "legDistances": legRuns,
+                    "pavePct": walk.metres > 0 ? Int((ped / walk.metres * 100).rounded()) : 0,
+                ]
+                if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys]) {
+                    FileHandle.standardError.write(Data("[trace] ".utf8) + d + Data("\n".utf8))
+                }
+            }
             guard report.pass else {
                 diagnostics.gateRejected += 1
                 for reason in report.rejections { diagnostics.gateRejectionsByReason[reason, default: 0] += 1 }
@@ -637,17 +680,29 @@ extension LocalLoopRouter {
         /// against; `targetMetres` is what the gate judges the result by, and
         /// they differ only on a re-aim.
         func sweep(variation: Int, aimMetres: Double, targetMetres: Double) {
+            let seed = LocalLoopRouter.ringSeed(
+                lon: request.lon, lat: request.lat,
+                targetMetres: targetMetres, variation: variation
+            )
             let attempts = LocalLoopRouter.ringSpreadAcrossCompass(
                 LocalLoopRouter.ringAttempts(
-                    seed: LocalLoopRouter.ringSeed(
-                        lon: request.lon, lat: request.lat,
-                        targetMetres: targetMetres, variation: variation
-                    ),
+                    seed: seed,
                     // Not `request.candidateWalks`, which is the searched
                     // engine's pool size and means something else entirely.
                     count: LocalLoopRouter.ringCandidateCount
                 )
             )
+            if ProcessInfo.processInfo.environment["LOOPER_TRACE"] != nil {
+                let list = attempts.enumerated().map { i, a -> [String: Any] in
+                    ["index": i, "dir": a.direction == .clockwise ? "clockwise" : "counter-clockwise",
+                     "bearing": (a.initialBearing * 100).rounded() / 100]
+                }
+                let obj: [String: Any] = ["ev": "attempts", "aimMetres": aimMetres,
+                    "targetMetres": targetMetres, "variation": variation, "seed": Int(seed), "list": list]
+                if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys]) {
+                    FileHandle.standardError.write(Data("[trace] ".utf8) + d + Data("\n".utf8))
+                }
+            }
             // A bearing that has already produced a walk drops out of the later
             // waves: the question "does anything work this way" has been
             // answered, and asking it again with a different corner count spends
@@ -682,11 +737,17 @@ extension LocalLoopRouter {
                         }
                         for (position, attempt) in slice.enumerated() {
                             diagnostics.candidatesBuilt += 1
+                            let traceID = "\(attempt.direction == .clockwise ? "clockwise" : "counter-clockwise")-\(Int(attempt.initialBearing.rounded()))"
                             guard let walk = built[position] else {
                                 diagnostics.candidatesAbandoned += 1
+                                if ProcessInfo.processInfo.environment["LOOPER_TRACE"] != nil {
+                                    FileHandle.standardError.write(Data("[trace] {\"ev\":\"candidate\",\"id\":\"\(traceID)\",\"corners\":\(corners),\"abandoned\":true}\n".utf8))
+                                }
                                 continue
                             }
-                            if consider(walk, targetMetres: targetMetres) { answered.insert(attempt.pair) }
+                            if consider(walk, targetMetres: targetMetres, traceID: traceID, traceCorners: corners) {
+                                answered.insert(attempt.pair)
+                            }
                         }
                         if enough() { return }
                         pending.removeAll { answered.contains($0.pair) }

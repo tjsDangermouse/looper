@@ -519,6 +519,12 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
     // Bearings with real network behind them go first. Nothing is removed —
     // see network.ts on why a probe never gets to veto a direction outright.
     let attempts = summary ? biasAttemptsToNetwork(spread, summary, qualityTarget) : spread
+    if (process.env.LOOPER_TRACE) {
+      process.stderr.write('[trace] ' + JSON.stringify({
+        ev: 'attempts', constructionTarget, qualityTarget, candidateVariation, seed,
+        list: attempts.map(a => ({ index: a.index, dir: a.direction, bearing: Math.round(a.initialBearing * 100) / 100 })),
+      }) + '\n')
+    }
     let passingCount = 0
     const timed = (loopAttempt: LoopAttempt) => metrics
       ? metrics.timeCandidate(() => buildOne(loopAttempt))
@@ -854,6 +860,29 @@ export async function generateLoops(request: LoopRequest, options: GenerateOptio
         thresholds: overrides?.quality,
       })
       if (flags.edgeOverlap) metrics?.countOverlapSource(report.overlapSource)
+      if (process.env.LOOPER_TRACE) {
+        const ped = new Set(['footway', 'path', 'pedestrian', 'steps'])
+        let onPave = 0
+        for (const leg of candidate.legs) {
+          const spans = leg.roadClasses ?? []
+          for (let i = 0; i < leg.coordinates.length - 1; i++) {
+            const a = leg.coordinates[i], b = leg.coordinates[i + 1]
+            const m = Math.hypot((a[0] - b[0]) * 71000, (a[1] - b[1]) * 111000)
+            const cls = spans.find(s => i >= s.from && i < s.to)?.roadClass
+            if (cls && ped.has(cls)) onPave += m
+          }
+        }
+        process.stderr.write('[trace] ' + JSON.stringify({
+          ev: 'candidate',
+          id: `${loopAttempt.direction}-${Math.round(loopAttempt.initialBearing)}`,
+          bearing: Math.round(loopAttempt.initialBearing * 100) / 100, dir: loopAttempt.direction,
+          corners: shape.cornerCount, dist: Math.round(candidate.distanceMeters),
+          pass: report.pass, rejections: report.rejections, score: report.quality.score,
+          legDistances: candidate.legDistances.map((d: number) => Math.round(d)),
+          pavePct: candidate.distanceMeters > 0 ? Math.round((onPave / candidate.distanceMeters) * 100) : 0,
+          points: candidate.coordinates.length,
+        }) + '\n')
+      }
       return {
         candidate,
         report,
