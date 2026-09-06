@@ -627,12 +627,20 @@ extension LocalLoopRouter {
             if ProcessInfo.processInfo.environment["LOOPER_TRACE"] != nil {
                 let ped = walk.legs.filter(\.roadClass.isPedestrianWay).reduce(0.0) { $0 + $1.metres }
                 let legRuns = walk.legShares.map { Int(($0 * walk.metres).rounded()) }
+                var carriageByName: [String: Double] = [:]
+                for leg in walk.legs where !leg.roadClass.isPedestrianWay {
+                    carriageByName[leg.name ?? "-", default: 0] += leg.metres
+                }
+                let bigCarriage = carriageByName.filter { $0.value > 60 }
+                    .sorted { $0.value > $1.value }
+                    .map { "\($0.key):\(Int($0.value))" }
                 let obj: [String: Any] = [
                     "ev": "candidate", "id": traceID, "corners": traceCorners,
                     "dist": Int(walk.metres.rounded()), "pass": report.pass,
                     "rejections": report.rejections, "score": report.quality.score,
                     "legDistances": legRuns,
                     "pavePct": walk.metres > 0 ? Int((ped / walk.metres * 100).rounded()) : 0,
+                    "carriage": bigCarriage,
                 ]
                 if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys]) {
                     FileHandle.standardError.write(Data("[trace] ".utf8) + d + Data("\n".utf8))

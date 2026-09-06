@@ -507,3 +507,69 @@ The pavement↔carriageway *hopping* was introduced by the `classSwitchPenaltyMe
 hysteresis in `796d342` / `a9dd895` and **reverted in `5731c54`**. A device build
 older than `5731c54` still has it. Confirm the installed build is newer than
 `5731c54` before treating the screenshots as a live bug.
+
+---
+
+## §10 — The exact failing request, reproduced (2026-09-06)
+
+The user supplied the app's real request from the log:
+`start=54.154682,-4.484663 targetMetres=4000 variation=813 excludes=3`.
+
+### Production vs on-device for that identical request
+
+| | offered loops | carriageway |
+|---|---|---|
+| **production** `/v1/loops` | 4099 / 3716 / 3586 m, **78 / 82 / 78 % pavement** | ≤ 133 m each; route 1 walks **497 m of Bucks Road entirely on the footway** |
+| **on-device** (same seed 2111359047, same 24 bearings) | 6 candidates pass; offered 3 carry **Central Promenade 461 m**, **Lord Street 217 m**, Ballabrooie Way/Grove 340 m of carriageway | 70 / 73 / 79 % pavement |
+
+Seed and bearings are bit-identical — the divergence is downstream.
+
+### Two distinct causes, both real
+
+**(a) §8 again — `area=yes` promenades.** The `Central Promenade: 461 m` and
+`Harris Promenade: 139 m` carriageway runs are the pedestrianised esplanade the
+on-device graph can't route across (§8). Fix: the centroid-hub in §8.
+
+**(b) NEW — on-device ring legs don't track their planned length, so good
+candidates collapse below the distance gate.** The southbound candidate
+(`cw-173` — straight down Bucks Road, the screenshot loop) **fails on-device**
+with `rej=['distance']`: it builds a crumpled 2241 m loop instead of ~4000 m.
+Its leg trace:
+
+| step | planned | legDist | running |
+|---|---|---|---|
+| 0 | 1000 | 1393 | 1393 |
+| 1 | 869 | 521 | 1348 |
+| 2 | 1326 | 750 | 2082 |
+| 3 (close) | — | 159 | 2241 |
+
+Step 1 aimed for 869 m and, after exhausting both retries (each aims
+`plannedLength × {1.0, 0.8, 0.6}`), kept a 521 m stub (`= 869 × 0.6`) — every
+attempt either blew its budget or short-backtracked into the step-0 corridor.
+From there the loop can only crumple back to the start. Production's GraphHopper
+leg for the same step finds a clean continuation that fits first try, and the
+loop builds out to 4 km and passes.
+
+So the clean "south down Bucks Road on the pavement" loop that production offers
+is **rejected on-device before it can be offered**, and the selector is left
+choosing among the carriageway-heavy survivors. The user sees the survivors.
+
+### Why the legs miss their planned length
+
+The ring builder is a faithful port; the leg *engine* under it is not GraphHopper.
+Corridor penalties (`avoidPenalty` ×20 on the previous leg's edges), the
+`weighted:true` cost, snapping, and the Overpass-vs-`.pbf` graph together make an
+on-device leg return a materially different distance and shape than GraphHopper
+returns for the same from/to. `attemptLeg`'s retry ladder (aim shorter, swing
+20°) can't rescue a leg that keeps back-tracking, so the candidate dies. This is
+§7's "2–3 % per leg" showing its worst case: on a constrained corner it is not
+2–3 %, it is 40–50 %, and it kills the candidate.
+
+### Where this leaves the parity goal
+
+- §8 centroid-hub fixes the promenade carriageway directly.
+- (b) is the hard one: it needs the on-device leg engine to return
+  GraphHopper-equivalent distances on constrained corners, or the ring builder's
+  gate/retry logic loosened so a leg that misses its plan by 40 % doesn't sink
+  the whole loop. Both are real work and should be designed and measured, not
+  guessed.
