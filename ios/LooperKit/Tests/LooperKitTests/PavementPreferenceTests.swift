@@ -126,4 +126,25 @@ final class PavementPreferenceTests: XCTestCase {
         )
         XCTAssertEqual(nonPedestrianLegs(weighted), 0)
     }
+
+    /// A shared-use promenade — `highway=cycleway` a walker is explicitly
+    /// welcome on — is walking ground, not a carriageway. The Douglas seafront
+    /// promenades are all tagged this way; classing them `.cycleway` priced
+    /// them like a road and lost half the seafront walk off "pavement".
+    func testAFootDesignatedCyclewayIsADedicatedWalkingWay() {
+        let policy = PedestrianAccessPolicy.standard
+        for foot in ["designated", "yes"] {
+            let decision = policy.decide(tags: [
+                "highway": "cycleway", "foot": foot, "bicycle": "designated", "name": "Central Promenade",
+            ])
+            XCTAssertTrue(decision.isWalkable)
+            XCTAssertTrue(decision.roadClass.isPedestrianWay, "foot=\(foot) cycleway should be a pedestrian way")
+            XCTAssertEqual(decision.weight, 1, "and it should keep full priority, not the 1.25 a carriageway gets")
+        }
+        // A segregated shared path with foot unset is still one a walker uses.
+        let segregated = policy.decide(tags: ["highway": "cycleway", "segregated": "yes"])
+        XCTAssertTrue(segregated.roadClass.isPedestrianWay)
+        // A bare cycleway with nothing said about feet stays refused.
+        XCTAssertFalse(policy.decide(tags: ["highway": "cycleway"]).isWalkable)
+    }
 }

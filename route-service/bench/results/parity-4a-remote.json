@@ -31,7 +31,7 @@
      "other": 0
     },
     "routedLegs": 215,
-    "engineMs": 3450,
+    "engineMs": 3811,
     "pavementHops": 838,
     "pavementHopMetres": 203399.35080352222,
     "pavementHopsPerKm": 4.119973818448828,
@@ -76,19 +76,19 @@
     "engineMsByAreas": {
      "0": {
       "calls": 34,
-      "ms": 455,
+      "ms": 472,
       "visitedNodes": 6986,
       "visitedNodeCalls": 34
      },
      "1-3": {
       "calls": 168,
-      "ms": 2774,
+      "ms": 3091,
       "visitedNodes": 86002,
       "visitedNodeCalls": 168
      },
      "4-7": {
       "calls": 13,
-      "ms": 221,
+      "ms": 248,
       "visitedNodes": 3794,
       "visitedNodeCalls": 13
      },
@@ -109,17 +109,17 @@
      "maxPairSharedPercent": 45.1,
      "maxPairSharedEdgePercent": 27.2
     },
-    "totalMs": 675,
+    "totalMs": 748,
     "candidateMs": {
-     "median": 184,
-     "p95": 288,
-     "max": 295
+     "median": 209,
+     "p95": 315,
+     "max": 321
     }
    }
   },
   "routes": [
    {
-    "id": "588dd4e9-67bd-46ae-a379-89f4bd3748ae",
+    "id": "106668a3-1e6a-46dc-9fc6-519117291ae0",
     "label": "North loop",
     "distanceMeters": 3011,
     "durationSeconds": 2168,
@@ -1310,7 +1310,7 @@
     }
    },
    {
-    "id": "d93dce1f-a2fb-44f1-bdde-d160e0c419dc",
+    "id": "0d541b4b-8856-41a4-b6bd-d810b176d947",
     "label": "North-west loop",
     "distanceMeters": 2768,
     "durationSeconds": 1993,
@@ -2598,7 +2598,7 @@
     }
    },
    {
-    "id": "5e65daf4-6434-418c-a648-6f8d62b1ff52",
+    "id": "5db6cb2f-7e87-4346-a7a7-40fe2613ad7c",
     "label": "South-west loop",
     "distanceMeters": 2702,
     "durationSeconds": 1954,
@@ -3806,7 +3806,7 @@
      "other": 0
     },
     "routedLegs": 225,
-    "engineMs": 3507,
+    "engineMs": 3686,
     "pavementHops": 1015,
     "pavementHopMetres": 308314.92095695937,
     "pavementHopsPerKm": 3.292088481639504,
@@ -3853,19 +3853,19 @@
     "engineMsByAreas": {
      "0": {
       "calls": 37,
-      "ms": 426,
+      "ms": 459,
       "visitedNodes": 7864,
       "visitedNodeCalls": 37
      },
      "1-3": {
       "calls": 179,
-      "ms": 2885,
+      "ms": 3019,
       "visitedNodes": 103740,
       "visitedNodeCalls": 179
      },
      "4-7": {
       "calls": 9,
-      "ms": 196,
+      "ms": 208,
       "visitedNodes": 5938,
       "visitedNodeCalls": 9
      },
@@ -3886,17 +3886,17 @@
      "maxPairSharedPercent": 12.2,
      "maxPairSharedEdgePercent": 12.2
     },
-    "totalMs": 664,
+    "totalMs": 710,
     "candidateMs": {
-     "median": 149,
-     "p95": 247,
+     "median": 162,
+     "p95": 276,
      "max": 335
     }
    }
   },
   "routes": [
    {
-    "id": "a6c9b59e-5d75-4f6f-9623-42c89f5762aa",
+    "id": "d4f13080-3940-4598-a7f8-5004b4f82540",
     "label": "North-east loop",
     "distanceMeters": 4162,
     "durationSeconds": 3048,
@@ -5566,7 +5566,7 @@
     }
    },
    {
-    "id": "99e64cd0-e87e-486e-b52f-8d9f5662c6f8",
+    "id": "ed81e89d-8e88-444b-b530-38d75ca926f8",
     "label": "North-west loop",
     "distanceMeters": 3813,
     "durationSeconds": 2767,
@@ -7221,7 +7221,7 @@
     }
    },
    {
-    "id": "e7632dca-8a48-4ae3-831c-9a3a62ce2ba0",
+    "id": "447c5d10-16bd-45e4-85cd-34a1c30ee05d",
     "label": "West loop",
     "distanceMeters": 3628,
     "durationSeconds": 2612,
@@ -8558,10 +8558,10 @@
      "other": 0
     },
     "routedLegs": 291,
-    "engineMs": 4768,
+    "engineMs": 6789,
     "pavementHops": 1623,
-    "pavementHopMetres": 595822.1859283241,
-    "pavementHopsPerKm": 2.7239670464289203,
+    "pavementHopMetres": 595822.1859283239,
+    "pavementHopsPerKm": 2.723967046428921,
     "visitedNodes": 229776,
     "visitedNodeCalls": 291,
     "candidatesBuilt": 24,
@@ -8603,19 +8603,19 @@
     "engineMsByAreas": {
      "0": {
       "calls": 47,
-      "ms": 540,
+      "ms": 836,
       "visitedNodes": 12388,
       "visitedNodeCalls": 47
      },
      "1-3": {
       "calls": 224,
-      "ms": 3934,
+      "ms": 5549,
       "visitedNodes": 212092,
       "visitedNodeCalls": 224
      },
      "4-7": {
       "calls": 20,
-      "ms": 294,
+      "ms": 404,
       "visitedNodes": 5296,
       "visitedNodeCalls": 20
      },
@@ -8636,17 +8636,17 @@
      "maxPairSharedPercent": 18.2,
      "maxPairSharedEdgePercent": 17.4
     },
-    "totalMs": 947,
+    "totalMs": 1336,
     "candidateMs": {
-     "median": 207,
-     "p95": 323,
-     "max": 359
+     "median": 309,
+     "p95": 483,
+     "max": 561
     }
    }
   },
   "routes": [
    {
-    "id": "68451f0b-9d5b-4236-b8b1-201bfcf2054d",
+    "id": "765c6654-3ff4-48f3-9bac-50fdd9736c3e",
     "label": "North-west loop",
     "distanceMeters": 5064,
     "durationSeconds": 3648,
@@ -10762,7 +10762,7 @@
     }
    },
    {
-    "id": "8111044d-fb77-456c-a1f5-f7ab28c4611d",
+    "id": "624391a5-9275-4566-85aa-b5d412a7e222",
     "label": "North loop",
     "distanceMeters": 4930,
     "durationSeconds": 3560,
@@ -12769,7 +12769,7 @@
     }
    },
    {
-    "id": "7b6e3674-9865-4e3c-92cb-402a14298c92",
+    "id": "dd0fa163-c71e-4d4d-8888-bffd1569b874",
     "label": "West loop",
     "distanceMeters": 4446,
     "durationSeconds": 3207,
@@ -14483,7 +14483,7 @@
      "other": 0
     },
     "routedLegs": 258,
-    "engineMs": 3614,
+    "engineMs": 3833,
     "pavementHops": 1443,
     "pavementHopMetres": 779636.9636494052,
     "pavementHopsPerKm": 1.8508614486997341,
@@ -14529,19 +14529,19 @@
     "engineMsByAreas": {
      "0": {
       "calls": 43,
-      "ms": 503,
+      "ms": 571,
       "visitedNodes": 12978,
       "visitedNodeCalls": 43
      },
      "1-3": {
       "calls": 204,
-      "ms": 2953,
+      "ms": 3094,
       "visitedNodes": 227760,
       "visitedNodeCalls": 204
      },
      "4-7": {
       "calls": 11,
-      "ms": 158,
+      "ms": 168,
       "visitedNodes": 4692,
       "visitedNodeCalls": 11
      },
@@ -14562,17 +14562,17 @@
      "maxPairSharedPercent": 45.8,
      "maxPairSharedEdgePercent": 45.9
     },
-    "totalMs": 717,
+    "totalMs": 757,
     "candidateMs": {
-     "median": 164,
-     "p95": 264,
-     "max": 264
+     "median": 162,
+     "p95": 291,
+     "max": 308
     }
    }
   },
   "routes": [
    {
-    "id": "23fe8e4a-5df6-4387-aa23-28971c5be30f",
+    "id": "3bf074d1-c8db-4a94-8d34-871e5dde62a4",
     "label": "West loop",
     "distanceMeters": 7975,
     "durationSeconds": 5742,
@@ -16575,7 +16575,7 @@
     }
    },
    {
-    "id": "92d35fec-7cba-4209-92f8-55dc36c01e09",
+    "id": "8f0d20f7-06c0-4c57-8636-f2e2bcb699d7",
     "label": "North-west loop",
     "distanceMeters": 8222,
     "durationSeconds": 5920,
@@ -18935,7 +18935,7 @@
     }
    },
    {
-    "id": "de2c72c2-7ecb-4f26-8bab-a3a0dbf6713d",
+    "id": "6421802a-b28c-4cc0-b58c-72f16d5d54e9",
     "label": "South-west loop",
     "distanceMeters": 8213,
     "durationSeconds": 5913,
@@ -20830,10 +20830,10 @@
      "other": 0
     },
     "routedLegs": 824,
-    "engineMs": 8257,
+    "engineMs": 9642,
     "pavementHops": 2642,
-    "pavementHopMetres": 1330591.9066660742,
-    "pavementHopsPerKm": 1.9855824966046762,
+    "pavementHopMetres": 1330591.9066660746,
+    "pavementHopsPerKm": 1.9855824966046756,
     "visitedNodes": 139070,
     "visitedNodeCalls": 785,
     "candidatesBuilt": 24,
@@ -20877,19 +20877,19 @@
     "engineMsByAreas": {
      "0": {
       "calls": 173,
-      "ms": 1330,
+      "ms": 1531,
       "visitedNodes": 13674,
       "visitedNodeCalls": 158
      },
      "1-3": {
       "calls": 542,
-      "ms": 5632,
+      "ms": 6624,
       "visitedNodes": 109186,
       "visitedNodeCalls": 518
      },
      "4-7": {
       "calls": 109,
-      "ms": 1295,
+      "ms": 1487,
       "visitedNodes": 16210,
       "visitedNodeCalls": 109
      },
@@ -20910,17 +20910,17 @@
      "maxPairSharedPercent": 23.2,
      "maxPairSharedEdgePercent": 20
     },
-    "totalMs": 1582,
+    "totalMs": 1849,
     "candidateMs": {
-     "median": 130,
-     "p95": 215,
-     "max": 240
+     "median": 147,
+     "p95": 261,
+     "max": 319
     }
    }
   },
   "routes": [
    {
-    "id": "cf0dcaa4-fa1a-4f8c-ab2c-686f8151d279",
+    "id": "3ea96c97-0e15-4fe8-971b-f9a6189647fa",
     "label": "Longer south-west loop",
     "distanceMeters": 5173,
     "durationSeconds": 3724,
@@ -22166,7 +22166,7 @@
     }
    },
    {
-    "id": "7498956e-3858-4b59-840f-9e8f4c0b5880",
+    "id": "40278dd4-fe71-41fc-8a28-cefb66bd8a27",
     "label": "East loop",
     "distanceMeters": 5060,
     "durationSeconds": 3643,
@@ -23776,7 +23776,7 @@
     }
    },
    {
-    "id": "e06728ae-abc2-45dc-9212-9b747c81e24f",
+    "id": "8a69688c-f482-4371-a0a1-6731ff76a53e",
     "label": "Shorter south-west loop",
     "distanceMeters": 4564,
     "durationSeconds": 3286,
@@ -24876,10 +24876,10 @@
      "other": 0
     },
     "routedLegs": 99,
-    "engineMs": 937,
+    "engineMs": 1121,
     "pavementHops": 420,
-    "pavementHopMetres": 161317.04892356938,
-    "pavementHopsPerKm": 2.6035685800264816,
+    "pavementHopMetres": 161317.0489235694,
+    "pavementHopsPerKm": 2.603568580026481,
     "visitedNodes": 26398,
     "visitedNodeCalls": 99,
     "candidatesBuilt": 24,
@@ -24915,19 +24915,19 @@
     "engineMsByAreas": {
      "0": {
       "calls": 20,
-      "ms": 138,
+      "ms": 146,
       "visitedNodes": 3018,
       "visitedNodeCalls": 20
      },
      "1-3": {
       "calls": 76,
-      "ms": 754,
+      "ms": 926,
       "visitedNodes": 22252,
       "visitedNodeCalls": 76
      },
      "4-7": {
       "calls": 3,
-      "ms": 45,
+      "ms": 49,
       "visitedNodes": 1128,
       "visitedNodeCalls": 3
      },
@@ -24948,17 +24948,17 @@
      "maxPairSharedPercent": 13.7,
      "maxPairSharedEdgePercent": 13.1
     },
-    "totalMs": 242,
+    "totalMs": 289,
     "candidateMs": {
-     "median": 110,
-     "p95": 142,
-     "max": 142
+     "median": 131,
+     "p95": 179,
+     "max": 179
     }
    }
   },
   "routes": [
    {
-    "id": "8044b8b4-3d91-4b37-9766-e5495f2a364f",
+    "id": "eaf6b57f-2a1d-42b7-914b-f2c941010836",
     "label": "North-east loop",
     "distanceMeters": 4758,
     "durationSeconds": 3426,
@@ -26521,7 +26521,7 @@
     }
    },
    {
-    "id": "c94e8aca-221d-41b0-b418-c690d53af8e3",
+    "id": "865f7ae3-6171-494a-9ca6-af08d3de8424",
     "label": "West loop",
     "distanceMeters": 4594,
     "durationSeconds": 3308,
@@ -27919,7 +27919,7 @@
     }
    },
    {
-    "id": "c436316a-8914-492a-bacb-aa6684e828c9",
+    "id": "5943e42c-9e73-467a-ae42-21d1e012e2fb",
     "label": "South-west loop",
     "distanceMeters": 5300,
     "durationSeconds": 3844,
@@ -29274,10 +29274,10 @@
      "other": 0
     },
     "routedLegs": 585,
-    "engineMs": 9346,
+    "engineMs": 8697,
     "pavementHops": 2738,
-    "pavementHopMetres": 882866.4843508916,
-    "pavementHopsPerKm": 3.1012616839941036,
+    "pavementHopMetres": 882866.4843508917,
+    "pavementHopsPerKm": 3.101261683994103,
     "visitedNodes": 309206,
     "visitedNodeCalls": 585,
     "candidatesBuilt": 24,
@@ -29319,19 +29319,19 @@
     "engineMsByAreas": {
      "0": {
       "calls": 126,
-      "ms": 1491,
+      "ms": 1434,
       "visitedNodes": 31706,
       "visitedNodeCalls": 126
      },
      "1-3": {
       "calls": 445,
-      "ms": 7560,
+      "ms": 6993,
       "visitedNodes": 270248,
       "visitedNodeCalls": 445
      },
      "4-7": {
       "calls": 14,
-      "ms": 295,
+      "ms": 270,
       "visitedNodes": 7252,
       "visitedNodeCalls": 14
      },
@@ -29352,17 +29352,17 @@
      "maxPairSharedPercent": 38.2,
      "maxPairSharedEdgePercent": 23.9
     },
-    "totalMs": 1955,
+    "totalMs": 1810,
     "candidateMs": {
-     "median": 165,
-     "p95": 424,
-     "max": 437
+     "median": 151,
+     "p95": 369,
+     "max": 412
     }
    }
   },
   "routes": [
    {
-    "id": "28721846-ec00-49f1-9499-f23c0b05a260",
+    "id": "3dc023ca-fe98-4986-bc72-8a628493380a",
     "label": "Longer north-west loop",
     "distanceMeters": 4066,
     "durationSeconds": 2929,
@@ -30953,7 +30953,7 @@
     }
    },
    {
-    "id": "1d3b417b-fe44-4268-89ea-d28a3b5e4a27",
+    "id": "defa2f39-1be9-41c3-ad16-e1e3a5e9698e",
     "label": "South-west loop",
     "distanceMeters": 3977,
     "durationSeconds": 2864,
@@ -32705,7 +32705,7 @@
     }
    },
    {
-    "id": "c3b99c6b-3b8a-4c77-876c-920edd1b6809",
+    "id": "8fb41875-207a-416a-8d10-e6512e6583db",
     "label": "Shorter north-west loop",
     "distanceMeters": 4004,
     "durationSeconds": 2885,
@@ -34342,7 +34342,7 @@
  "douglas-wp1-6km": {
   "routes": [
    {
-    "id": "e5b39747-3c1c-45c4-ae0f-859ca6c9cd2c",
+    "id": "031857fb-96e4-4bfd-bb9b-7971a335b15e",
     "label": "West loop",
     "distanceMeters": 6911,
     "durationSeconds": 4976,
@@ -36463,7 +36463,7 @@
      "other": 0
     },
     "routedLegs": 34,
-    "engineMs": 229,
+    "engineMs": 224,
     "pavementHops": 144,
     "pavementHopMetres": 65369.75790145679,
     "pavementHopsPerKm": 2.2028535001931053,
@@ -36507,13 +36507,13 @@
     "engineMsByAreas": {
      "0": {
       "calls": 18,
-      "ms": 74,
+      "ms": 73,
       "visitedNodes": 5282,
       "visitedNodeCalls": 18
      },
      "1-3": {
       "calls": 16,
-      "ms": 155,
+      "ms": 151,
       "visitedNodes": 22752,
       "visitedNodeCalls": 16
      },
@@ -36539,7 +36539,7 @@
      "totalUTurns": 0,
      "maxPairSharedPercent": 0
     },
-    "totalMs": 270,
+    "totalMs": 262,
     "candidateMs": {
      "median": 0,
      "p95": 0,
@@ -36552,7 +36552,7 @@
  "douglas-wp2-8km": {
   "routes": [
    {
-    "id": "fe628132-f2db-4bc9-8026-71d2df49be70",
+    "id": "03d0281e-0f94-4a6e-a326-099239a8a585",
     "label": "West loop",
     "distanceMeters": 9410,
     "durationSeconds": 6775,
@@ -39185,7 +39185,7 @@
      "other": 0
     },
     "routedLegs": 379,
-    "engineMs": 5075,
+    "engineMs": 4855,
     "pavementHops": 2169,
     "pavementHopMetres": 1146664.1852890654,
     "pavementHopsPerKm": 1.8915738607927408,
@@ -39233,19 +39233,19 @@
     "engineMsByAreas": {
      "0": {
       "calls": 90,
-      "ms": 760,
+      "ms": 771,
       "visitedNodes": 26374,
       "visitedNodeCalls": 90
      },
      "1-3": {
       "calls": 269,
-      "ms": 3963,
+      "ms": 3751,
       "visitedNodes": 356982,
       "visitedNodeCalls": 269
      },
      "4-7": {
       "calls": 20,
-      "ms": 352,
+      "ms": 333,
       "visitedNodes": 23414,
       "visitedNodeCalls": 20
      },
@@ -39265,11 +39265,11 @@
      "totalUTurns": 0,
      "maxPairSharedPercent": 0
     },
-    "totalMs": 1627,
+    "totalMs": 1592,
     "candidateMs": {
-     "median": 164,
-     "p95": 284,
-     "max": 309
+     "median": 159,
+     "p95": 254,
+     "max": 256
     }
    }
   },

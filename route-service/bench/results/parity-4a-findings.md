@@ -98,6 +98,75 @@ The ring fixtures echo it — on-device pave% is lower on every Douglas fixture
    not what is costing pavement. Sweep with `bench/probe-pavement.mjs`'s method
    once (1) is done, so the graph isn't a confound.
 
+---
+
+## 4b outcomes — pass 1 (items 1–3)
+
+### 1. C2 pavement gap → **fixed, one engine change**
+
+Not subnetwork pruning (prune 0 vs 200 was identical). The cause: the Douglas
+seafront promenades — Harris, Central, King Edward Road — are tagged
+`highway=cycleway` + `foot=designated` + `bicycle=designated`. On-device classed
+them `.cycleway`: not a pedestrian way, and priced at 1.25 like a carriageway.
+So the search took every scrappy parallel footway and the promenade — ~40–50% of
+the seafront/inland legs — counted as "not pavement". GraphHopper's deployed
+foot import routes them as footway.
+
+Fix (`PedestrianAccessPolicy.decide`): a `cycleway` with `foot=designated`/`yes`
+or `segregated=yes` is reclassified `.path` — a pedestrian way at full priority.
+A bare cycleway with nothing said about feet is still refused.
+
+Leg ceiling, before → after:
+
+| leg | pave % (gh / device) |
+|---|---|
+| douglas-seafront | 96.7 / **56.7 → 96.7** |
+| douglas-inland | 87.5 / **50.4 → 100** |
+| onchan | 70.3 / 70.3 (unchanged — no shared-path there) |
+
+Ring fixtures moved with it (`douglas-8km` pave 76 → 85, vs GH 87).
+
+> **route-service follow-up (not done here):** when GraphHopper next re-imports
+> OSM it will see the new `cycleway` tagging too; `looper_foot.json`'s priority
+> block should get the matching `foot=designated`/`segregated` → full-priority
+> rule so the two engines stay aligned.
+
+### 2. `shapeless` / spur rejection excess → **mostly a harness artifact**
+
+Remote routes ~24 candidates and stops; on-device judges a pool of up to 256
+(by design — no wire). Raw reject *counts* are therefore not comparable. The
+harness now reports **pass rate** (`bench/parity.ts` "Candidate throughput"),
+and on that measure:
+
+- `douglas-3/4/8 km`, `prom-4km`: on-device pass rate is within a few points of
+  remote (31/25/25/19% vs 29/25/19/21%). No divergence.
+- `onchan-5km`: remote routed only 4 candidates, all 4 passed, stopped — hence
+  `{}`. On-device's 21% pass rate is normal for the set. Not a divergence.
+- `douglas-5km` (9% vs 23%) and `peel-5km` (5%, and the `peel-control` leg
+  endpoint won't snap) are genuinely low. `peel-5km` is sparse/stale Peel
+  Overpass data (C2). `douglas-5km` is the one real lead — heavy `distance:30`
+  and `u-turns:8` rejections at the 5 km scale specifically; worth a targeted
+  look in a later pass, not chased here.
+
+### 3. Low `sameWalk%` on mid-size Douglas loops → **not a rule mismatch**
+
+The pavement/shape gap tracks loop divergence, not a ported rule. Proof:
+`douglas-8km` has 85% sameWalk and its pave (85.2 vs 86.6), compactness
+(0.389 vs 0.353) and u-turns all line up. `douglas-5km` has 34% sameWalk — the
+per-route best-match is [26, 34, 17]%, i.e. three genuinely different loops —
+and its pave (55 vs 84) diverges with them. Two deterministic searches with the
+same candidate-generation algorithm over two different graphs (C2) close
+different, individually valid walks. No engine change.
+
+### Net
+
+One engine change (promenade reclassification), verified. Items 2 and 3 resolve
+to "not a bug — here is why", plus harness improvements (pass-rate column,
+per-route best-match). The remaining real leads are all C2: `douglas-5km`
+candidate quality at 5 km, and Peel data currency/coverage.
+
+---
+
 ## Re-running
 
 ```

@@ -113,6 +113,8 @@ final class Phase4ParityTests: XCTestCase {
             var gateReasons: [String: Int] = [:]
             var paveShare: [Double] = []
             var paveHopsKm: [Double] = []
+            var built = 0
+            var passed = 0
 
             if fixture.waypoints.isEmpty {
                 let result = try router.findRingLoops(
@@ -125,6 +127,8 @@ final class Phase4ParityTests: XCTestCase {
                 gateReasons = result.diagnostics.gateRejectionsByReason
                 paveShare = result.diagnostics.offeredPavement.map(\.share)
                 paveHopsKm = result.diagnostics.offeredPavement.map(\.hopsPerKm)
+                built = result.diagnostics.closedWalks
+                passed = result.diagnostics.passedGate
             } else {
                 let result = try router.findWaypointLoops(
                     .init(start: fixture.point, waypoints: fixture.waypoints, targetMetres: target),
@@ -166,6 +170,8 @@ final class Phase4ParityTests: XCTestCase {
                 "worstOverlapPct": round(worstOverlap * 1000) / 10,
                 "graphNodes": build.graphNodes,
                 "graphEdges": build.graphEdges,
+                "closedWalks": built,
+                "passedGate": passed,
                 "ms": ms,
                 "gateRejections": gateReasons,
                 "routes": lines.map { line in
@@ -252,6 +258,69 @@ final class Phase4ParityTests: XCTestCase {
                 },
             ]
             try emit("[parity-leg-json]", json)
+        }
+    }
+
+    /// Why the on-device seafront/inland legs lose pavement. Prints the build
+    /// report, the routed legs with their road class, and the same leg routed
+    /// with subnetwork pruning turned off — if the pavement comes back, the
+    /// pruning is eating it.
+    func testInvestigateSeafrontPavementGap() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["LOOPER_LIVE_OVERPASS"] == "1")
+        let legs: [(id: String, from: Point, to: Point)] = [
+            ("douglas-seafront", Point(-4.4816, 54.1506), Point(-4.4693, 54.1602)),
+            ("douglas-inland", Point(-4.4750, 54.1550), Point(-4.4600, 54.1650)),
+        ]
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("looper-live-chunks", isDirectory: true)
+        var endpoints = OverpassRoutingDataSource.Configuration.publicOverpassEndpoints
+        if let override = ProcessInfo.processInfo.environment["LOOPER_OVERPASS_ENDPOINT"],
+           let url = URL(string: override) { endpoints = [url] + endpoints }
+
+        for leg in legs {
+            let mid = Point((leg.from.lng + leg.to.lng) / 2, (leg.from.lat + leg.to.lat) / 2)
+            let manager = RoutingDataManager(
+                store: RoutingChunkStore(directory: directory),
+                source: OverpassRoutingDataSource(configuration: .init(endpoints: endpoints, serverTimeoutSeconds: 120))
+            )
+            _ = try await manager.ensureCoverage(lat: mid.lat, lon: mid.lng, targetMetres: 6000)
+            let data = await manager.storedData(lat: mid.lat, lon: mid.lng, targetMetres: 6000)
+
+            let highwayHistogram = Dictionary(grouping: data.ways.compactMap { $0.tags["highway"] }, by: { $0 })
+                .mapValues(\.count).sorted { $0.value > $1.value }
+            let footwayCount = data.ways.filter { ($0.tags["highway"] == "footway" || $0.tags["highway"] == "pedestrian") }.count
+            print("[inv] \(leg.id): ways=\(data.ways.count) nodes=\(data.nodes.count) footway+pedestrian=\(footwayCount)")
+            print("[inv]   highways: \(highwayHistogram.prefix(12).map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+
+            for prune in [0, LocalWalkingGraphBuilder.minNetworkSize] {
+                let (graph, report) = LocalWalkingGraphBuilder.build(from: data, minNetworkSize: prune)
+                let index = LocalEdgeIndex(graph: graph)
+                let footEdges = (0..<graph.edgeCount).filter { graph.roadClass(ofEdge: $0).isPedestrianWay }.count
+                guard let routed = try? LocalLegRouter.route(
+                    graph: graph, index: index, from: leg.from, to: leg.to, weighted: true
+                ) else { print("[inv]   prune=\(prune): leg unroutable"); continue }
+                let total = routed.legs.reduce(0.0) { $0 + $1.metres }
+                let pave = routed.legs.filter(\.roadClass.isPedestrianWay).reduce(0.0) { $0 + $1.metres }
+                print("[inv]   prune=\(prune): graph=\(report.graphNodes)n/\(report.graphEdges)e "
+                    + "footEdges=\(footEdges) dropped=\(report.subnetworkEdgesDropped) "
+                    + "walkable=\(report.waysWalkable)/\(report.waysConsidered) "
+                    + "-> leg \(Int(total))m pave=\(Int(pave / total * 100))%")
+                if prune == 0 {
+                    let byClass = Dictionary(grouping: routed.legs, by: { "\($0.roadClass)" })
+                        .mapValues { $0.reduce(0.0) { $0 + $1.metres } }
+                        .sorted { $0.value > $1.value }
+                    print("[inv]   legs by class: " + byClass.map { "\($0.key)=\(Int($0.value))m" }.joined(separator: " "))
+                    let waysByID = Dictionary(data.ways.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                    var seen = Set<Int64>()
+                    for walkLeg in routed.legs where walkLeg.physical >= 0 && !walkLeg.roadClass.isPedestrianWay {
+                        let wayID = graph.edgeWayID[Int(walkLeg.physical)]
+                        guard seen.insert(wayID).inserted, let way = waysByID[wayID] else { continue }
+                        let tags = way.tags.sorted { $0.key < $1.key }
+                            .map { "\($0.key)=\($0.value)" }.joined(separator: " ")
+                        print("[inv]   non-ped way \(wayID) [\(Int(graph.edgeMetres[Int(walkLeg.physical)]))m of this edge]: \(tags)")
+                    }
+                }
+            }
         }
     }
 }

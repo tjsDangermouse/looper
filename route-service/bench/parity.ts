@@ -68,6 +68,8 @@ type EngineRow = {
   meanHopsPerKm: number | null
   gateRejections: Record<string, number>
   routes: LngLat[][]
+  closedWalks?: number
+  passedGate?: number
   raw?: unknown
 }
 
@@ -168,6 +170,8 @@ function readOnDevice(path: string): Map<string, EngineRow> {
       meanHopsPerKm: parsed.meanHopsPerKm ?? null,
       gateRejections: parsed.gateRejections ?? {},
       routes: parsed.routes ?? [],
+      closedWalks: parsed.closedWalks,
+      passedGate: parsed.passedGate,
     })
   }
   return rows
@@ -255,6 +259,41 @@ async function main() {
       + `| ${cell(remote.meanCompactness, d?.meanCompactness ?? null, 3)} `
       + `| ${cell(remote.worstOverlapPct, d?.worstOverlapPct ?? null)} |`,
     )
+  }
+  lines.push('')
+  lines.push('## Per-route best match (offer-set agreement)')
+  lines.push('')
+  lines.push('For each remote offer, its best geometry overlap with any on-device')
+  lines.push('offer, and vice versa. Three high numbers ⇒ the same three walks.')
+  lines.push('')
+  for (const remote of remoteRows) {
+    const d = device.get(remote.id)
+    if (!d || !remote.routes.length || !d.routes.length) continue
+    const bestFor = (line: LngLat[], pool: LngLat[][]) =>
+      Math.max(0, ...pool.map(p => Math.min(sharedCorridorMetres(line, p).fraction, sharedCorridorMetres(p, line).fraction)))
+    const r2d = remote.routes.map(r => round(bestFor(r, d.routes) * 100, 0))
+    const d2r = d.routes.map(x => round(bestFor(x, remote.routes) * 100, 0))
+    lines.push(`- **${remote.id}** — remote→device best overlap: [${r2d.join(', ')}] %  ·  device→remote: [${d2r.join(', ')}] %`)
+  }
+  lines.push('')
+  lines.push('## Candidate throughput')
+  lines.push('')
+  lines.push('Remote routes ~24 candidates and stops; on-device judges a pool of up')
+  lines.push('to 256 (by design — no wire). Compare the **pass rate**, not the raw')
+  lines.push('reject counts.')
+  lines.push('')
+  lines.push('| fixture | remote routed → passed (rate) | on-device closed → passed (rate) |')
+  lines.push('|---|---|---|')
+  for (const remote of remoteRows) {
+    const dg: any = remote.raw ?? {}
+    const rRouted = dg.routed ?? 0
+    const rPassed = dg.passed ?? 0
+    const d: any = device.get(remote.id)
+    const rRate = rRouted ? `${Math.round((rPassed / rRouted) * 100)}%` : '—'
+    const dCell = d && d.closedWalks
+      ? `${d.closedWalks} → ${d.passedGate} (${Math.round((d.passedGate / d.closedWalks) * 100)}%)`
+      : '—'
+    lines.push(`| ${remote.id} | ${rRouted} → ${rPassed} (${rRate}) | ${dCell} |`)
   }
   lines.push('')
   lines.push('## Gate rejections (histogram, per fixture)')
