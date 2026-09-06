@@ -776,6 +776,7 @@ extension LocalLoopRouter {
         for (position, index) in chosen.enumerated() {
             let entry = assembled[index]
             diagnostics.offeredPavement.append(RouteQuality.pavement(of: entry.legs))
+            diagnostics.offeredLegs.append(entry.legs)
             let seconds = entry.metres / mps
             // In time mode the walker asked in seconds, so the quoted percent
             // is the duration ratio; in distance mode it is the distance ratio.

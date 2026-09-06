@@ -2,7 +2,7 @@ import Foundation
 
 /// One stretch of the assembled walk: the ground covered by a single graph
 /// edge, in the direction it was walked.
-public struct WalkLeg: Sendable {
+public struct WalkLeg: Sendable, Equatable {
     public var coordinates: [Point]
     public var metres: Double
     public var name: String?

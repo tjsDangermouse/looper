@@ -145,6 +145,10 @@ public struct LocalLoopRouter: Sendable {
         /// `RouteQuality.pavement`: the share of the walk on ways meant for
         /// walkers, and how often it crossed between those and the carriageway.
         public var offeredPavement: [RouteQuality.PavementReport] = []
+        /// The assembled base-edge legs of each offered walk, same order as
+        /// `offeredPavement`. Development only — lets a diagnostic name the ways
+        /// a walk used. Not serialised to the app.
+        public var offeredLegs: [[WalkLeg]] = []
         public var offered = 0
         // --- The ported ring generator. Zero on the searched path. ----------
         /// Candidates the sweep tried to build.

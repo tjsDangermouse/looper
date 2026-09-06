@@ -317,16 +317,72 @@ final class Phase4ParityTests: XCTestCase {
                         .sorted { $0.value > $1.value }
                     print("[inv]   legs by class: " + byClass.map { "\($0.key)=\(Int($0.value))m" }.joined(separator: " "))
                     let waysByID = Dictionary(data.ways.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-                    var seen = Set<Int64>()
-                    for walkLeg in routed.legs where walkLeg.physical >= 0 && !walkLeg.roadClass.isPedestrianWay {
-                        let wayID = graph.edgeWayID[Int(walkLeg.physical)]
-                        guard seen.insert(wayID).inserted, let way = waysByID[wayID] else { continue }
-                        let tags = way.tags.sorted { $0.key < $1.key }
-                            .map { "\($0.key)=\($0.value)" }.joined(separator: " ")
-                        print("[inv]   non-ped way \(wayID) [\(Int(graph.edgeMetres[Int(walkLeg.physical)]))m of this edge]: \(tags)")
+                    // The full sequence, so a footway→3m carriageway→footway
+                    // stutter (a connectivity gap) shows up plainly.
+                    for walkLeg in routed.legs where walkLeg.metres > 0.5 {
+                        let way = walkLeg.physical >= 0 ? waysByID[graph.edgeWayID[Int(walkLeg.physical)]] : nil
+                        let mark = walkLeg.roadClass.isPedestrianWay ? "  " : "!!"
+                        print("[inv]   \(mark) \(String(format: "%4d", Int(walkLeg.metres)))m \(walkLeg.roadClass) "
+                            + "\(way?.tags["name"] ?? walkLeg.name ?? "-") "
+                            + "[\(way?.tags["footway"] ?? "")\(way.map { $0.tags["sidewalk"].map { " sidewalk=\($0)" } ?? "" } ?? "")]")
                     }
                 }
             }
+        }
+    }
+
+    /// The user's actual repro is a *loop*, not a leg. Generate a ring loop
+    /// from a Bucks Road doorstep and report how much of each offered walk is
+    /// on a carriageway, and on which named ways — so a loop that walks the
+    /// A42 past its own pavement shows up by name.
+    func testInvestigateBucksRoadLoop() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["LOOPER_LIVE_OVERPASS"] == "1")
+        let start = Point(-4.4833, 54.1533)   // Bucks Road / Christian Road
+        let target = 4000.0
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("looper-live-chunks", isDirectory: true)
+        var endpoints = OverpassRoutingDataSource.Configuration.publicOverpassEndpoints
+        if let override = ProcessInfo.processInfo.environment["LOOPER_OVERPASS_ENDPOINT"],
+           let url = URL(string: override) { endpoints = [url] + endpoints }
+        let manager = RoutingDataManager(
+            store: RoutingChunkStore(directory: directory),
+            source: OverpassRoutingDataSource(configuration: .init(endpoints: endpoints, serverTimeoutSeconds: 120))
+        )
+        _ = try await manager.ensureCoverage(lat: start.lat, lon: start.lng, targetMetres: target)
+        let data = await manager.storedData(lat: start.lat, lon: start.lng, targetMetres: target)
+        let (graph, _) = LocalWalkingGraphBuilder.build(
+            from: data, minNetworkSize: LocalWalkingGraphBuilder.minNetworkSize
+        )
+        let index = LocalEdgeIndex(graph: graph)
+        let waysByID = Dictionary(data.ways.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+
+        let result = try LocalLoopRouter().findRingLoops(
+            .init(lat: start.lat, lon: start.lng, targetMetres: target), in: graph, index: index
+        )
+        for (i, route) in result.routes.enumerated() {
+            let pave = i < result.diagnostics.offeredPavement.count
+                ? result.diagnostics.offeredPavement[i] : RouteQuality.PavementReport()
+            print("[loop] route \(i) \(Int(route.distanceMeters))m pave=\(Int(pave.share * 100))% hops=\(pave.hops)")
+        }
+        guard let best = result.diagnostics.offeredLegs.first else { return }
+        // Collapse consecutive legs on the same class+name so a run reads as one
+        // line; a carriageway run beside its own pavement then stands out.
+        var runs: [(ped: Bool, name: String, metres: Double)] = []
+        for leg in best where leg.metres > 0.5 {
+            let way = leg.physical >= 0 ? waysByID[graph.edgeWayID[Int(leg.physical)]] : nil
+            let name = way?.tags["name"] ?? leg.name ?? "-"
+            let ped = leg.roadClass.isPedestrianWay
+            if let last = runs.last, last.ped == ped, last.name == name {
+                runs[runs.count - 1].metres += leg.metres
+            } else {
+                runs.append((ped, name, leg.metres))
+            }
+        }
+        var hops = 0
+        for i in 1..<max(1, runs.count) where runs[i].ped != runs[i - 1].ped { hops += 1 }
+        print("[loop] route 0: \(runs.count) runs, \(hops) pavement/carriageway transitions")
+        for r in runs where r.metres > 3 {
+            print("[loop]   \(r.ped ? "  " : "!!") \(String(format: "%4d", Int(r.metres)))m \(r.name)")
         }
     }
 }

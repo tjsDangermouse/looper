@@ -177,3 +177,81 @@ OUT=$(mktemp); : > "$OUT"
 ( cd route-service && npx tsx bench/parity.ts --ondevice "$OUT" \
     && npx tsx bench/parity-legs.ts --ondevice "$OUT" )
 ```
+
+---
+
+## 4b pass 2 — reverted, re-baselined against the Bucks Road repro
+
+The user tested with `a9dd895` (hysteresis etc.) in and still saw the walk on a
+carriageway. Reverted `796d342` + the engine part of `a9dd895` (`5731c54`) and
+re-measured on the clean baseline.
+
+### The leg router is fine
+
+`bucks-road` leg (`[-4.4818,54.1512]→[-4.4842,54.1556]`, `sidewalk:both=separate`):
+
+| | metres | pave % | hops/km |
+|---|---|---|---|
+| GraphHopper | 640 | ~85 | 3.1 |
+| on-device (reverted) | 679 | 84 | 5.9 |
+
+The pavement *share* matches. The leg sequence is clean —
+`footway [sidewalk]` runs joined by `footway [crossing]` connectors, exactly
+like GraphHopper. The extra transitions are **endpoint snapping**: the start
+lands on a 7 m service stub and the end on 87 m of West View Lane (a service
+lane) rather than the parallel pavement. GraphHopper's snapper ends on footway.
+
+### A lot of the loop-level "carriageway" is correct
+
+`sidewalk:both=yes` streets (Ballabrooie Way/Avenue/Drive, Mount Bradda, …) have
+pavements that are **not separately mapped**. GraphHopper with `looper_foot.json`
+does **no** sidewalk synthesis, so it walks the carriageway centreline there
+too — 112 m of Ballabrooie Way comes back `road_class=unclassified` from
+GraphHopper. The `pave%` metric counts that against both engines equally; a
+Bucks-Road-area 4 km on-device loop that reads "64% pavement" spends ~486 m of
+its carriageway on Ballabrooie* streets where the carriageway *is* the route.
+
+### The real residual gap (reverted baseline vs remote)
+
+| fixture | pave % r/d | hops/km r/d | sameWalk % |
+|---|---|---|---|
+| douglas-3km | 72 / 61 | 4.1 / 4.8 | 74 |
+| douglas-4km | 76 / 72 | 3.3 / 4.4 | 53 |
+| douglas-5km | 84 / 55 | 2.7 / 2.8 | 36 |
+| douglas-8km | 87 / 75 | 1.9 / 3.0 | 88 |
+| douglas-prom-4km | 88 / 79 | 3.1 / 4.5 | 38 |
+
+~10–12 pts less pavement on most Douglas loops, and **~40 % more
+pavement↔carriageway transitions** — the "on and off the kerb" the user
+originally reported. This is on the **clean baseline**; the reverted changes
+were an attempt to fix it that partly backfired (the flat 15 m hysteresis).
+
+### Where it comes from (loop-router-specific — the leg router is fine)
+
+1. **Ring-anchor snapping.** The loop router routes legs to bearing/distance
+   anchors, not user pins. An anchor at a street's location snaps to whichever
+   edge is geometrically nearest — usually the carriageway centreline, not the
+   set-back pavement — so each of ~8–12 anchors contributes a carriageway stub
+   at both ends. GraphHopper's snapper does the same geometrically but its leg
+   routing pulls straight back onto the pavement; on-device keeps more of the
+   stub.
+2. **No pavement term in the quality gate** (confirmed both engines). Nothing
+   rejects or down-ranks a loop that skips available pavement; both rely purely
+   on the 0.8 priority in leg routing.
+3. Corridor avoidance (20× on prior legs' edges within 25 m) preserves the
+   pavement/carriageway *ratio* but may still tip a near-tie — needs a
+   controlled check.
+
+### Recommended next steps (for review before implementing)
+
+- **A. Pedestrian-preferring snap** (`LocalEdgeIndex.snap`): among edges within
+  a wide band of the nearest (e.g. `nearest + 15 m`, capped ~20 m), prefer a
+  pedestrian way; fall back to a carriageway only when none is near. This is
+  what GraphHopper effectively does by weighing snap candidates, and it targets
+  cause 1 directly. (The reverted 4 m bias was the right idea, too weak.)
+- **B. Pavement-adherence term in the quality gate**, added to **both**
+  `route-service/src/loops/quality.ts` and `RouteQuality` so parity holds
+  (the parity plan's Phase 5 item): down-rank / reject a loop whose pavement
+  share is well below what its ground allows.
+- **C. Re-check the corridor × ratio interaction** with a controlled leg test.
+- Do **not** re-introduce a flat per-transition penalty.
