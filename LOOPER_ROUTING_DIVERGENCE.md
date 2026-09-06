@@ -474,3 +474,36 @@ typical fetched box outside Douglas seafront (if it's ~always <20, the centroid
 hub is cheap); and whether any are large enough (a park) that a centroid hub
 routes people through a flowerbed — if so, cap by area or fall back to
 perimeter+centroid spokes.
+
+---
+
+## §9 — Bucks Road junction hops: NOT a divergence
+
+The user reports the on-device loop jumping onto the Bucks Road carriageway "twice
+in a short distance", "around areas where a side road comes in". Measured at three
+Bucks Road side-street junctions (Christian Road, Tynwald Street, Prospect
+Terrace), pavement-only path between the pavement N approach and S approach:
+
+| junction | straight | on-device pavement path | GraphHopper |
+|---|---|---|---|
+| Christian Road | 33 m | 97 m (not foot-only) | **91 m (not foot-only)** |
+| Tynwald Street | 33 m | 46 m (not foot-only) | **46 m (not foot-only)** |
+| Prospect Terrace | 39 m | 182 m (not foot-only) | **183 m (not foot-only)** |
+
+**Identical.** OSM does not map a pavement crossing across these side-street
+mouths, so *both* engines cross on the road. This is not a port bug — it is the
+map, and GraphHopper does exactly the same thing.
+
+Everything measured this session shows the current `localrouting` engine at
+parity with remote on pavement adherence:
+- Bucks Road leg, forced: on-device 11 m carriageway, GraphHopper 11 m.
+- `douglas` 4 km loops: on-device 64/59/74 % pavement, remote 57/68 %.
+- Junction crossings: identical (this section).
+- The one genuine carriageway divergence is §8 (seafront `area=yes` plazas).
+
+### Most likely explanation for the screenshots: stale install
+
+The pavement↔carriageway *hopping* was introduced by the `classSwitchPenaltyMetres`
+hysteresis in `796d342` / `a9dd895` and **reverted in `5731c54`**. A device build
+older than `5731c54` still has it. Confirm the installed build is newer than
+`5731c54` before treating the screenshots as a live bug.

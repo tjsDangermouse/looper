@@ -470,6 +470,52 @@ final class Phase4ParityTests: XCTestCase {
             if nearA && nearB { bridged += 1 }
         }
         print("[bucks] \(primaryEndpoints.count) Bucks Road carriageway edges; \(bridged) have footway within 20 m of BOTH ends (pavement present, not connected)")
+
+        // Route the screenshot leg on-device (weighted) and, for each carriageway
+        // hop, report whether a footway-only path across it exists and how long.
+        let idx = LocalEdgeIndex(graph: graph)
+        let routed = try LocalLegRouter.route(
+            graph: graph, index: idx,
+            from: Point(-4.48093, 54.15472), to: Point(-4.48189, 54.15083),
+            weighted: true, maximumSnapMetres: 1_000_000)
+        print("[bucks] screenshot leg on-device: \(Int(routed.legs.reduce(0){$0+$1.metres}))m")
+        // At three Bucks Road side-street junctions, the pavement N approach and
+        // S approach a few metres apart: how far is the shortest footway-only
+        // path between them? ~5 m = a crossing edge exists. 40 m+ = the only
+        // pavement connection is a detour and the router will cut the mouth on
+        // the carriageway instead.
+        let junctions: [(String, Point, Point)] = [
+            ("Christian Road",  Point(-4.48247, 54.15330), Point(-4.48250, 54.15300)),
+            ("Tynwald Street",  Point(-4.48300, 54.15230), Point(-4.48310, 54.15200)),
+            ("Prospect Terr.",  Point(-4.48090, 54.15490), Point(-4.48095, 54.15455)),
+        ]
+        for (nm, n, s) in junctions {
+            let r = try? LocalLegRouter.route(graph: graph, index: idx, from: n, to: s, weighted: true, maximumSnapMetres: 25)
+            let footOnly = r.map { $0.legs.allSatisfy { $0.roadClass.isPedestrianWay || $0.metres < 2 } } ?? false
+            let straight = d(n, s)
+            print("[bucks] jct \(nm): straight \(Int(straight))m — pavement path \(r.map { "\(Int($0.legs.reduce(0){$0+$1.metres}))m footOnly=\(footOnly)" } ?? "none")")
+        }
+
+        var i = 0
+        while i < routed.legs.count {
+            let leg = routed.legs[i]
+            if !leg.roadClass.isPedestrianWay && leg.metres > 3 {
+                var run = leg.metres
+                var j = i
+                while j + 1 < routed.legs.count && !routed.legs[j + 1].roadClass.isPedestrianWay {
+                    j += 1; run += routed.legs[j].metres
+                }
+                let a = routed.legs[i].coordinates.first ?? routed.coordinates.first!
+                let b = routed.legs[j].coordinates.last ?? routed.coordinates.last!
+                // shortest footway-only path a->b
+                let alt = (try? LocalLegRouter.route(
+                    graph: graph, index: idx, from: a, to: b, weighted: true,
+                    maximumSnapMetres: 30))
+                let footOnly = alt.map { r in r.legs.allSatisfy { $0.roadClass.isPedestrianWay || $0.metres < 2 } } ?? false
+                print("[bucks]   \(Int(run))m carriageway (\(leg.name ?? "-")) — footway alt: \(alt.map { "\(Int($0.legs.reduce(0){$0+$1.metres}))m footOnly=\(footOnly)" } ?? "none")")
+                i = j + 1
+            } else { i += 1 }
+        }
     }
 
     func testInvestigateBucksRoadLoop() async throws {
