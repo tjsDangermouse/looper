@@ -420,6 +420,27 @@ final class Phase4ParityTests: XCTestCase {
             print("  first=\(routed.coordinates.first!) last=\(routed.coordinates.last!)")
         }
 
+        // Corridor test: penalise only the FOOTWAY edges within 25 m of the
+        // straight line (what a sparse ring corridor does when it catches the
+        // pavement a previous leg walked but misses the carriageway beside it).
+        if e["LOOPER_PENALISE_FOOTWAY"] == "1" {
+            var pen: Set<Int32> = []
+            for edge in 0..<graph.edgeCount where graph.roadClass(ofEdge: edge).isPedestrianWay {
+                let a = Point(graph.nodeLon[Int(graph.edgeFrom[edge])], graph.nodeLat[Int(graph.edgeFrom[edge])])
+                let dToLine = min(LocalGeo.distance(lat1: a.lat, lon1: a.lng, lat2: from.lat, lon2: from.lng),
+                                  LocalGeo.distance(lat1: a.lat, lon1: a.lng, lat2: to.lat, lon2: to.lng))
+                if dToLine < 120 { pen.insert(Int32(edge)) }
+            }
+            let r = try LocalLegRouter.route(graph: graph, index: index, from: from, to: to,
+                penalising: pen, penalty: LocalLegRouter.avoidPenalty, weighted: true, maximumSnapMetres: 1_000_000)
+            let ped = r.legs.filter { $0.roadClass.isPedestrianWay }.reduce(0.0) { $0 + $1.metres }
+            let tot = r.legs.reduce(0.0) { $0 + $1.metres }
+            print("[penalise-footway] \(pen.count) footway edges penalised -> \(Int(tot))m, \(Int(ped/max(1,tot)*100))% footway")
+            for leg in r.legs where leg.metres > 2 {
+                print("  \(leg.roadClass.isPedestrianWay ? "  " : "!!") \(Int(leg.metres))m \(leg.name ?? "-")")
+            }
+        }
+
         // Why did it use the carriageway? Union-find; then for the midpoint,
         // list the nearest footway edges and whether they share the route's
         // component.

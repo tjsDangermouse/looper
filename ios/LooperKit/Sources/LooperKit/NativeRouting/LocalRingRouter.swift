@@ -456,7 +456,7 @@ extension LocalLoopRouter {
     ) -> Set<Int32> {
         guard coordinates.count >= 2 else { return [] }
         let halfWidth = LocalLoopRouter.ringCorridorHalfWidth
-        let spacing = LocalLoopRouter.ringCorridorSampleMetres
+        _ = LocalLoopRouter.ringCorridorSampleMetres
         // One frame for both sides of the comparison, so the whole thing is
         // done in metres on a plane rather than in degrees on a sphere.
         let origin = coordinates[0]
@@ -468,35 +468,53 @@ extension LocalLoopRouter {
         // corridor. A leg with nothing left outside the circle contributes
         // nothing at all, which is the right answer for a very short first leg.
         let exclusionRadius = LocalLoopRouter.ringStartExclusionMetres + halfWidth
-        let walked = RouteQuality.resample(coordinates, spacingMetres: spacing, origin: origin).samples
-            .filter { sample in
-                let dx = sample.midX - startXY.x, dy = sample.midY - startXY.y
-                return dx * dx + dy * dy >= exclusionRadius * exclusionRadius
-            }
-        guard !walked.isEmpty else { return [] }
-
-        // A hash at the corridor's own width, so a lookup only ever has to
-        // examine the nine cells around a point to be sure of finding anything
-        // within it.
-        @inline(__always) func key(_ x: Double, _ y: Double) -> Int64 {
-            Int64((x / halfWidth).rounded(.down)) &* 1_000_003
-                &+ Int64((y / halfWidth).rounded(.down))
+        // The walked line as metric segments, with the ground near the start
+        // dropped (as `buildAvoidanceAreas` drops it before buffering). The
+        // remote engine buffers the *line* into a solid polygon; a point-cloud
+        // sampled every `spacing` metres and compared point-to-point leaves
+        // gaps, and — crucially — lets the carriageway a few metres from a
+        // walked pavement fall outside the corridor while the pavement is in
+        // it, so the next leg jumps onto that carriageway to dodge the penalty.
+        // Comparing to the line's *segments* reproduces the polygon.
+        var walkedSegs: [(ax: Double, ay: Double, bx: Double, by: Double)] = []
+        let projected = coordinates.map { frame.project(lon: $0.lng, lat: $0.lat) }
+        for i in 0..<(projected.count - 1) {
+            let a = projected[i], b = projected[i + 1]
+            let mx = (a.x + b.x) / 2 - startXY.x, my = (a.y + b.y) / 2 - startXY.y
+            if mx * mx + my * my < exclusionRadius * exclusionRadius { continue }
+            walkedSegs.append((a.x, a.y, b.x, b.y))
         }
-        var buckets: [Int64: [(x: Double, y: Double)]] = [:]
-        for sample in walked {
-            buckets[key(sample.midX, sample.midY), default: []].append((sample.midX, sample.midY))
+        guard !walkedSegs.isEmpty else { return [] }
+
+        // Uniform grid over the walked segments at the corridor half-width, so
+        // a lookup only examines the nine cells around a point.
+        let cell = halfWidth
+        var buckets: [Int64: [Int]] = [:]
+        @inline(__always) func key(_ cx: Int64, _ cy: Int64) -> Int64 { cx &* 1_000_003 &+ cy }
+        for (idx, s) in walkedSegs.enumerated() {
+            let x0 = Int64((Swift.min(s.ax, s.bx) / cell).rounded(.down))
+            let x1 = Int64((Swift.max(s.ax, s.bx) / cell).rounded(.down))
+            let y0 = Int64((Swift.min(s.ay, s.by) / cell).rounded(.down))
+            let y1 = Int64((Swift.max(s.ay, s.by) / cell).rounded(.down))
+            var cx = x0
+            while cx <= x1 { var cy = y0; while cy <= y1 { buckets[key(cx, cy), default: []].append(idx); cy += 1 }; cx += 1 }
+        }
+        let hwSq = halfWidth * halfWidth
+        @inline(__always) func distSqToSeg(_ px: Double, _ py: Double, _ s: (ax: Double, ay: Double, bx: Double, by: Double)) -> Double {
+            let dx = s.bx - s.ax, dy = s.by - s.ay
+            let len = dx * dx + dy * dy
+            var t = len > 0 ? ((px - s.ax) * dx + (py - s.ay) * dy) / len : 0
+            t = Swift.max(0, Swift.min(1, t))
+            let qx = s.ax + t * dx, qy = s.ay + t * dy
+            let ex = px - qx, ey = py - qy
+            return ex * ex + ey * ey
         }
         @inline(__always) func isInside(_ x: Double, _ y: Double) -> Bool {
-            let cellX = Int64((x / halfWidth).rounded(.down))
-            let cellY = Int64((y / halfWidth).rounded(.down))
+            let cx = Int64((x / cell).rounded(.down)), cy = Int64((y / cell).rounded(.down))
             for dx in -1...1 {
                 for dy in -1...1 {
-                    guard let nearby = buckets[(cellX + Int64(dx)) &* 1_000_003 &+ (cellY + Int64(dy))]
-                    else { continue }
-                    for other in nearby {
-                        let ox = x - other.x, oy = y - other.y
-                        if ox * ox + oy * oy <= halfWidth * halfWidth { return true }
-                    }
+                    guard let ids = buckets[key(cx + Int64(dx), cy + Int64(dy))] else { continue }
+                    for id in ids where distSqToSeg(x, y, walkedSegs[id]) <= hwSq { return true }
                 }
             }
             return false
@@ -527,9 +545,27 @@ extension LocalLoopRouter {
             guard line.count >= 2 else { continue }
             // An edge counts as inside if any of it is: a street that touches
             // the corridor for a hundred metres and leaves is still a street
-            // the walk has been down.
-            let sampled = RouteQuality.resample(line, spacingMetres: spacing, origin: origin).samples
-            if sampled.contains(where: { isInside($0.midX, $0.midY) }) { corridor.insert(edge) }
+            // the walk has been down. Test the edge's own vertices and a point
+            // every few metres along it — a short segment (a kerb dropped, a
+            // crossing) must not slip between samples, or the carriageway it
+            // belongs to escapes a corridor the pavement beside it is in.
+            var hit = false
+            var prev = frame.project(lon: line[0].lng, lat: line[0].lat)
+            outer: for k in 1..<line.count {
+                let cur = frame.project(lon: line[k].lng, lat: line[k].lat)
+                if isInside(prev.x, prev.y) || isInside(cur.x, cur.y) { hit = true; break }
+                let dx = cur.x - prev.x, dy = cur.y - prev.y
+                let dist = (dx * dx + dy * dy).squareRoot()
+                if dist > 4 {
+                    let steps = Int(dist / 4)
+                    for st in 1...steps {
+                        let f = Double(st) / Double(steps + 1)
+                        if isInside(prev.x + dx * f, prev.y + dy * f) { hit = true; break outer }
+                    }
+                }
+                prev = cur
+            }
+            if hit { corridor.insert(edge) }
         }
         return corridor
     }

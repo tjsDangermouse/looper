@@ -664,3 +664,45 @@ within 20 m of both ends — and re-ran each through local GraphHopper.
   isolate: build one Brunswick Road leg with the real corridor / snap / re-aim
   from the offered loop and see which of those turns it onto the carriageway.
 - Sub-class 1 (promenades) is §8, unchanged.
+
+---
+
+## §13 — Circular Road (the user's example): the ring corridor was too sparse
+
+Reproduced the user's Circular Road screenshot: start `54.154682,-4.484663`,
+4 km, variation 24, offered route 4. That loop's Circular Road leg (west of the
+Westmoreland Road junction, toward Drinkwater Street):
+
+| | distance | footway | carriageway |
+|---|---|---|---|
+| GraphHopper (isolated leg) | 90 m | 79 m | 11 m |
+| on-device **isolated leg** | 90 m | 76 m | 14 m |
+| on-device **inside the loop** | ~85 m | **0** | **~83 m** on the A45 |
+
+The isolated leg is fine. Inside the loop it is all carriageway. Proven cause:
+penalising only the Circular Road *footway* edges (leaving the carriageway
+cheap) turns the isolated leg from 90 % footway to **6 % footway, 84 m on the
+carriageway** — exactly the loop's behaviour.
+
+That penalty is the ring corridor. `ringCorridor` sampled the walked line every
+15 m into points and asked whether a candidate edge's 15-m samples came within
+25 m of a walked *point*. A short edge (a kerb-to-kerb segment, a crossing)
+could slip between samples, and the point-to-point test made the effective
+corridor patchy — so the pavement a previous leg walked landed inside the
+corridor while the carriageway 5 m from it did not. The remote engine buffers
+the line into a solid polygon (`@turf/buffer`, 25 m), which covers both.
+
+### Fix (`<pending>`)
+
+`ringCorridor` now compares against the walked line's **segments** (point-to-
+segment distance, uniform grid) and walks each candidate edge at ≤ 4 m
+resolution testing its vertices too. This reproduces the solid buffer. Circular
+Road in the repro loop is now 100 % footway; the offered loops for the real
+request sit at 77–81 % pavement (production: 78/82/78 %). All 263 tests pass.
+
+### Still open
+
+The systematic scan still flags ~40 carriageway runs where GraphHopper stays on
+the pavement; most are §8 promenades (`area=yes`), the rest are candidates
+ranked past the first three (refresh territory). The first-three offers are now
+at production parity.
