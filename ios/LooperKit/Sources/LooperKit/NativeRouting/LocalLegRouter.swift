@@ -37,6 +37,13 @@ public enum LocalLegRouter {
     public static let avoidPenalty = 20.0
     public static let relaxedAvoidPenalty = 5.0
 
+    /// Metres of search cost charged once each time a weighted leg crosses
+    /// between a dedicated pedestrian way and a carriageway. Discourages the
+    /// block-by-block kerb-hopping the parallel-edge graph invites without
+    /// deterring a genuine, lasting move onto a road that has no pavement.
+    /// See the note at the head of the A* in `route(from:to:)`.
+    public static let classSwitchPenaltyMetres = 15.0
+
     /// One anchor-to-anchor leg, as ground.
     public struct Leg: Sendable {
         /// One entry per base edge walked, oriented the way it was walked.
@@ -197,12 +204,38 @@ public enum LocalLegRouter {
         // only the direction that half allows. Identical reasoning to
         // `LocalExploration`'s seeding, and identical consequences if got
         // wrong: a one-way alley walked the wrong way.
-        var distance = [Double](repeating: .infinity, count: graph.nodeCount)
-        var parentArc = [Int32](repeating: -1, count: graph.nodeCount)
-        var settled = [Bool](repeating: false, count: graph.nodeCount)
+        // Hysteresis against a leg hopping between a pavement and its own
+        // carriageway block by block. The remote engine's weighting has no such
+        // term, but it does not need one: the on-device graph carries a
+        // separately-mapped pavement and its road as parallel edges joined at
+        // every corner, and with only the 0.8 pavement tie-break between them
+        // the search takes whichever is a few metres shorter on each block —
+        // the walk the user sees stepping on and off the kerb. A fixed cost
+        // paid only when the walk *changes* between the two ground classes
+        // settles that near-tie toward staying put, without touching which
+        // pavement or which road it prefers. Search-only — never added to a
+        // reported distance. Zero when unweighted, where the waypoint router's
+        // U-turn detector was swept without it. Calibrate against the Phase 4
+        // GraphHopper reference run, as `looper_foot.json`'s 0.8 was.
+        let classSwitchPenalty = weighted ? LocalLegRouter.classSwitchPenaltyMetres : 0
+        let laneCount = weighted ? 2 : 1
+        @inline(__always) func isPedestrian(_ edge: Int) -> Bool {
+            graph.roadClass(ofEdge: edge).isPedestrianWay
+        }
+        /// The search state: a node, plus (when weighted) whether the walk
+        /// reached it along a dedicated pedestrian way. `lane` is 0 or 1.
+        @inline(__always) func state(_ node: Int, lane: Int) -> Int { node * laneCount + lane }
+        @inline(__always) func laneFor(_ edge: Int) -> Int { laneCount == 1 ? 0 : (isPedestrian(edge) ? 1 : 0) }
+
+        let stateCount = graph.nodeCount * laneCount
+        var distance = [Double](repeating: .infinity, count: stateCount)
+        var parentArc = [Int32](repeating: -1, count: stateCount)
+        var parentState = [Int32](repeating: -1, count: stateCount)
+        var settled = [Bool](repeating: false, count: stateCount)
         var heap = BinaryHeap()
 
         let sourceFrom = Int(graph.edgeFrom[source.edge]), sourceTo = Int(graph.edgeTo[source.edge])
+        let sourceLane = laneFor(source.edge)
         /// Which half of the source edge the walk began on, if any.
         enum Departure { case atNode(Int), towardsFrom, towardsTo }
         var departures: [(node: Int, metres: Double, departure: Departure)] = []
@@ -218,8 +251,9 @@ public enum LocalLegRouter {
         var departureOf: [Int: Departure] = [:]
         for entry in departures {
             let seed = entry.metres * sourcePenalty
-            guard seed < distance[entry.node] else { continue }
-            distance[entry.node] = seed
+            let seat = state(entry.node, lane: sourceLane)
+            guard seed < distance[seat] else { continue }
+            distance[seat] = seed
             departureOf[entry.node] = entry.departure
         }
         guard !departures.isEmpty else { throw Failure.unreachable(from: from, to: to) }
@@ -280,55 +314,77 @@ public enum LocalLegRouter {
             let dx = (graph.nodeLon[node] - goalLon) * metresPerDegreeLon
             return (dx * dx + dy * dy).squareRoot() * 0.99 - spread
         }
+        // Equal-cost paths resolve deterministically and toward the ground a
+        // walker would rather be on: a dedicated pedestrian way first, then the
+        // shorter edge, then — only to settle a remaining tie — the lower edge
+        // id. The previous rule was edge id alone; the comment claimed
+        // GraphHopper parity, but an edge id is Overpass/chunk-merge order and
+        // agrees with nothing on the remote engine, so a pavement-vs-carriageway
+        // tie broke arbitrarily and inconsistently along a route.
+        @inline(__always) func preferable(_ candidateArc: Int, over incumbentArc: Int) -> Bool {
+            let a = Int(graph.arcEdge[candidateArc]), b = Int(graph.arcEdge[incumbentArc])
+            let aPed = isPedestrian(a), bPed = isPedestrian(b)
+            if aPed != bPed { return aPed }
+            if graph.edgeMetres[a] != graph.edgeMetres[b] { return graph.edgeMetres[a] < graph.edgeMetres[b] }
+            return a < b
+        }
+
         var remaining = wanted
-        for entry in departures where distance[entry.node].isFinite {
-            heap.push(node: Int32(entry.node), key: distance[entry.node] + Swift.max(0, estimate(entry.node)))
+        for entry in departures {
+            let seat = state(entry.node, lane: sourceLane)
+            guard distance[seat].isFinite else { continue }
+            heap.push(node: Int32(seat), key: distance[seat] + Swift.max(0, estimate(entry.node)))
         }
         while let entry = heap.pop() {
-            let node = Int(entry.node)
-            if settled[node] { continue }
-            settled[node] = true
+            let seat = Int(entry.node)
+            if settled[seat] { continue }
+            settled[seat] = true
+            let node = seat / laneCount, lane = seat % laneCount
             remaining.remove(node)
             if remaining.isEmpty { break }
-            let here = distance[node]
+            let here = distance[seat]
             for arc in Int(graph.arcStart[node])..<Int(graph.arcStart[node + 1]) {
                 let next = Int(graph.arcTo[arc])
-                let step = here + cost(Int(graph.arcEdge[arc]))
-                if step < distance[next] {
-                    distance[next] = step
-                    parentArc[next] = Int32(arc)
-                    heap.push(node: Int32(next), key: step + Swift.max(0, estimate(next)))
-                } else if step == distance[next], !settled[next], parentArc[next] >= 0,
-                          graph.arcEdge[arc] < graph.arcEdge[Int(parentArc[next])] {
-                    // Equal-cost paths resolve by lower edge id, as GraphHopper's
-                    // do, so a tie between a pavement and its carriageway is
-                    // broken the same way on both engines. The node is already
-                    // queued with the right key; only the parent moves.
-                    parentArc[next] = Int32(arc)
+                let edge = Int(graph.arcEdge[arc])
+                let nextLane = laneFor(edge)
+                let switchCost = (laneCount == 2 && nextLane != lane) ? classSwitchPenalty : 0
+                let nextSeat = state(next, lane: nextLane)
+                let step = here + cost(edge) + switchCost
+                if step < distance[nextSeat] {
+                    distance[nextSeat] = step
+                    parentArc[nextSeat] = Int32(arc)
+                    parentState[nextSeat] = Int32(seat)
+                    heap.push(node: Int32(nextSeat), key: step + Swift.max(0, estimate(next)))
+                } else if step == distance[nextSeat], !settled[nextSeat], parentArc[nextSeat] >= 0,
+                          preferable(arc, over: Int(parentArc[nextSeat])) {
+                    // The state is already queued with the right key; only its
+                    // parent moves.
+                    parentArc[nextSeat] = Int32(arc)
+                    parentState[nextSeat] = Int32(seat)
                 }
             }
         }
 
-        var best: (node: Int, arrival: Arrival, key: Double)?
+        var best: (seat: Int, arrival: Arrival, key: Double)?
         for entry in arrivals {
-            guard distance[entry.node].isFinite else { continue }
-            let key = distance[entry.node] + entry.metres * targetPenalty
-            if best == nil || key < best!.key { best = (entry.node, entry.arrival, key) }
+            for lane in 0..<laneCount {
+                let seat = state(entry.node, lane: lane)
+                guard distance[seat].isFinite else { continue }
+                let key = distance[seat] + entry.metres * targetPenalty
+                if best == nil || key < best!.key { best = (seat, entry.arrival, key) }
+            }
         }
         guard let arrival = best else { throw Failure.unreachable(from: from, to: to) }
 
         // ------------------------------------------------------ read it back
         var arcs: [Int32] = []
-        var node = arrival.node
-        while parentArc[node] >= 0 {
-            let arc = parentArc[node]
-            arcs.append(arc)
-            // The arc's other end. `arcTo` is where it leads, so the node it
-            // left is whichever end of its edge is not this one.
-            let edge = Int(graph.arcEdge[Int(arc)])
-            node = graph.arcForward[Int(arc)] ? Int(graph.edgeFrom[edge]) : Int(graph.edgeTo[edge])
+        var seat = arrival.seat
+        while parentArc[seat] >= 0 {
+            arcs.append(parentArc[seat])
+            seat = Int(parentState[seat])
         }
         arcs.reverse()
+        let node = seat / laneCount
 
         var legs: [WalkLeg] = []
         if let departure = departureOf[node] {

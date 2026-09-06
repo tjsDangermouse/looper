@@ -43,6 +43,17 @@ public struct LocalEdgeIndex: Sendable {
     /// that the first ring of a query usually settles it.
     public static let defaultCellMetres: Double = 150
 
+    /// How much further a walker is assumed to tolerate standing from a mapped
+    /// pavement than from the carriageway beside it, when the two are almost
+    /// equidistant. GraphHopper's snapper weighs candidate edges by the
+    /// profile's priority; this is the same idea reduced to a metre budget, so
+    /// a request point between a separately-mapped pavement and its road snaps
+    /// to the pavement unless the road is clearly nearer. Only the *choice* of
+    /// edge is affected — `distanceMetres` in the result is always the true
+    /// perpendicular distance. Kept below a typical pavement-to-kerb offset so
+    /// a point genuinely in the carriageway still snaps to the carriageway.
+    public static let pedestrianSnapBiasMetres: Double = 4
+
     private let cellSizeLat: Double
     private let cellSizeLon: Double
     private let minLat: Double
@@ -157,15 +168,24 @@ public struct LocalEdgeIndex: Sendable {
         // tunnel/bridge, however much closer the bridge is. A prevented edge is
         // only returned when nothing else is within `maximumMetres`.
         var best: EdgeSnap?
+        /// `best`, scored with the pedestrian bias applied — what the ring
+        /// cutoff and the nearer-than test compare on. Never below the true
+        /// distance, so stopping on it can only ever be conservative.
+        var bestScore = Double.infinity
         var bestPrevented: EdgeSnap?
         var seen = Set<Int32>()
+
+        @inline(__always) func score(_ snap: EdgeSnap) -> Double {
+            snap.distanceMetres
+                + (graph.roadClass(ofEdge: snap.edge).isPedestrianWay ? 0 : LocalEdgeIndex.pedestrianSnapBiasMetres)
+        }
 
         var ring = 0
         while ring <= maximumRing {
             // Everything in this ring is at least `(ring - 1)` cells away, so
             // once the best *ordinary* find is nearer than that, no later ring
             // can beat it.
-            if let best, best.distanceMetres <= Double(ring - 1) * cellMetres { break }
+            if best != nil, bestScore <= Double(ring - 1) * cellMetres { break }
             if Double(ring - 1) * cellMetres > maximumMetres { break }
             var examined = false
             for cellY in (y - ring)...(y + ring) {
@@ -184,8 +204,12 @@ public struct LocalEdgeIndex: Sendable {
                             if bestPrevented == nil || candidate.distanceMetres < bestPrevented!.distanceMetres {
                                 bestPrevented = candidate
                             }
-                        } else if best == nil || candidate.distanceMetres < best!.distanceMetres {
-                            best = candidate
+                        } else {
+                            let candidateScore = score(candidate)
+                            if best == nil || candidateScore < bestScore {
+                                best = candidate
+                                bestScore = candidateScore
+                            }
                         }
                     }
                 }
