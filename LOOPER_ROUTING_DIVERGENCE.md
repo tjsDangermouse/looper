@@ -260,3 +260,64 @@ stub the search leaves immediately — no separate change needed.
 - No change to the cost model, the ×0.8, or the ring aim placement — those match
   remote already.
 - No new on-device-only heuristic (unlike the reverted `classSwitchPenaltyMetres`).
+
+---
+
+## 6. Implementation attempt — RESULT: §5 does not move the needle
+
+`5a` (weight the stub seeds by `edgeWeight`) was implemented and measured on the
+`Phase4ParityTests` harness. **Zero effect.** The stub metres on a real ring
+leg are only a few metres (the aim snaps close, or the search picks the near
+tower node anyway), so pricing them 1.25× vs 1.0× changes no decision. Reverted.
+
+`5b`/`5c` (the `alongOneEdge` / virtual-node work): on closer analysis the
+"same-edge carriageway with a useful parallel route" case **does not exist** —
+any node a parallel way shares with a carriageway splits that carriageway edge,
+so `source.edge == target.edge` only when the edge is one genuinely
+junction-free stretch, where the direct walk *is* correct (GraphHopper does the
+same). Not implemented.
+
+### What the implementation attempt DID uncover — §3.1 is the real mechanism for the worst legs
+
+Tracing a single leg from the Bucks Road doorstep to an aim ~500 m off the
+network in Douglas Bay: the aim's geometrically-nearest edge is
+`way 38256630 = highway=service access=private surface=concrete` — the
+**private concrete breakwater / harbour road**.
+
+- **Deployed GraphHopper** (`FootAccessParser` with `block_private = true`)
+  removes that way from routing **and from the snap filter**, so the bay aim
+  snaps to the nearest *public* edge (~500–680 m away, on land near the
+  promenade) and GraphHopper routes there almost entirely on pavement
+  (measured: 16–23% carriageway).
+- **On-device** (`PedestrianAccessPolicy` prices `access=private` at ×10 but
+  keeps it in the graph and snappable) snaps the bay aim **onto the private
+  breakwater road**, then `half()` + the A* walk a long carriageway to reach it
+  (measured: 43–65% carriageway).
+
+Blocking `access=private`/`restricted` on-device (to match deployed GraphHopper)
+was implemented and measured. It **made the offered loops slightly worse** —
+`douglas-prom-4km` lost 11 points of pavement — because it also removed private
+ways that were genuinely useful pavement links, and the bay aims then snapped to
+the *ferry* route instead (`half()` of a 130 km ferry edge = 579 m). Reverted.
+
+### Net conclusion
+
+**None of §5, nor blocking `access=private`, improves the offered-loop pavement
+share.** The garbage off-network legs (§2, §3.1) are mostly rejected by the ring
+generator's overshoot check before they reach an offered loop. The residual
+offered-loop carriageway is:
+
+1. **`sidewalk:both=yes` streets** — ~10–15 pts. GraphHopper walks these too;
+   a `pave%` metric artifact, not a divergence (§1.5).
+2. **The heuristic loop generator picking different loops than remote**
+   (`sameWalk%` 25–53% on mid-size Douglas fixtures) — the same candidate
+   algorithm over two deterministic searches on two slightly different graphs
+   fans out to different, individually-valid loops.
+3. **`douglas-5km`** — a persistent ~30-point outlier (54% vs remote's 84%) not
+   explained by any of the above. Needs the three remote offers laid beside the
+   three on-device offers, street by street.
+
+The productive next step is **not** another leg-router change — it is (3):
+eyeball `douglas-5km`'s offered loops directly. Everything upstream of the
+offered set (cost, connectivity, access, snapping) has been ruled out or shown
+not to matter to what actually gets offered.
