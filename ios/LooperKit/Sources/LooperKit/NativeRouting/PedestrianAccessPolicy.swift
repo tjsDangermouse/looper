@@ -193,21 +193,7 @@ public struct PedestrianAccessPolicy: Sendable {
             return oneway(tags: tags, roadClass: .other, reason: "ferry", weight: 1)
         }
         guard let highway = tags["highway"] else { return .blocked("no-highway-tag") }
-        var roadClass = RoadClass(highway: highway)
-        // A cycleway a walker is explicitly welcome on — `foot=designated`,
-        // `foot=yes`, or a `segregated=yes` shared path — is a dedicated
-        // walking way in all but the signpost. The Douglas seafront promenades
-        // (Harris, Central, King Edward Road) are all tagged this way, and
-        // GraphHopper's deployed foot import routes them as footway. Leaving
-        // them classed `.cycleway` priced them like a carriageway (0.8, weight
-        // 1.25), so the search took every scrappy parallel footway instead and
-        // the promenade — half the seafront walk — counted as "not pavement".
-        // Class it `.path`, which is a pedestrian way, so it keeps full
-        // priority and the pavement metrics and the class-switch hysteresis
-        // treat it as the walking ground it is.
-        if roadClass == .cycleway, foot(tags) == .allowed || tags["segregated"] == "yes" {
-            roadClass = .path
-        }
+        let roadClass = RoadClass(highway: highway)
         let cost = weight(tags: tags, roadClass: roadClass)
 
         // Terrain a walking app has no business offering. `hike_rating >= 2` is

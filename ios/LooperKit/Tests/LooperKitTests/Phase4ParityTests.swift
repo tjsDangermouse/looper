@@ -200,6 +200,11 @@ final class Phase4ParityTests: XCTestCase {
             ("douglas-inland", Point(-4.4750, 54.1550), Point(-4.4600, 54.1650)),
             ("onchan", Point(-4.4530, 54.1720), Point(-4.4400, 54.1800)),
             ("peel-control", Point(-4.7020, 54.2250), Point(-4.6900, 54.2320)),
+            // The user's repro: Bucks Road A42, Douglas. `sidewalk:both=separate`,
+            // pavements mapped as their own ways the whole length. GraphHopper
+            // walks it at ~85% pavement; on-device puts the walk on the
+            // carriageway.
+            ("bucks-road", Point(-4.4818, 54.1512), Point(-4.4842, 54.1556)),
         ]
 
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -270,6 +275,7 @@ final class Phase4ParityTests: XCTestCase {
         let legs: [(id: String, from: Point, to: Point)] = [
             ("douglas-seafront", Point(-4.4816, 54.1506), Point(-4.4693, 54.1602)),
             ("douglas-inland", Point(-4.4750, 54.1550), Point(-4.4600, 54.1650)),
+            ("bucks-road", Point(-4.4818, 54.1512), Point(-4.4842, 54.1556)),
         ]
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("looper-live-chunks", isDirectory: true)

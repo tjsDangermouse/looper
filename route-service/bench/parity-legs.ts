@@ -23,6 +23,8 @@ const LEGS: { id: string; from: LngLat; to: LngLat }[] = [
   { id: 'douglas-inland', from: [-4.475, 54.155], to: [-4.46, 54.165] },
   { id: 'onchan', from: [-4.453, 54.172], to: [-4.44, 54.18] },
   { id: 'peel-control', from: [-4.702, 54.225], to: [-4.69, 54.232] },
+  // The user's repro — Bucks Road A42, Douglas (sidewalk:both=separate).
+  { id: 'bucks-road', from: [-4.4818, 54.1512], to: [-4.4842, 54.1556] },
 ]
 
 const PEDESTRIAN = new Set(['footway', 'path', 'pedestrian', 'steps'])
