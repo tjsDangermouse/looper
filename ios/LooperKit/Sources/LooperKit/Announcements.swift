@@ -8,6 +8,33 @@ public enum Band: String {
     case now
 }
 
+/// Remembers how far through the announcement bands each manoeuvre has got.
+/// GPS can move a matched position backwards for a fix or two; once a turn has
+/// reached `now`, that noise must not make it announce `near` again. Different
+/// manoeuvres remain independent, so two close turns can both be announced.
+public struct GuidanceAnnouncementHistory {
+    private var highestBandByTurn: [Int: Int] = [:]
+
+    public init() {}
+
+    public mutating func shouldAnnounce(_ turn: TurnAnnouncementInput) -> Bool {
+        guard let band = turnBand(turn.distanceAway) else { return false }
+        let rank: Int
+        switch band {
+        case .soon: rank = 0
+        case .near: rank = 1
+        case .now: rank = 2
+        }
+        guard rank > highestBandByTurn[turn.index, default: -1] else { return false }
+        highestBandByTurn[turn.index] = rank
+        return true
+    }
+
+    public mutating func reset() {
+        highestBandByTurn.removeAll(keepingCapacity: true)
+    }
+}
+
 public func turnBand(_ metresAway: Double) -> Band? {
     if metresAway <= 5 { return .now }
     if metresAway < 120 { return .near }

@@ -121,6 +121,8 @@ final class AppModel: ObservableObject {
     private var requestSeq = 0
     private var lastAsk: (key: String, variation: Int) = ("", Int.random(in: 0..<300) * AppModel.variationStride)
     private var spoken = ""
+    private var announcementHistory = GuidanceAnnouncementHistory()
+    private var endingAfterArrival = false
     private var walked = 0.0
     private var badFixes = 0
     private var findingStageTask: Task<Void, Never>?
@@ -602,6 +604,8 @@ final class AppModel: ObservableObject {
 
         if !muted { speechManager.prime() }
         spoken = ""
+        announcementHistory.reset()
+        endingAfterArrival = false
         walked = 0
         progress = 0
         isPaused = false
@@ -614,7 +618,6 @@ final class AppModel: ObservableObject {
         routeStore.save(route)
         routeTileCache.cache(route)
         startRecording(route, id: plan.sessionID, owner: owner)
-        navigationLogger.recordRoute(route, sessionID: plan.sessionID, activity: activity, unit: unit)
         navigationLogger.log("navigation.started", details: [
             "sessionID": plan.sessionID,
             "routeID": route.id,
@@ -623,6 +626,7 @@ final class AppModel: ObservableObject {
             "muted": String(muted),
             "watchOwner": owner == .watch ? "watch" : "phone"
         ])
+        navigationLogger.recordRoute(route, sessionID: plan.sessionID, activity: activity, unit: unit)
         startWalkWatch()
         startWatchStateFeed()
     }
@@ -633,6 +637,7 @@ final class AppModel: ObservableObject {
     /// is what makes the second call a no-op.
     func endWalk() {
         guard hasActiveWalk || session?.isFinished == false else { return }
+        endingAfterArrival = false
         let finished = finishRecording()
         navigationLogger.log("navigation.ended", details: [
             "progressM": rounded(progress),
@@ -959,10 +964,7 @@ final class AppModel: ObservableObject {
                     ])
                 }
                 if record(update, on: selected) {
-                    // This is the same idempotent path used by both End
-                    // buttons. It presents the summary and tells the Watch to
-                    // finish its one canonical HealthKit workout.
-                    endWalk()
+                    announceArrivalThenEnd()
                     return
                 }
                 announceIfNeeded()
@@ -995,7 +997,7 @@ final class AppModel: ObservableObject {
         }
         if spoken == "off" { spoken = "" }
         if let turn, let announcement = turnAnnouncement(turn.announcementInput, unit: unit) {
-            if spoken != announcement.key {
+            if announcementHistory.shouldAnnounce(turn.announcementInput) {
                 spoken = announcement.key
                 navigationLogger.log("guidance.queued", details: [
                     "kind": "turn", "key": announcement.key, "text": announcement.text,
@@ -1009,10 +1011,28 @@ final class AppModel: ObservableObject {
            let selected,
            hasArrived(selected, progressMeters: progress),
            spoken != "home" {
-            spoken = "home"
-            let text = "You are back where you started."
-            navigationLogger.log("guidance.queued", details: ["kind": "arrival", "text": text, "progressM": rounded(progress)])
-            speechManager.speak(text)
+            announceArrivalThenEnd()
+        }
+    }
+
+    /// Arrival used to end the outing before `announceIfNeeded` could enqueue
+    /// its final sentence. Keep the outing alive until that sentence finishes;
+    /// manual/watch End remains immediately available and idempotent meanwhile.
+    private func announceArrivalThenEnd() {
+        guard !endingAfterArrival else { return }
+        guard screen == .walk, !muted, !isPaused else {
+            endWalk()
+            return
+        }
+        endingAfterArrival = true
+        spoken = "home"
+        let text = "You are back where you started."
+        navigationLogger.log("guidance.queued", details: [
+            "kind": "arrival", "text": text, "progressM": rounded(progress)
+        ])
+        speechManager.speak(text) { [weak self] in
+            guard let self, self.endingAfterArrival else { return }
+            self.endWalk()
         }
     }
 

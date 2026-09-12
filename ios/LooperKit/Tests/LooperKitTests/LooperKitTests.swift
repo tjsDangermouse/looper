@@ -156,6 +156,20 @@ final class WalkingMathsTests: XCTestCase {
         XCTAssertEqual(turnAnnouncement(turn, unit: .km)?.key, "2:near")
     }
 
+    func testGuidanceHistoryNeverMovesBackToAnEarlierBand() {
+        var history = GuidanceAnnouncementHistory()
+        XCTAssertTrue(history.shouldAnnounce(TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 80)))
+        XCTAssertTrue(history.shouldAnnounce(TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 4)))
+        XCTAssertFalse(history.shouldAnnounce(TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 6)))
+        XCTAssertFalse(history.shouldAnnounce(TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 3)))
+    }
+
+    func testGuidanceHistoryKeepsAdjacentTurnsIndependent() {
+        var history = GuidanceAnnouncementHistory()
+        XCTAssertTrue(history.shouldAnnounce(TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 4)))
+        XCTAssertTrue(history.shouldAnnounce(TurnAnnouncementInput(index: 3, instruction: "Turn right", distanceAway: 80)))
+    }
+
     func testSpeaksImperial() {
         let turn = TurnAnnouncementInput(index: 0, instruction: "Turn left", distanceAway: 80)
         XCTAssertEqual(turnAnnouncement(turn, unit: .mi)?.text, "In 90 yards, turn left")

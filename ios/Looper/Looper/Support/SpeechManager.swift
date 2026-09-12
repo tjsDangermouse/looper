@@ -8,6 +8,7 @@ final class SpeechManager: NSObject {
     private nonisolated(unsafe) let synthesizer = AVSpeechSynthesizer()
     private let selectedVoiceKey = "selectedVoiceIdentifier"
     private let navigationLogger: NavigationLogger
+    private var completions: [ObjectIdentifier: () -> Void] = [:]
 
     init(navigationLogger: NavigationLogger? = nil) {
         self.navigationLogger = navigationLogger ?? .shared
@@ -59,23 +60,29 @@ final class SpeechManager: NSObject {
         }
     }
 
-    func speak(_ text: String) {
-        let interrupted = synthesizer.isSpeaking
+    func speak(_ text: String, completion: (() -> Void)? = nil) {
+        let queuedBehindPrevious = synthesizer.isSpeaking
         navigationLogger.log("speech.requested", details: [
             "text": text,
-            "interruptedPrevious": String(interrupted),
+            "queuedBehindPrevious": String(queuedBehindPrevious),
+            "interruptedPrevious": "false",
             "voice": selectedVoice?.identifier ?? "system-default"
         ])
         let utterance = AVSpeechUtterance(string: text)
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         utterance.voice = selectedVoice
+        if let completion { completions[ObjectIdentifier(utterance)] = completion }
         prime()
-        synthesizer.stopSpeaking(at: .immediate)
+        // AVSpeechSynthesizer has its own FIFO. Let a close next turn wait for
+        // the current sentence instead of cutting it off and starting again.
         synthesizer.speak(utterance)
     }
 
     func stop() {
         navigationLogger.log("speech.stopRequested", details: ["wasSpeaking": String(synthesizer.isSpeaking)])
+        // A deliberate stop (pause, mute or ending by hand) owns the lifecycle;
+        // no queued completion should later try to advance it a second time.
+        completions.removeAll()
         synthesizer.stopSpeaking(at: .immediate)
         deactivate()
     }
@@ -119,14 +126,16 @@ extension SpeechManager: @preconcurrency AVSpeechSynthesizerDelegate {
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor in
             navigationLogger.log("speech.finished", details: ["text": utterance.speechString])
+            completions.removeValue(forKey: ObjectIdentifier(utterance))?()
+            if !synthesizer.isSpeaking { deactivate() }
         }
-        deactivate()
     }
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         Task { @MainActor in
             navigationLogger.log("speech.cancelled", details: ["text": utterance.speechString])
+            completions.removeValue(forKey: ObjectIdentifier(utterance))?()
+            if !synthesizer.isSpeaking { deactivate() }
         }
-        deactivate()
     }
 }

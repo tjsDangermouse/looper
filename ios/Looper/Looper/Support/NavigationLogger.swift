@@ -58,7 +58,10 @@ final class NavigationLogger: ObservableObject {
         }
     }
 
-    private static let maximumEntries = 1_500
+    /// About three hours of one-per-second fixes plus guidance events. More
+    /// importantly, the latest walk is protected below even if it exceeds this
+    /// normal history budget, so a complete diagnostic is never made partial.
+    private static let maximumEntries = 12_000
     private let recordingKey = "navigation-diagnostics-enabled"
     private let fileURL: URL
     private let routeSnapshotURL: URL
@@ -66,6 +69,10 @@ final class NavigationLogger: ObservableObject {
     private let decoder = JSONDecoder()
     private var entries: [Entry]
     private var routeSnapshot: RouteSnapshot?
+    /// Entries at and after the newest navigation start belong to one coherent
+    /// diagnosis and are never trimmed. A later walk makes the older one normal
+    /// history again and eligible for the rolling cap.
+    private var protectedSessionStart: Int?
 
     private init(fileManager: FileManager = .default) {
         let base = (try? fileManager.url(
@@ -81,6 +88,7 @@ final class NavigationLogger: ObservableObject {
         } else {
             entries = []
         }
+        protectedSessionStart = entries.lastIndex { $0.event == "navigation.started" }
         routeSnapshot = (try? Data(contentsOf: routeSnapshotURL)).flatMap { try? JSONDecoder().decode(RouteSnapshot.self, from: $0) }
         entryCount = entries.count
         isRecordingEnabled = Self.includedInThisBuild && (UserDefaults.standard.object(forKey: recordingKey) as? Bool ?? true)
@@ -90,8 +98,17 @@ final class NavigationLogger: ObservableObject {
     func log(_ event: String, details: [String: String] = [:]) {
         guard Self.includedInThisBuild, isRecordingEnabled else { return }
         entries.append(Entry(timestamp: Date(), event: event, details: details))
+        if event == "navigation.started" {
+            protectedSessionStart = entries.count - 1
+        }
         if entries.count > Self.maximumEntries {
-            entries.removeFirst(entries.count - Self.maximumEntries)
+            let overflow = entries.count - Self.maximumEntries
+            let removable = protectedSessionStart ?? entries.count
+            let removed = min(overflow, removable)
+            if removed > 0 {
+                entries.removeFirst(removed)
+                protectedSessionStart = protectedSessionStart.map { $0 - removed }
+            }
         }
         entryCount = entries.count
         persist()
@@ -103,6 +120,7 @@ final class NavigationLogger: ObservableObject {
         try? FileManager.default.removeItem(at: fileURL)
         try? FileManager.default.removeItem(at: routeSnapshotURL)
         routeSnapshot = nil
+        protectedSessionStart = nil
         log("diagnostics.cleared")
     }
 
