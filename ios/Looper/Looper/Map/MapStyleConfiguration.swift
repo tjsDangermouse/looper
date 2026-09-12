@@ -12,6 +12,10 @@ struct MapStyleChoice: Hashable, Identifiable {
     static var allCases: [MapStyleChoice] {
         [.default] + customMapStyles.map { MapStyleChoice(id: $0.id, label: $0.name, palette: $0.palette) }
     }
+
+    static var looper: MapStyleChoice {
+        allCases.first { $0.id == "looper" } ?? .default
+    }
 }
 
 enum MapStyleConfiguration {

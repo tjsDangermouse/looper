@@ -140,7 +140,7 @@ export function MapStyleEditor() {
   return <main className="style-editor">
     <div ref={mapContainer} className="style-editor-map" aria-label={`Live preview of ${active.name}`} />
     <aside className="style-editor-panel">
-      <header className="editor-header"><div><p>Looper workshop</p><h1>Style manager</h1></div><button type="button" className="editor-save" disabled={!dirty || saving} onClick={save}>{saving ? 'Saving…' : dirty ? 'Save to apps' : 'Saved'}</button><span className={dirty ? 'dirty' : ''}>{status.startsWith('Save failed:') ? status : dirty ? 'Unsaved changes' : status}</span></header>
+      <header className="editor-header"><div><p>Looper workshop</p><h1>Style manager</h1></div><button type="button" className="editor-save" disabled={!dirty || saving} onClick={save}>{saving ? 'Saving…' : dirty ? 'Save to apps' : 'Saved'}</button><span className={dirty ? 'dirty' : ''}>{status.startsWith('Save failed:') ? status : dirty ? 'Unsaved changes' : status} · <a href="/route-diagnostics">Route diagnostics</a></span></header>
       <section className="style-catalogue">
         <label><span>Map style</span><select value={active.id} onChange={event => setActiveID(event.target.value)}>{catalogue.styles.map(style => <option key={style.id} value={style.id}>{style.name}</option>)}</select></label>
         <div className="catalogue-actions"><button type="button" onClick={createStyle}>New</button><button type="button" onClick={duplicateStyle}>Duplicate</button><button type="button" disabled={catalogue.styles.length === 1} onClick={deleteStyle}>Delete</button></div>

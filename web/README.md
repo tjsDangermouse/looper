@@ -36,3 +36,12 @@ The write endpoint exists only in the local Vite development server and refuses 
 connections. Do not edit the generated TypeScript or Swift files by hand; reopen the
 editor, make the change, and save again. Restart or rebuild the iOS app after saving so
 Xcode recompiles the generated Swift package source.
+
+## Route diagnostics
+
+Open [`http://localhost:5173/route-diagnostics`](http://localhost:5173/route-diagnostics)
+on the development server. Drop in the combined navigation diagnostics JSON or the
+plain-text iOS export to compare planned and walked geometry, inspect guidance on the
+map and in the navigation ledger, and copy a focused map selection as an AI-ready JSON
+evidence bundle. Parsing and selection happen entirely in the browser; the location
+file is not uploaded to a server.

@@ -3,7 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var model = AppModel(apiBase: Config.apiBase)
-    @State private var mapStyle: MapStyleChoice = .default
+    @State private var mapStyle: MapStyleChoice = .looper
 
     var body: some View {
         Group {

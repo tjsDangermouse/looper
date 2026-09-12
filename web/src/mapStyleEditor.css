@@ -7,6 +7,7 @@
 .editor-header h1 { margin: 0; color: #fff; font-size: 25px; letter-spacing: -.04em; }
 .editor-header > span { grid-column: 1 / -1; color: #8fa198; font-size: 11px; }
 .editor-header > span.dirty { color: #e0c271; }
+.editor-header > span a { color: #b7d48f; }
 .editor-save { min-width: 102px; height: 39px; border-radius: 9px; background: #9cc36b; color: #10200f; font-size: 12px; font-weight: 750; }
 .editor-save:disabled { background: #34463f; color: #8fa198; }
 .style-catalogue { flex: none; padding: 13px 14px 14px; border-bottom: 1px solid #34463f; background: #111c18; }
