@@ -342,8 +342,8 @@ extension LocalLoopRouter {
         })
         let mps = LocalInstructions.metresPerSecond(paceMinutesPerKm: request.paceMinutesPerKm)
         var routes: [Route] = []
-        for (position, index) in chosen.enumerated() {
-            let entry = assembled[index]
+        for (position, selectedIndex) in chosen.enumerated() {
+            let entry = assembled[selectedIndex]
             let seconds = entry.metres / mps
             let actual = request.targetSeconds != nil ? seconds : entry.metres
             let requested = request.targetSeconds ?? request.targetMetres
@@ -355,7 +355,12 @@ extension LocalLoopRouter {
                 targetDifferencePercent: requested > 0 ? ((actual / requested - 1) * 100).rounded() : 0,
                 geometry: LineGeometry(coordinates: entry.coordinates),
                 steps: tidySteps(LocalInstructions.steps(for: entry.legs, paceMinutesPerKm: request.paceMinutesPerKm)),
-                routingEngine: .onDevice
+                routingEngine: .onDevice,
+                planningDiagnostics: routePlanningDiagnostics(
+                    legs: entry.legs, graph: graph, index: index,
+                    algorithm: "local-waypoint-v1", requestedStart: request.start,
+                    requestedTargetMeters: request.targetMetres, variation: request.variation
+                )
             ))
         }
         diagnostics.assembleMs = Date().timeIntervalSince(assembleBegan) * 1000

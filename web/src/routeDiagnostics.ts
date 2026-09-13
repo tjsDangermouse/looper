@@ -13,8 +13,54 @@ export type DiagnosticStep = {
   endCoordinateIndex?: number
 }
 
+export type PlanningEdgeSpan = {
+  startCoordinateIndex: number
+  endCoordinateIndex: number
+  osmWayID: number
+  fromOSMNodeID: number
+  toOSMNodeID: number
+  roadClass: string
+  road?: string
+  distanceMeters: number
+  baseWeight: number
+  avoidancePenalty: number
+}
+
+export type PlanningDecisionWitness = {
+  startCoordinateIndex: number
+  endCoordinateIndex: number
+  carriagewayMeters: number
+  selectedWeightedCost: number
+  unpenalizedAlternativeMeters?: number
+  unpenalizedAlternativeWeightedCost?: number
+  unpenalizedAlternativePedestrianPercent?: number
+  unpenalizedAlternativeOSMWayIDs: number[]
+}
+
+export type RoutePlanningDiagnostics = {
+  schemaVersion: number
+  engine: string
+  algorithm: string
+  requestedStart: [number, number]
+  requestedTargetMeters: number
+  variation: number
+  graphDataVersion: number
+  graphNodeCount: number
+  graphEdgeCount: number
+  graphChunks: Array<{ id: string; dataVersion: number; downloadedAt: string; nodeCount: number; wayCount: number }>
+  snappedStart?: [number, number]
+  candidateID?: string
+  candidateCorners?: number
+  edgeSpans: PlanningEdgeSpan[]
+  decisionWitnesses: PlanningDecisionWitness[]
+}
+
 export type RouteSnapshot = {
   capturedAt: string
+  diagnosticSchemaVersion?: number
+  appVersion?: string
+  appBuild?: string
+  sourceRevision?: string
   sessionID: string
   routeID: string
   routeName: string
@@ -23,6 +69,8 @@ export type RouteSnapshot = {
   navigationUnit: string
   advertisedDistanceMeters: number
   geometryDistanceMeters: number
+  routingEngine?: string
+  planningDiagnostics?: RoutePlanningDiagnostics
   coordinates: DiagnosticCoordinate[]
   steps: DiagnosticStep[]
 }
@@ -140,9 +188,28 @@ export function selectionBundle(diagnostic: RouteDiagnostic, bounds: Bounds) {
     const index = Number(entry.details.key?.split(':')[0])
     if (entry.coordinate && contains(bounds, entry.coordinate) && Number.isFinite(index)) stepIndices.add(index)
   }
+  const overlapsSelection = (item: { startCoordinateIndex: number; endCoordinateIndex: number }) =>
+    coordinateIndices.some(index => index >= item.startCoordinateIndex && index <= item.endCoordinateIndex)
+  const planningDiagnostics = route.planningDiagnostics ? {
+    ...route.planningDiagnostics,
+    edgeSpans: route.planningDiagnostics.edgeSpans.filter(overlapsSelection),
+    decisionWitnesses: route.planningDiagnostics.decisionWitnesses.filter(overlapsSelection),
+  } : undefined
   return {
     kind: 'looper-route-diagnostic-selection',
-    route: { sessionID: route.sessionID, routeID: route.routeID, routeName: route.routeName, advertisedDistanceMeters: route.advertisedDistanceMeters },
+    route: {
+      diagnosticSchemaVersion: route.diagnosticSchemaVersion,
+      capturedAt: route.capturedAt,
+      appVersion: route.appVersion,
+      appBuild: route.appBuild,
+      sourceRevision: route.sourceRevision,
+      sessionID: route.sessionID,
+      routeID: route.routeID,
+      routeName: route.routeName,
+      advertisedDistanceMeters: route.advertisedDistanceMeters,
+      routingEngine: route.routingEngine,
+    },
+    planningDiagnostics,
     selectedBounds: bounds,
     plannedRouteFragments: routeFragments,
     navigationSteps: route.steps.filter(step => stepIndices.has(step.index)),

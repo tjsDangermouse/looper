@@ -299,5 +299,23 @@ public func reverseRoute(_ route: Route) -> Route {
     result.reversed = !(route.reversed ?? false)
     result.steps = tidySteps(steps)
     result.geometry = LineGeometry(coordinates: route.geometry.coordinates.reversed())
+    if var diagnostics = route.planningDiagnostics, lastCoordinateIndex >= 0 {
+        diagnostics.edgeSpans = diagnostics.edgeSpans.reversed().map { span in
+            var reversed = span
+            reversed.startCoordinateIndex = lastCoordinateIndex - span.endCoordinateIndex
+            reversed.endCoordinateIndex = lastCoordinateIndex - span.startCoordinateIndex
+            reversed.fromOSMNodeID = span.toOSMNodeID
+            reversed.toOSMNodeID = span.fromOSMNodeID
+            return reversed
+        }
+        diagnostics.decisionWitnesses = diagnostics.decisionWitnesses.reversed().map { witness in
+            var reversed = witness
+            reversed.startCoordinateIndex = lastCoordinateIndex - witness.endCoordinateIndex
+            reversed.endCoordinateIndex = lastCoordinateIndex - witness.startCoordinateIndex
+            reversed.unpenalizedAlternativeOSMWayIDs.reverse()
+            return reversed
+        }
+        result.planningDiagnostics = diagnostics
+    }
     return result
 }

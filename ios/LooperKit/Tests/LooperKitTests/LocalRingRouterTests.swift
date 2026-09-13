@@ -170,6 +170,17 @@ final class LocalRingRouterTests: XCTestCase {
             XCTAssertGreaterThan(route.steps.count, 1)
             let line = route.geometry.coordinates
             XCTAssertEqual(line.first, line.last, "a loop ends where it began")
+            let planning = try XCTUnwrap(route.planningDiagnostics)
+            XCTAssertEqual(planning.schemaVersion, RoutePlanningDiagnostics.currentSchemaVersion)
+            XCTAssertEqual(planning.engine, .onDevice)
+            XCTAssertEqual(planning.algorithm, "local-ring-v1")
+            XCTAssertEqual(planning.requestedTargetMeters, 2000)
+            XCTAssertFalse(planning.edgeSpans.isEmpty)
+            XCTAssertNotNil(planning.candidateID)
+            XCTAssertNotNil(planning.candidateCorners)
+            XCTAssertTrue(planning.edgeSpans.allSatisfy {
+                $0.startCoordinateIndex >= 0 && $0.endCoordinateIndex < line.count
+            })
         }
         XCTAssertEqual(
             Set(result.routes.map(\.name)).count, result.routes.count,

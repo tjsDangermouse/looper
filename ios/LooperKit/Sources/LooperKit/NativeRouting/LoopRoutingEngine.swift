@@ -254,15 +254,21 @@ public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
             lat: request.start.lat, lon: request.start.lng,
             targetMetres: targetMetres, waypoints: request.waypoints
         )
+        let chunkMetadata = await data.chunkMetadata(
+            lat: request.start.lat, lon: request.start.lng,
+            targetMetres: targetMetres, waypoints: request.waypoints
+        )
 
         // Ordered pins are a different question from a ring, and they get a
         // different search — but the same graph, the same gate and the same
         // guarantee: no routing call leaves this device either way.
         if !request.waypoints.isEmpty {
-            return try waypointLoops(
+            var response = try waypointLoops(
                 request, targetMetres: targetMetres, paceMinutesPerKm: paceMinutesPerKm,
                 graph: graph, index: index
             )
+            response.routes = routes(response.routes, adding: chunkMetadata)
+            return response
         }
 
         // The generator the service itself answers walkers with, ported. The
@@ -291,10 +297,26 @@ public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
         // taken out of the pool before the selector saw it, which is the only
         // place removing it can actually produce a different walk.
         return LoopResponse(
-            routes: result.routes,
+            routes: routes(result.routes, adding: chunkMetadata),
             localDiagnostics: result.diagnostics,
             routingEngine: .onDevice
         )
+    }
+
+    private func routes(
+        _ routes: [Route], adding metadata: [RoutingChunkStore.ChunkMetadata]
+    ) -> [Route] {
+        let chunks = metadata.map {
+            RoutePlanningDiagnostics.GraphChunk(
+                id: $0.id.description, dataVersion: $0.dataVersion,
+                downloadedAt: $0.downloadedAt, nodeCount: $0.nodeCount, wayCount: $0.wayCount
+            )
+        }
+        return routes.map { route in
+            var route = route
+            route.planningDiagnostics?.graphChunks = chunks
+            return route
+        }
     }
 
     /// Walks through ordered pins.

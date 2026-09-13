@@ -635,7 +635,10 @@ extension LocalLoopRouter {
         let start = Point(request.lon, request.lat)
 
         var candidates: [RouteDiversity.Candidate] = []
-        var assembled: [(legs: [WalkLeg], coordinates: [Point], metres: Double, report: RouteQuality.Report)] = []
+        var assembled: [(
+            legs: [WalkLeg], coordinates: [Point], metres: Double,
+            report: RouteQuality.Report, candidateID: String, candidateCorners: Int
+        )] = []
         /// What the walks that were *built* came out at, passing or not. A pass
         /// that misses the target the same way every time is a pass that was
         /// aimed wrong, and this is what says so.
@@ -689,7 +692,10 @@ extension LocalLoopRouter {
             }
             var physical: [Int32: Double] = [:]
             for leg in walk.legs where leg.physical >= 0 { physical[leg.physical, default: 0] += leg.metres }
-            assembled.append((walk.legs, coordinates, walk.metres, report))
+            assembled.append((
+                walk.legs, coordinates, walk.metres, report,
+                traceID, traceCorners
+            ))
             let sampled = excluded.isEmpty ? nil : RouteQuality.corridor(coordinates, origin: start)
             fresh.append(sampled.map { mine in
                 excluded.allSatisfy {
@@ -879,8 +885,8 @@ extension LocalLoopRouter {
         })
         let mps = LocalInstructions.metresPerSecond(paceMinutesPerKm: request.paceMinutesPerKm)
         var routes: [Route] = []
-        for (position, index) in chosen.enumerated() {
-            let entry = assembled[index]
+        for (position, selectedIndex) in chosen.enumerated() {
+            let entry = assembled[selectedIndex]
             diagnostics.offeredPavement.append(RouteQuality.pavement(of: entry.legs))
             diagnostics.offeredLegs.append(entry.legs)
             let seconds = entry.metres / mps
@@ -896,7 +902,13 @@ extension LocalLoopRouter {
                 targetDifferencePercent: requested > 0 ? ((actual / requested - 1) * 100).rounded() : 0,
                 geometry: LineGeometry(coordinates: entry.coordinates),
                 steps: tidySteps(LocalInstructions.steps(for: entry.legs, paceMinutesPerKm: request.paceMinutesPerKm)),
-                routingEngine: .onDevice
+                routingEngine: .onDevice,
+                planningDiagnostics: routePlanningDiagnostics(
+                    legs: entry.legs, graph: graph, index: index,
+                    algorithm: "local-ring-v1", requestedStart: start,
+                    requestedTargetMeters: request.targetMetres, variation: request.variation,
+                    candidateID: entry.candidateID, candidateCorners: entry.candidateCorners
+                )
             ))
         }
         if let first = routes.first?.geometry.coordinates.first {
@@ -910,5 +922,107 @@ extension LocalLoopRouter {
             throw Failure.noLoopFound
         }
         return Result(routes: routes, diagnostics: diagnostics)
+    }
+
+    /// Materialises the facts which affected a chosen path while the exact
+    /// graph is still in memory. A later field report must not have to infer
+    /// these from a polyline or from whatever OSM happens to contain then.
+    func routePlanningDiagnostics(
+        legs: [WalkLeg], graph: LocalWalkingGraph, index: LocalEdgeIndex,
+        algorithm: String, requestedStart: Point, requestedTargetMeters: Double,
+        variation: Int, candidateID: String? = nil, candidateCorners: Int? = nil
+    ) -> RoutePlanningDiagnostics {
+        var coordinateIndex = 0
+        var records: [(leg: WalkLeg, span: RoutePlanningDiagnostics.EdgeSpan)] = []
+        records.reserveCapacity(legs.count)
+
+        for leg in legs where leg.physical >= 0 {
+            let edge = Int(leg.physical)
+            guard graph.edgeFrom.indices.contains(edge), let first = leg.coordinates.first else { continue }
+            let fromNode = Int(graph.edgeFrom[edge]), toNode = Int(graph.edgeTo[edge])
+            let fromDistance = LocalGeo.distance(
+                lat1: first.lat, lon1: first.lng,
+                lat2: graph.nodeLat[fromNode], lon2: graph.nodeLon[fromNode]
+            )
+            let toDistance = LocalGeo.distance(
+                lat1: first.lat, lon1: first.lng,
+                lat2: graph.nodeLat[toNode], lon2: graph.nodeLon[toNode]
+            )
+            let forward = fromDistance <= toDistance
+            let added = Swift.max(0, leg.coordinates.count - 1)
+            let span = RoutePlanningDiagnostics.EdgeSpan(
+                startCoordinateIndex: coordinateIndex,
+                endCoordinateIndex: coordinateIndex + added,
+                osmWayID: graph.edgeWayID[edge],
+                fromOSMNodeID: graph.nodeOSMID[forward ? fromNode : toNode],
+                toOSMNodeID: graph.nodeOSMID[forward ? toNode : fromNode],
+                roadClass: String(describing: leg.roadClass), road: leg.name,
+                distanceMeters: leg.metres, baseWeight: leg.baseWeight,
+                avoidancePenalty: leg.avoidancePenalty
+            )
+            records.append((leg, span))
+            coordinateIndex += added
+        }
+
+        // Keep this deliberately bounded. It is a diagnostic counterfactual,
+        // not another candidate search. It runs only for the selected routes
+        // and only where the route visibly leaves and rejoins pedestrian ways.
+        var witnesses: [RoutePlanningDiagnostics.DecisionWitness] = []
+        var position = 0
+        while position < records.count && witnesses.count < 12 {
+            guard !records[position].leg.roadClass.isPedestrianWay else {
+                position += 1
+                continue
+            }
+            var end = position
+            while end < records.count && !records[end].leg.roadClass.isPedestrianWay { end += 1 }
+            guard let from = records[position].leg.coordinates.first,
+                  let to = records[end - 1].leg.coordinates.last else {
+                position = Swift.max(position + 1, end)
+                continue
+            }
+            let run = records[position..<end]
+            let carriagewayMeters = run.reduce(0) { $0 + $1.leg.metres }
+            let selectedCost = run.reduce(0) {
+                $0 + $1.leg.metres * $1.leg.baseWeight * $1.leg.avoidancePenalty
+            }
+            let alternative = try? LocalLegRouter.route(
+                graph: graph, index: index, from: from, to: to,
+                weighted: true, maximumSnapMetres: LocalLoopRouter.ringLegSnapMetres
+            )
+            let alternativePedestrian = alternative?.legs.reduce(0.0) {
+                $0 + ($1.roadClass.isPedestrianWay ? $1.metres : 0)
+            }
+            var alternativeWays: [Int64] = []
+            for leg in alternative?.legs ?? [] where leg.physical >= 0 {
+                let way = graph.edgeWayID[Int(leg.physical)]
+                if alternativeWays.last != way { alternativeWays.append(way) }
+            }
+            witnesses.append(.init(
+                startCoordinateIndex: records[position].span.startCoordinateIndex,
+                endCoordinateIndex: records[end - 1].span.endCoordinateIndex,
+                carriagewayMeters: carriagewayMeters,
+                selectedWeightedCost: selectedCost,
+                unpenalizedAlternativeMeters: alternative?.metres,
+                unpenalizedAlternativeWeightedCost: alternative?.legs.reduce(0) {
+                    $0 + $1.metres * $1.baseWeight
+                },
+                unpenalizedAlternativePedestrianPercent: alternative.map {
+                    $0.metres > 0 ? (alternativePedestrian ?? 0) / $0.metres * 100 : 0
+                },
+                unpenalizedAlternativeOSMWayIDs: alternativeWays
+            ))
+            position = end
+        }
+
+        return RoutePlanningDiagnostics(
+            engine: .onDevice, algorithm: algorithm,
+            requestedStart: requestedStart, requestedTargetMeters: requestedTargetMeters,
+            variation: variation, graphDataVersion: RoutingChunkStore.currentDataVersion,
+            graphNodeCount: graph.nodeCount, graphEdgeCount: graph.edgeCount,
+            snappedStart: records.first?.leg.coordinates.first,
+            candidateID: candidateID, candidateCorners: candidateCorners,
+            edgeSpans: records.map(\.span), decisionWitnesses: witnesses
+        )
     }
 }

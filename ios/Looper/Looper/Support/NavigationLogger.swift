@@ -39,6 +39,10 @@ final class NavigationLogger: ObservableObject {
         }
 
         let capturedAt: Date
+        let diagnosticSchemaVersion: Int?
+        let appVersion: String?
+        let appBuild: String?
+        let sourceRevision: String?
         let sessionID: String
         let routeID: String
         let routeName: String
@@ -47,6 +51,8 @@ final class NavigationLogger: ObservableObject {
         let navigationUnit: String
         let advertisedDistanceMeters: Double
         let geometryDistanceMeters: Double
+        let routingEngine: String?
+        let planningDiagnostics: RoutePlanningDiagnostics?
         let coordinates: [Coordinate]
         let steps: [StepSnapshot]
     }
@@ -152,6 +158,10 @@ final class NavigationLogger: ObservableObject {
         }
         routeSnapshot = RouteSnapshot(
             capturedAt: Date(),
+            diagnosticSchemaVersion: 2,
+            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+            appBuild: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
+            sourceRevision: Bundle.main.object(forInfoDictionaryKey: "GIT_COMMIT") as? String,
             sessionID: sessionID,
             routeID: route.id,
             routeName: route.name,
@@ -160,6 +170,8 @@ final class NavigationLogger: ObservableObject {
             navigationUnit: unit.rawValue,
             advertisedDistanceMeters: route.distanceMeters,
             geometryDistanceMeters: geometryDistance(route.geometry.coordinates),
+            routingEngine: route.routingEngine?.rawValue,
+            planningDiagnostics: route.planningDiagnostics,
             coordinates: coordinates,
             steps: steps
         )

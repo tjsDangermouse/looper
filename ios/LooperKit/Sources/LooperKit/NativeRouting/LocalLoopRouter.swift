@@ -408,8 +408,8 @@ public struct LocalLoopRouter: Sendable {
             (bearing: candidates[$0].bearing, distanceMetres: assembled[$0].metres)
         })
         var routes: [Route] = []
-        for (position, index) in chosen.enumerated() {
-            let entry = assembled[index]
+        for (position, selectedIndex) in chosen.enumerated() {
+            let entry = assembled[selectedIndex]
             diagnostics.offeredPavement.append(RouteQuality.pavement(of: entry.legs))
             let seconds = entry.metres / LocalInstructions.walkingMetresPerSecond
             routes.append(Route(
@@ -420,7 +420,13 @@ public struct LocalLoopRouter: Sendable {
                 targetDifferencePercent: ((entry.metres / request.targetMetres - 1) * 100).rounded(),
                 geometry: LineGeometry(coordinates: entry.coordinates),
                 steps: tidySteps(LocalInstructions.steps(for: entry.legs)),
-                routingEngine: .onDevice
+                routingEngine: .onDevice,
+                planningDiagnostics: routePlanningDiagnostics(
+                    legs: entry.legs, graph: graph, index: index,
+                    algorithm: "local-closed-search-v1",
+                    requestedStart: Point(request.lon, request.lat),
+                    requestedTargetMeters: request.targetMetres, variation: request.variation
+                )
             ))
         }
         diagnostics.assembleMs = Date().timeIntervalSince(assembleBegan) * 1000

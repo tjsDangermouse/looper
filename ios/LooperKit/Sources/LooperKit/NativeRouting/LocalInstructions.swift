@@ -10,16 +10,23 @@ public struct WalkLeg: Sendable, Equatable {
     /// The base-graph edge this leg ran along, so retracing can be asked of the
     /// network. `-1` where the caller does not track it.
     public var physical: Int32
+    /// Inputs to the search cost, retained so an offered route can explain why
+    /// this edge beat the pavement beside it.
+    public var baseWeight: Double
+    public var avoidancePenalty: Double
 
     public init(
         coordinates: [Point], metres: Double, name: String?,
-        roadClass: PedestrianAccessPolicy.RoadClass, physical: Int32 = -1
+        roadClass: PedestrianAccessPolicy.RoadClass, physical: Int32 = -1,
+        baseWeight: Double = 1, avoidancePenalty: Double = 1
     ) {
         self.coordinates = coordinates
         self.metres = metres
         self.name = name
         self.roadClass = roadClass
         self.physical = physical
+        self.baseWeight = baseWeight
+        self.avoidancePenalty = avoidancePenalty
     }
 }
 

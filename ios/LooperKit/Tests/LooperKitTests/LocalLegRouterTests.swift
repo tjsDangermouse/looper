@@ -193,9 +193,13 @@ final class LocalLegRouterTests: XCTestCase {
         let everything = Set((0..<graph.edgeCount).map(Int32.init))
         let leg = try LocalLegRouter.route(
             graph: graph, index: index, from: ends.0, to: Point(ends.1.lon, ends.1.lat),
-            penalising: everything, penalty: 10
+            penalising: everything, penalty: 10, weighted: true
         )
         XCTAssertEqual(leg.metres, 750, accuracy: 5, "the reported length is the true one, never the penalised cost")
+        XCTAssertTrue(leg.legs.allSatisfy { $0.avoidancePenalty == 10 })
+        XCTAssertTrue(leg.legs.allSatisfy {
+            $0.baseWeight == graph.edgeWeight[Int($0.physical)]
+        }, "the diagnostic retains the pedestrian-profile cost too")
     }
 
     // MARK: - Guides, and the spikes they cause

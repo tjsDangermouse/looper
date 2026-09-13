@@ -177,6 +177,88 @@ public struct LineGeometry: Codable, Equatable, Sendable {
     }
 }
 
+/// A compact, self-contained explanation of how an on-device route was made.
+/// It travels with the route so a later navigation export does not have to
+/// reproduce a decision against a graph which may since have changed.
+public struct RoutePlanningDiagnostics: Codable, Equatable, Sendable {
+    public static let currentSchemaVersion = 1
+
+    public struct EdgeSpan: Codable, Equatable, Sendable {
+        public var startCoordinateIndex: Int
+        public var endCoordinateIndex: Int
+        public var osmWayID: Int64
+        public var fromOSMNodeID: Int64
+        public var toOSMNodeID: Int64
+        public var roadClass: String
+        public var road: String?
+        public var distanceMeters: Double
+        /// Cost per metre from the pedestrian profile before loop avoidance.
+        public var baseWeight: Double
+        /// Extra cost because an earlier leg already used this corridor.
+        public var avoidancePenalty: Double
+    }
+
+    /// A generation-time counterfactual for a carriageway run in the route.
+    public struct DecisionWitness: Codable, Equatable, Sendable {
+        public var startCoordinateIndex: Int
+        public var endCoordinateIndex: Int
+        public var carriagewayMeters: Double
+        public var selectedWeightedCost: Double
+        public var unpenalizedAlternativeMeters: Double?
+        public var unpenalizedAlternativeWeightedCost: Double?
+        public var unpenalizedAlternativePedestrianPercent: Double?
+        public var unpenalizedAlternativeOSMWayIDs: [Int64]
+    }
+
+    public struct GraphChunk: Codable, Equatable, Sendable {
+        public var id: String
+        public var dataVersion: Int
+        public var downloadedAt: Date
+        public var nodeCount: Int
+        public var wayCount: Int
+    }
+
+    public var schemaVersion: Int
+    public var engine: RoutingEngine
+    public var algorithm: String
+    public var requestedStart: Point
+    public var requestedTargetMeters: Double
+    public var variation: Int
+    public var graphDataVersion: Int
+    public var graphNodeCount: Int
+    public var graphEdgeCount: Int
+    public var graphChunks: [GraphChunk]
+    public var snappedStart: Point?
+    public var candidateID: String?
+    public var candidateCorners: Int?
+    public var edgeSpans: [EdgeSpan]
+    public var decisionWitnesses: [DecisionWitness]
+
+    public init(
+        engine: RoutingEngine, algorithm: String, requestedStart: Point,
+        requestedTargetMeters: Double, variation: Int, graphDataVersion: Int,
+        graphNodeCount: Int, graphEdgeCount: Int, graphChunks: [GraphChunk] = [], snappedStart: Point?,
+        candidateID: String? = nil, candidateCorners: Int? = nil,
+        edgeSpans: [EdgeSpan], decisionWitnesses: [DecisionWitness]
+    ) {
+        self.schemaVersion = Self.currentSchemaVersion
+        self.engine = engine
+        self.algorithm = algorithm
+        self.requestedStart = requestedStart
+        self.requestedTargetMeters = requestedTargetMeters
+        self.variation = variation
+        self.graphDataVersion = graphDataVersion
+        self.graphNodeCount = graphNodeCount
+        self.graphEdgeCount = graphEdgeCount
+        self.graphChunks = graphChunks
+        self.snappedStart = snappedStart
+        self.candidateID = candidateID
+        self.candidateCorners = candidateCorners
+        self.edgeSpans = edgeSpans
+        self.decisionWitnesses = decisionWitnesses
+    }
+}
+
 public struct Route: Codable, Equatable, Sendable {
     public var id: String
     public var name: String
@@ -191,6 +273,9 @@ public struct Route: Codable, Equatable, Sendable {
     /// screen and into a saved favourite. Nothing about the route's meaning
     /// depends on it.
     public var routingEngine: RoutingEngine?
+    /// Present for locally planned routes. Optional keeps
+    /// saved routes and responses from older builds source-compatible.
+    public var planningDiagnostics: RoutePlanningDiagnostics?
 
     public init(
         id: String,
@@ -201,7 +286,8 @@ public struct Route: Codable, Equatable, Sendable {
         geometry: LineGeometry,
         steps: [Step],
         reversed: Bool? = nil,
-        routingEngine: RoutingEngine? = nil
+        routingEngine: RoutingEngine? = nil,
+        planningDiagnostics: RoutePlanningDiagnostics? = nil
     ) {
         self.id = id
         self.name = name
@@ -212,5 +298,6 @@ public struct Route: Codable, Equatable, Sendable {
         self.steps = steps
         self.reversed = reversed
         self.routingEngine = routingEngine
+        self.planningDiagnostics = planningDiagnostics
     }
 }

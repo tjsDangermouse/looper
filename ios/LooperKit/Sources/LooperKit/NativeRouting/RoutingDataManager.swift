@@ -200,6 +200,21 @@ public actor RoutingDataManager {
         return await store.merged(grid.chunks(covering: bounds))
     }
 
+    /// The exact stored inputs used to build a graph, for a route diagnostic.
+    /// Metadata only: exporting a report never copies the town's OSM payload.
+    public func chunkMetadata(
+        lat: Double, lon: Double, targetMetres: Double, waypoints: [Point] = []
+    ) async -> [RoutingChunkStore.ChunkMetadata] {
+        let bounds = RoutingCoverage.requiredBounds(
+            start: Point(lon, lat), waypoints: waypoints, targetMetres: targetMetres
+        )
+        var result: [RoutingChunkStore.ChunkMetadata] = []
+        for id in grid.chunks(covering: bounds) {
+            if let metadata = await store.metadata(for: id) { result.append(metadata) }
+        }
+        return result
+    }
+
     /// Fill and pin an area for offline use. The future Offline Areas screen
     /// is this method and a rectangle on a map; nothing below it changes,
     /// which is the point of the retention flag existing before the UI does.

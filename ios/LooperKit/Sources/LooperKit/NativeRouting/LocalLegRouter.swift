@@ -188,7 +188,11 @@ public enum LocalLegRouter {
         // Two points on the same edge with nothing but that edge between them
         // is the one case the node graph cannot express, and it is common: two
         // pins dropped on the same long street.
-        if source.edge == target.edge, let direct = alongOneEdge(source, target, graph: graph, index: index) {
+        if source.edge == target.edge, var direct = alongOneEdge(source, target, graph: graph, index: index) {
+            for position in direct.legs.indices {
+                direct.legs[position].baseWeight = weighted ? graph.edgeWeight[source.edge] : 1
+                direct.legs[position].avoidancePenalty = penalising.contains(Int32(source.edge)) ? penalty : 1
+            }
             return direct
         }
 
@@ -336,8 +340,10 @@ public enum LocalLegRouter {
             case .atNode: break
             case .towardsFrom:
                 legs.append(half(source, graph: graph, index: index, towardsFrom: true, reversed: false))
+                legs[legs.count - 1].avoidancePenalty = sourcePenalty
             case .towardsTo:
                 legs.append(half(source, graph: graph, index: index, towardsFrom: false, reversed: false))
+                legs[legs.count - 1].avoidancePenalty = sourcePenalty
             }
         }
         for arc in arcs {
@@ -347,7 +353,9 @@ public enum LocalLegRouter {
                 metres: graph.edgeMetres[edge],
                 name: graph.name(ofEdge: edge),
                 roadClass: graph.roadClass(ofEdge: edge),
-                physical: Int32(edge)
+                physical: Int32(edge),
+                baseWeight: weighted ? graph.edgeWeight[edge] : 1,
+                avoidancePenalty: penalising.contains(Int32(edge)) ? penalty : 1
             ))
         }
         switch arrival.arrival {
@@ -356,8 +364,10 @@ public enum LocalLegRouter {
             // From the edge's `from` end inward: the towards-from half, walked
             // the other way.
             legs.append(half(target, graph: graph, index: index, towardsFrom: true, reversed: true))
+            legs[legs.count - 1].avoidancePenalty = targetPenalty
         case .fromEdgeEnd:
             legs.append(half(target, graph: graph, index: index, towardsFrom: false, reversed: true))
+            legs[legs.count - 1].avoidancePenalty = targetPenalty
         }
 
         let trimmed = cancellingReversals(legs)
