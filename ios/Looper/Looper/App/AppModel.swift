@@ -189,6 +189,21 @@ final class AppModel: ObservableObject {
             showingVoiceSettings = true
             return
         }
+        if target == "route-playback" {
+            guard let path = ProcessInfo.processInfo.environment["LOOPER_ROUTE_FIXTURE"] else {
+                error = "LOOPER_ROUTE_FIXTURE is required for route playback."
+                return
+            }
+            do {
+                let route = try JSONDecoder().decode(Route.self, from: Data(contentsOf: URL(fileURLWithPath: path)))
+                routes = [route]
+                selected = route
+                Task { await startWalk(route) }
+            } catch {
+                self.error = "Could not open route playback fixture: \(error.localizedDescription)"
+            }
+            return
+        }
         func sampleRoute(id: String, name: String) -> Route {
             Route(
                 id: id, name: name, distanceMeters: 4200, durationSeconds: 3000,
@@ -584,8 +599,9 @@ final class AppModel: ObservableObject {
         Task { await startWalk(route, watchSessionID: sessionID) }
     }
 
-    private func startWalk(_ route: Route, watchSessionID: String? = nil) async {
+    private func startWalk(_ proposedRoute: Route, watchSessionID: String? = nil) async {
         defer { startingWalk = false }
+        let route = reassessDirections(proposedRoute)
         selected = route
         var plan = preparedLoopPlan(for: route)
         if let watchSessionID { plan.sessionID = watchSessionID }

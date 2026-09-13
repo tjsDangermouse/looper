@@ -4,6 +4,7 @@ export type DiagnosticStep = {
   index: number
   instruction: string
   road?: string
+  roadClass?: string
   maneuver?: string
   distanceMeters: number
   cumulativeStartMeters: number

@@ -515,6 +515,91 @@ final class LocalRoutingSearchTests: XCTestCase {
         XCTAssertEqual(angle(179), .uTurn)
     }
 
+    func testRouteStartRechecksAFalseTurnFromAnyRoutingSource() {
+        let start = SyntheticOSM.douglas
+        let pivotValue = LocalGeo.destination(lat: start.lat, lon: start.lng, metres: 100, bearing: 0)
+        let pivot = Point(pivotValue.lon, pivotValue.lat)
+        let kerb = LocalGeo.destination(lat: pivot.lat, lon: pivot.lng, metres: 3, bearing: 49)
+        let onward = LocalGeo.destination(lat: pivot.lat, lon: pivot.lng, metres: 20, bearing: 2)
+        let route = Route(
+            id: "crossing", name: "Crossing fixture", distanceMeters: 122,
+            durationSeconds: 88, targetDifferencePercent: 0,
+            geometry: LineGeometry(coordinates: [start, pivot, Point(kerb.lon, kerb.lat), Point(onward.lon, onward.lat)]),
+            steps: [
+                Step(instruction: "Set off", distanceMeters: 100, durationSeconds: 72, startIndex: 0, endIndex: 1),
+                Step(instruction: "Turn right", distanceMeters: 22, durationSeconds: 16, startIndex: 1, endIndex: 3, maneuver: .name("turn-right")),
+                Step(instruction: "Arrive", distanceMeters: 0, durationSeconds: 0, startIndex: 3, endIndex: 3, maneuver: .name("finish")),
+            ]
+        )
+
+        let checked = reassessDirections(route)
+
+        XCTAssertEqual(checked.steps.count, 2)
+        XCTAssertEqual(checked.steps[0].distanceMeters, 122)
+        XCTAssertEqual(turnKind(checked.steps[1]), .arrive)
+    }
+
+    func testRouteStartCallsAStraightPavementRoadPavementSequenceOneCrossing() {
+        let start = SyntheticOSM.douglas
+        let kerb1Value = LocalGeo.destination(lat: start.lat, lon: start.lng, metres: 100, bearing: 0)
+        let kerb1 = Point(kerb1Value.lon, kerb1Value.lat)
+        let kerb2Value = LocalGeo.destination(lat: kerb1.lat, lon: kerb1.lng, metres: 14, bearing: 4)
+        let kerb2 = Point(kerb2Value.lon, kerb2Value.lat)
+        let onwardValue = LocalGeo.destination(lat: kerb2.lat, lon: kerb2.lng, metres: 100, bearing: 1)
+        let onward = Point(onwardValue.lon, onwardValue.lat)
+        let route = Route(
+            id: "road-crossing", name: "Road crossing fixture", distanceMeters: 214,
+            durationSeconds: 154, targetDifferencePercent: 0,
+            geometry: LineGeometry(coordinates: [start, kerb1, kerb2, onward]),
+            steps: [
+                Step(
+                    instruction: "Set off", distanceMeters: 100, durationSeconds: 72,
+                    startIndex: 0, endIndex: 1, roadClass: "footway"
+                ),
+                Step(
+                    instruction: "Bear right onto Main Road", distanceMeters: 14, durationSeconds: 10,
+                    startIndex: 1, endIndex: 2, maneuver: .name("keep-right"),
+                    road: "Main Road", roadClass: "primary"
+                ),
+                Step(
+                    instruction: "Turn right", distanceMeters: 100, durationSeconds: 72,
+                    startIndex: 2, endIndex: 3, maneuver: .name("turn-right"), roadClass: "footway"
+                ),
+                Step(
+                    instruction: "Arrive", distanceMeters: 0, durationSeconds: 0,
+                    startIndex: 3, endIndex: 3, maneuver: .name("finish")
+                ),
+            ]
+        )
+
+        let checked = reassessDirections(route)
+
+        XCTAssertEqual(checked.steps.count, 3)
+        XCTAssertEqual(checked.steps[1].instruction, "Cross the road and continue straight")
+        XCTAssertFalse(checked.steps[1].instruction.contains("Main Road"))
+        XCTAssertEqual(checked.steps[1].distanceMeters, 114)
+        XCTAssertEqual(turnKind(checked.steps[1]), .straight)
+        XCTAssertEqual(turnKind(checked.steps[2]), .arrive)
+
+        let checkedBackwards = reassessDirections(reverseRoute(route))
+        XCTAssertEqual(checkedBackwards.steps[1].instruction, "Cross the road and continue straight")
+        XCTAssertEqual(checkedBackwards.steps[1].distanceMeters, 114)
+    }
+
+    func testLocalInstructionsPreserveRoadClassTransitionsForTheRouteStartCheck() {
+        let start = SyntheticOSM.douglas
+        var pavement = leg(from: start, bearing: 0, metres: 100, name: nil)
+        pavement.roadClass = .footway
+        var road = leg(from: pavement.coordinates.last!, bearing: 0, metres: 14, name: "Main Road")
+        road.roadClass = .primary
+        var onward = leg(from: road.coordinates.last!, bearing: 0, metres: 100, name: nil)
+        onward.roadClass = .footway
+
+        let steps = LocalInstructions.steps(for: [pavement, road, onward])
+
+        XCTAssertEqual(steps.dropLast().map(\.roadClass), ["footway", "primary", "footway"])
+    }
+
     /// A road bending round is not an instruction, and calling one out at
     /// every surveyed vertex is how guidance becomes unusable.
     func testAStreetContinuingIsOneStepNotMany() {

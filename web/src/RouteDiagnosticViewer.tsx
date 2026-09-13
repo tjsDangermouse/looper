@@ -29,7 +29,7 @@ function routeSources(diagnostic: RouteDiagnostic) {
   const rejected = diagnostic.entries.filter(entry => entry.event === 'location.rejected').map(entryCoordinate).filter((coordinate): coordinate is [number, number] => Boolean(coordinate))
   const directions = route.steps.flatMap(step => {
     const point = route.coordinates[step.startCoordinateIndex ?? -1]
-    return point ? [pointFeature([point.longitude, point.latitude], { index: step.index, instruction: step.instruction, road: step.road ?? '', kind: 'direction' })] : []
+    return point ? [pointFeature([point.longitude, point.latitude], { index: step.index, instruction: step.instruction, road: step.road ?? '', roadClass: step.roadClass ?? '', kind: 'direction' })] : []
   })
   const messages = located.flatMap((entry, eventIndex) => entry.event === 'guidance.queued' && entry.coordinate
     ? [pointFeature(entry.coordinate, { eventIndex, text: entry.details.text ?? '', key: entry.details.key ?? '', time: clock(entry.timestamp), kind: 'message' })]
@@ -97,7 +97,7 @@ export function RouteDiagnostics() {
         if (!feature || !coordinates) return
         const properties = feature.properties ?? {}
         const html = properties.kind === 'direction'
-          ? `<strong>Direction ${properties.index}</strong><span>${escaped(properties.instruction)}</span>${properties.road ? `<small>${escaped(properties.road)}</small>` : ''}`
+          ? `<strong>Direction ${properties.index}</strong><span>${escaped(properties.instruction)}</span>${properties.road || properties.roadClass ? `<small>${escaped([properties.road, properties.roadClass].filter(Boolean).join(' · '))}</small>` : ''}`
           : `<strong>${escaped(properties.time)}</strong><span>${escaped(properties.text)}</span><small>${escaped(properties.key || 'arrival')}</small>`
         popup.setLngLat(coordinates).setHTML(`<div class="diagnostic-popup">${html}</div>`).addTo(map)
       })
@@ -191,7 +191,7 @@ export function RouteDiagnostics() {
       <div className="diagnostic-table-wrap"><table><thead><tr><th>#</th><th>Planned direction</th><th>At</th><th>Guidance messages fired</th></tr></thead>
         <tbody>{route?.steps.map(step => {
           const messages = messagesByStep.get(step.index) ?? []
-          return <tr key={step.index}><td><b>{step.index}</b></td><td><strong>{step.instruction}</strong>{step.road && <small>{step.road}</small>}</td><td>{formatMetres(step.cumulativeStartMeters)}</td><td>{messages.length ? <div className="message-list">{messages.map((message, index) => <button type="button" key={`${message.timestamp}-${index}`} onClick={() => {
+          return <tr key={step.index}><td><b>{step.index}</b></td><td><strong>{step.instruction}</strong>{(step.road || step.roadClass) && <small>{[step.road, step.roadClass].filter(Boolean).join(' · ')}</small>}</td><td>{formatMetres(step.cumulativeStartMeters)}</td><td>{messages.length ? <div className="message-list">{messages.map((message, index) => <button type="button" key={`${message.timestamp}-${index}`} onClick={() => {
             const coordinate = locateEntries(diagnostic.entries).find(entry => entry.timestamp === message.timestamp)?.coordinate
             if (coordinate) mapRef.current?.flyTo({ center: coordinate, zoom: 17 })
           }}><time>{clock(message.timestamp)}</time><span>{message.details.text}</span><i>{message.details.key?.split(':')[1] ?? message.details.kind}</i></button>)}</div> : <span className="not-recorded">No retained message</span>}</td></tr>

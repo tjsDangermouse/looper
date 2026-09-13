@@ -61,7 +61,7 @@ export function nextTurn(route:Route, progressMeters:number) {
 // maneuver at all, so the wording is read as a last resort.
 export type Turn='left'|'slight-left'|'sharp-left'|'right'|'slight-right'|'sharp-right'|'straight'|'u-turn'|'arrive'
 const ORS_TURNS:Record<number,Turn> = {0:'left',1:'right',2:'sharp-left',3:'sharp-right',4:'slight-left',5:'slight-right',6:'straight',7:'straight',8:'straight',9:'u-turn',10:'arrive',11:'straight',12:'slight-left',13:'slight-right'}
-const NAMED_TURNS:Record<string,Turn> = {'turn-left':'left','turn-right':'right','keep-left':'slight-left','keep-right':'slight-right','u-turn-left':'u-turn','u-turn-right':'u-turn','continue':'straight','roundabout':'straight','finish':'arrive','waypoint':'arrive'}
+const NAMED_TURNS:Record<string,Turn> = {'turn-left':'left','turn-right':'right','keep-left':'slight-left','keep-right':'slight-right','u-turn-left':'u-turn','u-turn-right':'u-turn','continue':'straight','cross-road':'straight','roundabout':'straight','finish':'arrive','waypoint':'arrive'}
 const KNOWN = new Set<Turn>(['left','slight-left','sharp-left','right','slight-right','sharp-right','straight','u-turn','arrive'])
 // Sharp and slight are looked for before the bare side, so "slight left" does
 // not read as a square left turn.
@@ -97,7 +97,7 @@ export function tidySteps(steps:Step[]):Step[] {
   for(const step of steps){
     const last=out[out.length-1]
     const rejoins = !!last?.road && last.road===step.road
-    if(last && turnKind(step)!=='arrive' && (step.distanceMeters<MICRO_STEP_METRES || rejoins)){
+    if(last && step.maneuver!=='cross-road' && turnKind(step)!=='arrive' && (step.distanceMeters<MICRO_STEP_METRES || rejoins)){
       last.distanceMeters+=step.distanceMeters; last.durationSeconds+=step.durationSeconds; last.endIndex=step.endIndex
       continue
     }
@@ -130,10 +130,24 @@ function routeBearing(coords:Point[], pivot:number, before:boolean):number|undef
 }
 const isPath = (roadClass?:string) => !!roadClass&&PATH_CLASSES.has(roadClass.toLowerCase())
 const roadLabel = (road?:string) => road||'the road'
+const CROSSING_ROAD_CLASSES = new Set(['living','living_street','residential','unclassified','road','tertiary','secondary','primary','trunk'])
 export function normaliseWalkingSteps(route:Route):Route {
   const steps=route.steps.map(step=>({...step}))
+  const crossingEntries=new Set<number>(), crossingExits=new Set<number>()
+  for(let index=1;index<steps.length-1;index++){
+    const previous=steps[index-1], crossing=steps[index], next=steps[index+1]
+    const entry=crossing.startIndex, exit=next.startIndex??crossing.endIndex
+    if(!isPath(previous.roadClass)||!CROSSING_ROAD_CLASSES.has(crossing.roadClass?.toLowerCase()??'')||!isPath(next.roadClass)||crossing.distanceMeters>40||entry===undefined||exit===undefined) continue
+    const incoming=routeBearing(route.geometry.coordinates,entry,true)
+    const outgoing=routeBearing(route.geometry.coordinates,exit,false)
+    if(incoming===undefined||outgoing===undefined||bearingGap(incoming,outgoing)>=20) continue
+    crossingEntries.add(index); crossingExits.add(index+1)
+    crossing.maneuver='cross-road'
+    crossing.instruction='Cross the road and continue straight'
+  }
   for(let index=1;index<steps.length;index++){
     const step=steps[index], previous=steps[index-1]
+    if(crossingEntries.has(index)||crossingExits.has(index)) continue
     if(step.startIndex===undefined) continue
     const incoming=routeBearing(route.geometry.coordinates,step.startIndex,true)
     const outgoing=routeBearing(route.geometry.coordinates,step.startIndex,false)
@@ -143,7 +157,17 @@ export function normaliseWalkingSteps(route:Route):Route {
     if(ontoPath){ step.maneuver='continue'; step.instruction=`Carry on across ${roadLabel(previous.road)} onto the pathway` }
     else if(ontoRoad){ step.maneuver='continue'; step.instruction=`Carry on from the pathway onto ${roadLabel(step.road)}` }
   }
-  return {...route,steps:tidySteps(steps)}
+  const combined:Step[]=[]
+  for(let index=0;index<steps.length;index++){
+    const step=steps[index]
+    if(crossingExits.has(index)&&combined.length){
+      const crossing=combined[combined.length-1]
+      crossing.distanceMeters+=step.distanceMeters
+      crossing.durationSeconds+=step.durationSeconds
+      crossing.endIndex=step.endIndex
+    } else combined.push(step)
+  }
+  return {...route,steps:tidySteps(combined)}
 }
 
 // Walking the loop the other way round. The same roads come in the opposite
@@ -157,8 +181,16 @@ export function reverseRoute(route:Route):Route {
   // Zero-length steps — arriving, and the odd roundabout marker — name no road
   // to walk, so the roads of the walk are the steps that cover ground.
   const walked = route.steps.filter(step=>step.distanceMeters>0)
+  const lastCoordinateIndex=route.geometry.coordinates.length-1
   const steps:Step[] = walked.map((_,j)=>{
-    const road=walked[walked.length-1-j], joins=walked[walked.length-j]
+    const original=walked[walked.length-1-j]
+    const road={...original,
+      ...(original.startIndex!==undefined&&original.endIndex!==undefined?{
+        startIndex:lastCoordinateIndex-original.endIndex,
+        endIndex:lastCoordinateIndex-original.startIndex,
+      }:{})
+    }
+    const joins=walked[walked.length-j]
     if(!joins) return { ...road, maneuver:'straight', instruction: road.road?`Head along ${road.road}`:'Set off along the loop' }
     return { ...road, maneuver: mirrorTurn(turnKind(joins)), instruction: onto(mirror(joins.instruction), road.road) }
   })

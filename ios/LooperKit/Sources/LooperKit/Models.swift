@@ -141,6 +141,10 @@ public struct Step: Codable, Equatable, Sendable {
     public var endIndex: Int?
     public var maneuver: Maneuver?
     public var road: String?
+    /// OSM/GraphHopper highway class for the stretch this step walks. Kept as
+    /// text because the route service sends names while the native graph uses
+    /// a compact numeric enum internally.
+    public var roadClass: String?
 
     public init(
         instruction: String,
@@ -149,7 +153,8 @@ public struct Step: Codable, Equatable, Sendable {
         startIndex: Int? = nil,
         endIndex: Int? = nil,
         maneuver: Maneuver? = nil,
-        road: String? = nil
+        road: String? = nil,
+        roadClass: String? = nil
     ) {
         self.instruction = instruction
         self.distanceMeters = distanceMeters
@@ -158,6 +163,7 @@ public struct Step: Codable, Equatable, Sendable {
         self.endIndex = endIndex
         self.maneuver = maneuver
         self.road = road
+        self.roadClass = roadClass
     }
 }
 

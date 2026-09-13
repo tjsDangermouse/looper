@@ -29,6 +29,7 @@ final class NavigationLogger: ObservableObject {
             let index: Int
             let instruction: String
             let road: String?
+            let roadClass: String?
             let maneuver: String?
             let distanceMeters: Double
             let cumulativeStartMeters: Double
@@ -137,6 +138,7 @@ final class NavigationLogger: ObservableObject {
                 index: index,
                 instruction: step.instruction,
                 road: step.road,
+                roadClass: step.roadClass,
                 maneuver: maneuverName(step.maneuver),
                 distanceMeters: step.distanceMeters,
                 cumulativeStartMeters: cumulative,

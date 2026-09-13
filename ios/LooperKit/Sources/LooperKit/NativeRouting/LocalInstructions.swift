@@ -62,6 +62,7 @@ public enum LocalInstructions {
             var maneuver: String
             var instruction: String
             var road: String?
+            var roadClass: PedestrianAccessPolicy.RoadClass
             var metres: Double
             var startIndex: Int
         }
@@ -70,6 +71,7 @@ public enum LocalInstructions {
             maneuver: "continue",
             instruction: setOff(along: legs[0].name),
             road: legs[0].name,
+            roadClass: legs[0].roadClass,
             metres: legs[0].metres,
             startIndex: 0
         )
@@ -80,7 +82,8 @@ public enum LocalInstructions {
             let turn = turnAngle(arriving: previous.coordinates, leaving: leg.coordinates)
             let maneuver = maneuverName(for: turn)
             let changedRoad = leg.name != previous.name
-            if maneuver == "continue" && !changedRoad {
+            let changedWalkingSurface = leg.roadClass.isPedestrianWay != previous.roadClass.isPedestrianWay
+            if maneuver == "continue" && !changedRoad && !changedWalkingSurface {
                 // The road bending round is not an instruction.
                 pending.metres += leg.metres
                 coordinateIndex += Swift.max(0, leg.coordinates.count - 1)
@@ -93,12 +96,14 @@ public enum LocalInstructions {
                 startIndex: pending.startIndex,
                 endIndex: coordinateIndex,
                 maneuver: .name(pending.maneuver),
-                road: pending.road
+                road: pending.road,
+                roadClass: String(describing: pending.roadClass)
             ))
             pending = Pending(
                 maneuver: maneuver,
                 instruction: phrase(maneuver: maneuver, road: leg.name, roadClass: leg.roadClass),
                 road: leg.name,
+                roadClass: leg.roadClass,
                 metres: leg.metres,
                 startIndex: coordinateIndex
             )
@@ -112,7 +117,8 @@ public enum LocalInstructions {
             startIndex: pending.startIndex,
             endIndex: coordinateIndex,
             maneuver: .name(pending.maneuver),
-            road: pending.road
+            road: pending.road,
+            roadClass: String(describing: pending.roadClass)
         ))
         steps.append(Step(
             instruction: "You’re back where you started",
