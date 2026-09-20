@@ -1131,7 +1131,8 @@ final class AppModel: ObservableObject {
             targetUnit: unit,
             displayUnit: unit,
             plannedDistanceMeters: route.distanceMeters,
-            plannedDurationSeconds: route.durationSeconds
+            plannedDurationSeconds: route.durationSeconds,
+            plannedGeometry: route.geometry.coordinates
         )
     }
 

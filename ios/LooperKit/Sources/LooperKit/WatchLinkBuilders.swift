@@ -25,12 +25,16 @@ public func turnAfter(_ route: Route, _ hit: TurnHit) -> TurnHit? {
     )
 }
 
-private func maneuver(_ hit: TurnHit) -> ManeuverPayload {
-    ManeuverPayload(
+private func maneuver(_ hit: TurnHit, route: Route) -> ManeuverPayload {
+    let coordinate = hit.step.startIndex.flatMap { index in
+        route.geometry.coordinates.indices.contains(index) ? route.geometry.coordinates[index] : nil
+    }
+    return ManeuverPayload(
         stepIndex: hit.index,
         turn: turnKind(hit.step),
         instruction: hit.instruction,
-        distanceMeters: max(0, hit.distanceAway)
+        distanceMeters: max(0, hit.distanceAway),
+        coordinate: coordinate
     )
 }
 
@@ -74,7 +78,7 @@ public func makeWorkoutState(
     if let route, let hit, let following = turnAfter(route, hit),
        hit.distanceAway <= WatchNavigationConfig.thenVisibleWithinMeters,
        following.distanceAway - hit.distanceAway <= WatchNavigationConfig.thenGapMeters {
-        then = maneuver(following)
+        then = maneuver(following, route: route)
     }
 
     return WorkoutStatePayload(
@@ -86,7 +90,7 @@ public func makeWorkoutState(
         progressFraction: planned > 0 ? min(1, max(0, record.progressMeters / planned)) : 0,
         remainingMeters: max(0, planned - record.progressMeters),
         offRoute: offRoute,
-        next: hit.map(maneuver),
+        next: route.flatMap { route in hit.map { maneuver($0, route: route) } },
         then: then,
         updatedAt: now
     )

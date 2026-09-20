@@ -233,7 +233,12 @@ final class WatchModel: ObservableObject {
             // A plan that arrives by the slow queue can be older than the one
             // already shown; the newest prepared loop is the one that counts.
             if let plan, plan.preparedAt > incoming.preparedAt { return }
-            guard !workout.isRunning else { return }
+            // Starting the mirrored workout can beat the plan across the
+            // radio. Accept that late plan when it belongs to this workout,
+            // but never let another outing replace the route in progress.
+            if workout.isRunning {
+                guard incoming.sessionID == workout.sessionID || incoming.sessionID == state?.sessionID else { return }
+            }
             plan = incoming
             storePlan(incoming)
             haptics.reset(for: incoming.activity)
@@ -250,7 +255,7 @@ final class WatchModel: ObservableObject {
             // plan didn't reach us — most likely the phone chose a different
             // loop while we were out of range. The state is still the truth
             // of what is happening, so it is shown, and the plan is chased.
-            if let plan, plan.sessionID != incoming.sessionID {
+            if plan?.sessionID != incoming.sessionID {
                 requestPlan()
             }
             state = incoming

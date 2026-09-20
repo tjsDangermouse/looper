@@ -12,7 +12,7 @@ public enum WatchLink {
     /// version it doesn't know throws rather than decoding half a message —
     /// the two devices can be updated separately, and an old Watch app
     /// guessing at a new phone's payload is worse than a stale screen.
-    public static let version = 1
+    public static let version = 2
 }
 
 /// Where the outing has got to, as both devices understand it. This is the
@@ -121,12 +121,23 @@ public struct ManeuverPayload: Codable, Equatable, Sendable {
     public var instruction: String
     /// How far until the manoeuvre.
     public var distanceMeters: Double
+    /// The route point where the manoeuvre happens. The phone resolves this
+    /// from its route steps so the Watch can mark the turn without doing any
+    /// navigation work of its own.
+    public var coordinate: Point?
 
-    public init(stepIndex: Int, turn: Turn, instruction: String, distanceMeters: Double) {
+    public init(
+        stepIndex: Int,
+        turn: Turn,
+        instruction: String,
+        distanceMeters: Double,
+        coordinate: Point? = nil
+    ) {
         self.stepIndex = stepIndex
         self.turn = turn.rawValue
         self.instruction = instruction
         self.distanceMeters = distanceMeters
+        self.coordinate = coordinate
     }
 
     public var turnKind: Turn { Turn(rawValue: turn) ?? .straight }

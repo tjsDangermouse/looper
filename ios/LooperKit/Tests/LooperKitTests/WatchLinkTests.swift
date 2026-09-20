@@ -40,7 +40,13 @@ private func state(
 }
 
 private func turn(at meters: Double, step: Int = 2, kind: Turn = .left) -> ManeuverPayload {
-    ManeuverPayload(stepIndex: step, turn: kind, instruction: "Turn left onto Harbour Road", distanceMeters: meters)
+    ManeuverPayload(
+        stepIndex: step,
+        turn: kind,
+        instruction: "Turn left onto Harbour Road",
+        distanceMeters: meters,
+        coordinate: Point(-4.48, 54.15)
+    )
 }
 
 // MARK: The wire format
@@ -252,12 +258,12 @@ final class WorkoutStatePayloadTests: XCTestCase {
     private let route = Route(
         id: "route-1", name: "Harbour loop", distanceMeters: 1_000, durationSeconds: 720,
         targetDifferencePercent: 0,
-        geometry: LineGeometry(coordinates: [Point(0, 0), Point(0.01, 0)]),
+        geometry: LineGeometry(coordinates: [Point(0, 0), Point(0.004, 0), Point(0.005, 0), Point(0.01, 0)]),
         steps: [
-            Step(instruction: "Head along Peel Road", distanceMeters: 400, durationSeconds: 300),
-            Step(instruction: "Turn left onto Harbour Road", distanceMeters: 100, durationSeconds: 70, maneuver: .code(0)),
-            Step(instruction: "Turn right onto Quay Street", distanceMeters: 500, durationSeconds: 350, maneuver: .code(1)),
-            Step(instruction: "Arrive at your starting point", distanceMeters: 0, durationSeconds: 0, maneuver: .code(10)),
+            Step(instruction: "Head along Peel Road", distanceMeters: 400, durationSeconds: 300, startIndex: 0),
+            Step(instruction: "Turn left onto Harbour Road", distanceMeters: 100, durationSeconds: 70, startIndex: 1, maneuver: .code(0)),
+            Step(instruction: "Turn right onto Quay Street", distanceMeters: 500, durationSeconds: 350, startIndex: 2, maneuver: .code(1)),
+            Step(instruction: "Arrive at your starting point", distanceMeters: 0, durationSeconds: 0, startIndex: 3, maneuver: .code(10)),
         ]
     )
 
@@ -286,6 +292,7 @@ final class WorkoutStatePayloadTests: XCTestCase {
         XCTAssertEqual(payload.next?.instruction, "Turn left onto Harbour Road")
         XCTAssertEqual(payload.next?.distanceMeters, 50)
         XCTAssertEqual(payload.next?.turnKind, .left)
+        XCTAssertEqual(payload.next?.coordinate, route.geometry.coordinates[1])
     }
 
     /// Two turns half a kilometre apart are two separate instructions, and

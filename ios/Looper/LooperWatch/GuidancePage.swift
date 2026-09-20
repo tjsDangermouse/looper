@@ -22,9 +22,24 @@ struct GuidancePage: View {
                 if routeCoordinates.count > 1 {
                     MapPolyline(coordinates: routeCoordinates)
                         .stroke(
+                            .black.opacity(0.68),
+                            style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round)
+                        )
+                    MapPolyline(coordinates: routeCoordinates)
+                        .stroke(
                             Color.looperAccent,
                             style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
                         )
+                }
+                if let turnCoordinate {
+                    Annotation("Next turn", coordinate: turnCoordinate) {
+                        Image(systemName: turnSymbolName(model.state?.next?.turnKind ?? .straight))
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.black)
+                            .padding(7)
+                            .background(Color.looperAccent, in: Circle())
+                            .overlay { Circle().strokeBorder(.black.opacity(0.65), lineWidth: 2) }
+                    }
                 }
                 UserAnnotation()
             }
@@ -42,6 +57,11 @@ struct GuidancePage: View {
         (model.plan?.plannedGeometry ?? []).map {
             CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)
         }
+    }
+
+    private var turnCoordinate: CLLocationCoordinate2D? {
+        guard let point = model.state?.next?.coordinate else { return nil }
+        return CLLocationCoordinate2D(latitude: point.lat, longitude: point.lng)
     }
 
     @ViewBuilder
