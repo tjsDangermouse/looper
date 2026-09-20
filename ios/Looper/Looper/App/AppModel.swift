@@ -593,13 +593,17 @@ final class AppModel: ObservableObject {
 
     /// The Watch has already started its own workout and is asking the phone
     /// to navigate. Skips asking the Watch to start a second time.
-    private func beginWalkFromWatch(_ route: Route, sessionID: String) {
+    private func beginWalkFromWatch(_ route: Route, sessionID: String, watchOwnsWorkout: Bool) {
         guard !startingWalk, !hasActiveWalk else { return }
         startingWalk = true
-        Task { await startWalk(route, watchSessionID: sessionID) }
+        Task { await startWalk(route, watchSessionID: sessionID, watchOwnsWorkout: watchOwnsWorkout) }
     }
 
-    private func startWalk(_ proposedRoute: Route, watchSessionID: String? = nil) async {
+    private func startWalk(
+        _ proposedRoute: Route,
+        watchSessionID: String? = nil,
+        watchOwnsWorkout: Bool = true
+    ) async {
         defer { startingWalk = false }
         let route = reassessDirections(proposedRoute)
         selected = route
@@ -607,7 +611,7 @@ final class AppModel: ObservableObject {
         if let watchSessionID { plan.sessionID = watchSessionID }
 
         var owner: HealthWorkoutOwner = .phone
-        if watchSessionID != nil {
+        if watchSessionID != nil, watchOwnsWorkout {
             // Started on the wrist: the Watch's workout is already running,
             // so it owns the Health record without being asked.
             owner = .watch
@@ -1165,7 +1169,11 @@ final class AppModel: ObservableObject {
             // route of its own to offer.
             guard let route = selected ?? routes.first else { return }
             guard let sessionID = command.sessionID else { return }
-            beginWalkFromWatch(route, sessionID: sessionID)
+            beginWalkFromWatch(
+                route,
+                sessionID: sessionID,
+                watchOwnsWorkout: command.recordsWorkout ?? true
+            )
         case .pause:
             pauseWalk()
         case .resume:

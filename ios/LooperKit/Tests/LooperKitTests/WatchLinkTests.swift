@@ -75,13 +75,20 @@ final class WatchLinkCodecTests: XCTestCase {
     }
 
     func testCommandKeepsItsIdentitySoItCanBeDeduplicated() throws {
-        let sent = WatchCommandPayload(kind: .end, sessionID: "session-1", id: "command-1", issuedAt: epoch)
+        let sent = WatchCommandPayload(
+            kind: .start,
+            sessionID: "session-1",
+            recordsWorkout: false,
+            id: "command-1",
+            issuedAt: epoch
+        )
         guard case .command(let decoded) = try WatchLinkCodec.decode(try WatchLinkCodec.encode(.command(sent))) else {
             return XCTFail("expected a command")
         }
         XCTAssertEqual(decoded.id, "command-1")
-        XCTAssertEqual(decoded.kind, .end)
+        XCTAssertEqual(decoded.kind, .start)
         XCTAssertEqual(decoded.sessionID, "session-1")
+        XCTAssertEqual(decoded.recordsWorkout, false)
     }
 
     func testWorkoutStatusSurvivesTheRoundTrip() throws {

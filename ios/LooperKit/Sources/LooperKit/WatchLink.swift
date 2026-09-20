@@ -12,7 +12,7 @@ public enum WatchLink {
     /// version it doesn't know throws rather than decoding half a message —
     /// the two devices can be updated separately, and an old Watch app
     /// guessing at a new phone's payload is worse than a stale screen.
-    public static let version = 2
+    public static let version = 3
 }
 
 /// Where the outing has got to, as both devices understand it. This is the
@@ -251,12 +251,23 @@ public struct WatchCommandPayload: Codable, Equatable, Sendable {
     /// The session the command is about. `nil` for `requestPlan`, and for a
     /// `start` sent from the Watch before the phone has opened a record.
     public var sessionID: String?
+    /// For a start initiated on the wrist, whether the Watch successfully
+    /// opened a HealthKit workout. `false` leaves recording with the phone
+    /// while the Watch remains available for guidance.
+    public var recordsWorkout: Bool?
     public var issuedAt: Date
 
-    public init(kind: WatchCommandKind, sessionID: String? = nil, id: String = UUID().uuidString, issuedAt: Date = Date()) {
+    public init(
+        kind: WatchCommandKind,
+        sessionID: String? = nil,
+        recordsWorkout: Bool? = nil,
+        id: String = UUID().uuidString,
+        issuedAt: Date = Date()
+    ) {
         self.id = id
         self.kind = kind
         self.sessionID = sessionID
+        self.recordsWorkout = recordsWorkout
         self.issuedAt = issuedAt
     }
 }

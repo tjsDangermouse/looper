@@ -32,13 +32,16 @@ final class WatchModel: ObservableObject {
     @Published private(set) var state: WorkoutStatePayload?
     @Published private(set) var result: WorkoutResultPayload?
     @Published private(set) var starting = false
+    /// When Health recording is unavailable, the phone owns the outing and
+    /// this app remains useful as its route and guidance display.
+    @Published private(set) var guidanceOnly = false
     @Published private(set) var notice: String?
     /// Whether the phone's navigation is currently being heard from. False
     /// means the numbers on screen are the Watch's own and the turn guidance
     /// has stopped — said out loud rather than quietly faked.
     @Published private(set) var isPhoneLive = false
-    /// The normal app stays behind this gate until the two first-run sheets
-    /// have been presented and answered in a deliberate order.
+    /// Health is not part of the launch gate. It is requested only when the
+    /// walker starts, and declining it never locks the rest of the app.
     @Published private(set) var launchPhase: LaunchPhase = .permissions
 
     let workout = WatchWorkout()
@@ -68,11 +71,14 @@ final class WatchModel: ObservableObject {
 
     var screen: Screen {
         if result != nil { return .finished }
-        if workout.isRunning || starting { return .working }
+        if workout.isRunning || guidanceOnly || starting { return .working }
         return plan == nil ? .waiting : .prepared
     }
 
     var activity: Activity { plan?.activity ?? .walking }
+    var isPaused: Bool {
+        workout.isRunning ? workout.phase == .paused : state?.phase == .paused
+    }
 
     func activate() {
         link.activate()
@@ -90,9 +96,9 @@ final class WatchModel: ObservableObject {
         }
     }
 
-    /// Location must resolve first. Only then may HealthKit present its sheet.
-    /// A shared task also makes a phone-initiated launch wait on the exact same
-    /// gate instead of starting a competing authorization request.
+    /// Location must resolve before maps and route recording are used. A
+    /// shared task prevents phone-initiated and on-Watch launches from asking
+    /// at the same time. Health is deliberately requested later, at Start.
     private func completePermissionGate() async -> Bool {
         if launchPhase == .ready { return true }
         if let permissionGate { return await permissionGate.value }
@@ -106,14 +112,6 @@ final class WatchModel: ObservableObject {
                 return false
             }
 
-            // The delegate callback records the choice before watchOS has
-            // necessarily finished dismissing its sheet. Leave that short
-            // transition clear before presenting HealthKit's larger sheet.
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            guard await workout.requestAuthorization() else {
-                launchPhase = .blocked("Allow Health access in Settings so Looper can record your workout, then try again.")
-                return false
-            }
             launchPhase = .ready
             return true
         }
@@ -162,23 +160,32 @@ final class WatchModel: ObservableObject {
         haptics.reset(for: activity)
         state = nil
         result = nil
+        guidanceOnly = false
 
+        var recordsWorkout = false
         do {
             try await workout.start(activity: activity, sessionID: plan.sessionID)
+            recordsWorkout = true
         } catch {
-            notice = (error as? LocalizedError)?.errorDescription ?? "The workout couldn’t start."
+            guidanceOnly = true
+            notice = "Guidance only · Apple Health recording is off"
             // The phone owns the Health record when the Watch can't take it —
             // it is told so explicitly rather than left to guess.
             send(.workoutStatus(WatchWorkoutStatusPayload(
-                sessionID: plan.sessionID, state: .failed, message: notice
+                sessionID: plan.sessionID,
+                state: .failed,
+                message: (error as? LocalizedError)?.errorDescription ?? "The workout couldn’t start."
             )))
-            return
         }
 
         if initiatedHere {
-            // Mirroring has already woken the phone app; this tells it which
-            // loop to navigate.
-            send(.command(WatchCommandPayload(kind: .start, sessionID: plan.sessionID)))
+            // Without a Health workout, WatchConnectivity starts navigation
+            // and explicitly leaves recording ownership with the phone.
+            send(.command(WatchCommandPayload(
+                kind: .start,
+                sessionID: plan.sessionID,
+                recordsWorkout: recordsWorkout
+            )))
         }
         beginFreshnessWatch()
     }
@@ -186,12 +193,12 @@ final class WatchModel: ObservableObject {
     // MARK: Controls
 
     func pause() {
-        workout.pause()
+        if workout.isRunning { workout.pause() }
         send(.command(WatchCommandPayload(kind: .pause, sessionID: plan?.sessionID)))
     }
 
     func resume() {
-        workout.resume()
+        if workout.isRunning { workout.resume() }
         send(.command(WatchCommandPayload(kind: .resume, sessionID: plan?.sessionID)))
     }
 
@@ -203,13 +210,14 @@ final class WatchModel: ObservableObject {
         Task {
             await workout.end()
             finishFreshnessWatch()
-            presentResultIfNeeded()
+            if !guidanceOnly { presentResultIfNeeded() }
         }
     }
 
     func dismissResult() {
         result = nil
         state = nil
+        guidanceOnly = false
         notice = nil
     }
 
@@ -236,7 +244,7 @@ final class WatchModel: ObservableObject {
             // Starting the mirrored workout can beat the plan across the
             // radio. Accept that late plan when it belongs to this workout,
             // but never let another outing replace the route in progress.
-            if workout.isRunning {
+            if workout.isRunning || guidanceOnly {
                 guard incoming.sessionID == workout.sessionID || incoming.sessionID == state?.sessionID else { return }
             }
             plan = incoming
@@ -246,7 +254,7 @@ final class WatchModel: ObservableObject {
             // The phone left the loop-choosing screen with nothing started.
             // A clear that predates the plan on screen is stale and ignored,
             // the same way an old plan would be.
-            guard !workout.isRunning else { return }
+            guard !workout.isRunning, !guidanceOnly else { return }
             guard let plan, plan.preparedAt <= clearedAt else { return }
             self.plan = nil
             clearStoredPlan()
@@ -259,6 +267,9 @@ final class WatchModel: ObservableObject {
                 requestPlan()
             }
             state = incoming
+            if !workout.isRunning, incoming.phase == .active || incoming.phase == .paused {
+                guidanceOnly = true
+            }
             lastStateAt = Date()
             isPhoneLive = true
             notice = nil
@@ -281,7 +292,7 @@ final class WatchModel: ObservableObject {
                 Task {
                     await workout.end()
                     finishFreshnessWatch()
-                    presentResultIfNeeded()
+                    if !guidanceOnly { presentResultIfNeeded() }
                 }
             case .start, .requestPlan:
                 break

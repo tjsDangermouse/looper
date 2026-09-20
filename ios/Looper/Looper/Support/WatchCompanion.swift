@@ -19,11 +19,21 @@ enum WatchConnection: Equatable {
     case degraded
     /// The Watch couldn't take part. Carries the reason for the phone to show.
     case failed(String)
+    /// The Watch cannot create a Health workout, but still receives the
+    /// phone's route, metrics and turn guidance over WatchConnectivity.
+    case guidanceOnly(String)
 
     var isRunningOnWatch: Bool {
         switch self {
         case .live, .degraded: return true
-        case .unavailable, .ready, .starting, .failed: return false
+        case .unavailable, .ready, .starting, .failed, .guidanceOnly: return false
+        }
+    }
+
+    var canReceiveGuidance: Bool {
+        switch self {
+        case .starting, .live, .degraded, .guidanceOnly: return true
+        case .unavailable, .ready, .failed: return false
         }
     }
 }
@@ -135,7 +145,7 @@ final class WatchCompanion: NSObject, ObservableObject {
         do {
             try await store.startWatchApp(toHandle: configuration)
         } catch {
-            connection = .failed("Your Apple Watch couldn’t start the workout.")
+            connection = .guidanceOnly("Apple Health recording is off on your Watch. Guidance is still available.")
             return false
         }
 
@@ -148,7 +158,7 @@ final class WatchCompanion: NSObject, ObservableObject {
             }
         }
         if !started, case .starting = connection {
-            connection = .failed("Your Apple Watch didn’t answer in time. Recording on iPhone instead.")
+            connection = .guidanceOnly("Recording on iPhone. Watch guidance remains available when connected.")
         }
         return started
     }
@@ -166,11 +176,15 @@ final class WatchCompanion: NSObject, ObservableObject {
     /// Sends the current state to the Watch. Throttled, and quietly dropped
     /// when there is nothing on the other end.
     func send(_ state: WorkoutStatePayload, force: Bool = false) {
-        guard connection.isRunningOnWatch || connection == .starting else { return }
+        guard connection.canReceiveGuidance else { return }
         let now = Date()
         if force || now.timeIntervalSince(lastLiveSend) >= Self.liveInterval {
             lastLiveSend = now
-            sendOverMirroredChannel(.state(state))
+            if mirrored != nil {
+                sendOverMirroredChannel(.state(state))
+            } else {
+                link.send(.state(state), delivery: .live)
+            }
         }
         // The durable copy is what a Watch that has been asleep or out of
         // range wakes up to, so it goes out on its own slower clock.
@@ -243,7 +257,9 @@ final class WatchCompanion: NSObject, ObservableObject {
                 finishStart(true)
             }
             if status.state == .failed {
-                connection = .failed(status.message ?? "Your Apple Watch couldn’t record this workout.")
+                connection = .guidanceOnly(
+                    status.message ?? "Apple Health recording is off on your Watch. Guidance is still available."
+                )
                 finishStart(false)
             }
             onWorkoutStatus?(status)
@@ -259,7 +275,7 @@ final class WatchCompanion: NSObject, ObservableObject {
         switch connection {
         case .unavailable, .ready:
             connection = reach.canPreload ? .ready : .unavailable
-        case .live, .degraded, .starting, .failed:
+        case .live, .degraded, .starting, .failed, .guidanceOnly:
             // A running workout's state is decided by the mirrored session,
             // not by whether the two apps can chat.
             break

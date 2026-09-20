@@ -31,7 +31,7 @@ private struct ControlsPage: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            if model.workout.phase == .paused {
+            if model.isPaused {
                 Button(action: model.resume) {
                     Label("Resume", systemImage: "play.fill")
                 }
@@ -95,11 +95,22 @@ private struct MetricsPage: View {
                 Metric(value: heartText, label: "BPM", tint: model.workout.heartRate == nil ? nil : .looperHeart)
             }
 
-            if !model.isPhoneLive {
-                Label("iPhone not connected", systemImage: "iphone.slash")
+            if model.guidanceOnly, model.isPhoneLive {
+                Label("Guidance only · Health recording off", systemImage: "heart.slash")
                     .font(.caption2)
                     .foregroundStyle(.orange)
-                    .accessibilityLabel("iPhone not connected. Distance and time are measured on your Watch.")
+            } else if !model.isPhoneLive {
+                Label(
+                    model.guidanceOnly ? "iPhone disconnected · Metrics unavailable" : "iPhone not connected",
+                    systemImage: "iphone.slash"
+                )
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .accessibilityLabel(
+                        model.guidanceOnly
+                            ? "iPhone disconnected. Guidance and live metrics are unavailable."
+                            : "iPhone not connected. Distance and time are measured on your Watch."
+                    )
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -109,7 +120,7 @@ private struct MetricsPage: View {
         HStack(spacing: 4) {
             Image(systemName: model.activity == .running ? "figure.run" : "figure.walk")
             Text(model.activity == .running ? "Run" : "Walk")
-            if model.workout.phase == .paused {
+            if model.isPaused {
                 Text("· Paused").foregroundStyle(Color.looperAccent)
             }
             Spacer()
@@ -126,6 +137,7 @@ private struct MetricsPage: View {
     /// ambiguous — the "iPhone not connected" line below says so.
     private var distanceMeters: Double {
         if model.isPhoneLive, let state = model.state { return state.distanceMeters }
+        if model.guidanceOnly, let state = model.state { return state.distanceMeters }
         return model.workout.localDistanceMeters
     }
 
