@@ -634,6 +634,7 @@ final class AppModel: ObservableObject {
         routeStore.save(route)
         routeTileCache.cache(route)
         startRecording(route, id: plan.sessionID, owner: owner)
+        navigationLogger.resetForNewRoute()
         navigationLogger.log("navigation.started", details: [
             "sessionID": plan.sessionID,
             "routeID": route.id,

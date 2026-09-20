@@ -122,13 +122,24 @@ final class NavigationLogger: ObservableObject {
     }
 
     func clear() {
+        resetStoredDiagnostics()
+        log("diagnostics.cleared")
+    }
+
+    /// Starts a route with one coherent diagnostic. The route snapshot only
+    /// represents the newest walk, so retaining older GPS events beside it
+    /// would make an export appear to contain one impossible joined track.
+    func resetForNewRoute() {
+        resetStoredDiagnostics()
+    }
+
+    private func resetStoredDiagnostics() {
         entries.removeAll()
         entryCount = 0
         try? FileManager.default.removeItem(at: fileURL)
         try? FileManager.default.removeItem(at: routeSnapshotURL)
         routeSnapshot = nil
         protectedSessionStart = nil
-        log("diagnostics.cleared")
     }
 
     /// Saves the selected route as it existed when navigation began: source

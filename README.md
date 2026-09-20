@@ -52,6 +52,51 @@ GraphHopper, Compose files, data documentation, and the API contract are
 operational assets owned by the route service and already sit within its
 extraction boundary.
 
+## Admin web tools
+
+Two development-only admin interfaces are provided by the web app. From the repository
+root, start the Vite development server in a terminal:
+
+```bash
+cd web
+npm install                 # first run, and whenever dependencies change
+npm run dev
+```
+
+Vite prints the local address when it is ready; by default it is
+[`http://localhost:5173`](http://localhost:5173). Keep that terminal running while using
+either tool. These pages are available only through the development server and are not
+included as admin interfaces in the deployed PWA.
+
+### Map colour themes
+
+Open [`http://localhost:5173/map-style-editor`](http://localhost:5173/map-style-editor).
+The editor manages the shared map-theme catalogue and the colours used to distinguish
+route options. It supports creating, duplicating, renaming and deleting themes, with a
+live vector-map preview for every colour change.
+
+Choose **Save to apps** to validate the catalogue and update all three tracked files:
+
+- `map-styles.json`, the human-readable source of truth.
+- `web/src/mapStyleConfig.generated.ts`, used by the web app.
+- `ios/LooperKit/Sources/LooperKit/MapStyleConfig.generated.swift`, used by iOS.
+
+Do not edit the generated TypeScript or Swift files directly. After saving a theme,
+restart or rebuild the iOS app so Xcode recompiles the generated Swift source.
+
+### Route diagnostics
+
+Open [`http://localhost:5173/route-diagnostics`](http://localhost:5173/route-diagnostics).
+Drop in a combined navigation-diagnostics JSON file or the plain-text export shared from
+the iOS app. The viewer overlays the planned route, accepted and rejected GPS fixes,
+planned directions and guidance messages, and provides a chronological navigation
+ledger beneath the map.
+
+Use **Highlight an area** to draw around a problem junction or section of the walk, then
+choose **Copy selected area for AI** to copy a focused JSON evidence bundle containing
+the relevant route geometry, steps, events and available planner evidence. Parsing,
+selection and copying happen entirely in the browser; the location data is not uploaded.
+
 ## Map rendering
 
 Both clients use MapLibre with OpenFreeMap's hosted Liberty style. The map switch offers
@@ -61,12 +106,7 @@ separately coloured vector layers for footways, trails and cycleways. Basemap st
 configuration is rendered by `web/src/mapStyle.ts` and
 `ios/Looper/Looper/Map/MapStyleConfiguration.swift`.
 
-### The style editor and its backend
-
-Run the editor at `/map-style-editor` from the web development server to create and manage
-styles, tune their colours against live vector tiles, and edit the shared route-option
-colours. **Save to apps** writes `map-styles.json` and regenerates both platform files, so
-a palette is never copied by hand between web and iOS.
+### The style editor backend
 
 The backend is `web/dev/mapStyleBackend.ts`, a Vite plugin serving a single endpoint
 (`/__looper-style-editor/config`). Two things about it are deliberate:
