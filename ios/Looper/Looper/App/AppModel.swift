@@ -2,6 +2,7 @@ import AVFoundation
 import CoreLocation
 import Foundation
 import LooperKit
+import UIKit
 
 /// A second "find new loops" tap before the first has answered means two
 /// requests can finish out of order. Only the most recently *started* one
@@ -647,6 +648,14 @@ final class AppModel: ObservableObject {
             "muted": String(muted),
             "watchOwner": owner == .watch ? "watch" : "phone"
         ])
+        // Logged after the reset above rather than where the handshake
+        // happens, so it survives into the export the walker sends in.
+        navigationLogger.log("watch.handshake", details: [
+            "startedFrom": watchSessionID == nil ? "phone" : "watch",
+            "paired": String(watch.isPairedWithApp),
+            "watchOwnsWorkout": String(owner == .watch),
+            "connection": watch.connection.diagnosticName
+        ])
         navigationLogger.recordRoute(route, sessionID: plan.sessionID, activity: activity, unit: unit)
         startWalkWatch()
         startWatchStateFeed()
@@ -825,7 +834,29 @@ final class AppModel: ObservableObject {
         summary = makeLoopSummary(record)
         // Deliberately not awaited: the summary appears straight away and the
         // Health row fills itself in behind it.
-        Task { await saveToHealth() }
+        //
+        // A loop that finishes on arrival finishes with the phone in a pocket
+        // and the screen off, and ending the walk has just given up the
+        // location updates that were keeping the app awake. The assertion
+        // below buys the save the time to finish rather than leaving it to
+        // be cut off mid-write by a suspension.
+        Task { await withBackgroundTime("health-save") { await self.saveToHealth() } }
+    }
+
+    /// Runs `work` under a background task assertion, so it survives the app
+    /// being suspended the moment it is no longer on screen. The assertion is
+    /// always given back — including when the system calls time on it first.
+    private func withBackgroundTime(_ name: String, _ work: () async -> Void) async {
+        var identifier: UIBackgroundTaskIdentifier = .invalid
+        identifier = UIApplication.shared.beginBackgroundTask(withName: name) {
+            guard identifier != .invalid else { return }
+            UIApplication.shared.endBackgroundTask(identifier)
+            identifier = .invalid
+        }
+        await work()
+        guard identifier != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(identifier)
+        identifier = .invalid
     }
 
     /// Rebuilds the on-screen summary from the record, so the Health row
@@ -1190,6 +1221,13 @@ final class AppModel: ObservableObject {
     }
 
     private func handleWatchWorkoutStatus(_ status: WatchWorkoutStatusPayload) {
+        navigationLogger.log("watch.workoutStatus", details: [
+            "state": String(describing: status.state),
+            "sessionID": status.sessionID,
+            "matchesCurrentSession": String(session?.id == status.sessionID),
+            "message": status.message ?? "none",
+            "connection": watch.connection.diagnosticName
+        ])
         guard var record = session, record.id == status.sessionID else { return }
         switch status.state {
         case .running:

@@ -55,14 +55,17 @@ struct StartLoopView: View {
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
 
-                    // The reason for the permission sheet, on screen before
-                    // the sheet is. Plain, and no broader than the truth:
-                    // this records the walk you chose, and shows your heart
-                    // rate while you do it.
-                    if model.workout.needsAuthorization {
-                        Text("Starting asks Apple Health for permission to record this \(plan.activity == .running ? "run" : "walk") and show your heart rate.")
+                    // Permission is settled at launch, so what this screen
+                    // owes the walker is not a warning about a sheet to come
+                    // but the plain consequence of the answer already given:
+                    // start this and nothing lands in Health.
+                    if !model.canRecordToHealth {
+                        Label(
+                            "Guidance only. Allow Health access in Settings to record this \(plan.activity == .running ? "run" : "walk") and show your heart rate.",
+                            systemImage: "heart.slash"
+                        )
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.orange)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }

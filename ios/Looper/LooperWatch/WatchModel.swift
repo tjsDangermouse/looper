@@ -40,9 +40,15 @@ final class WatchModel: ObservableObject {
     /// means the numbers on screen are the Watch's own and the turn guidance
     /// has stopped — said out loud rather than quietly faked.
     @Published private(set) var isPhoneLive = false
-    /// Health is not part of the launch gate. It is requested only when the
-    /// walker starts, and declining it never locks the rest of the app.
+    /// The normal app stays behind this gate until the first-run sheets have
+    /// been presented, in a deliberate order. Location is required to get
+    /// past it; Health is asked for there too but is not required.
     @Published private(set) var launchPhase: LaunchPhase = .permissions
+    /// Whether Health will accept a workout from this Watch. Settled at
+    /// launch, alongside the other permissions, so that by the time a loop is
+    /// on screen the app already knows whether it can record — and can say
+    /// so, rather than finding out on the Start tap.
+    @Published private(set) var canRecordToHealth = true
 
     let workout = WatchWorkout()
     private let link = WatchLinkSession()
@@ -96,9 +102,16 @@ final class WatchModel: ObservableObject {
         }
     }
 
-    /// Location must resolve before maps and route recording are used. A
-    /// shared task prevents phone-initiated and on-Watch launches from asking
-    /// at the same time. Health is deliberately requested later, at Start.
+    /// Both first-run questions are asked here, at launch, in a deliberate
+    /// order. A shared task also makes a phone-initiated launch wait on the
+    /// exact same gate instead of starting a competing authorization request.
+    ///
+    /// The two are not equally important. Location must resolve: without it
+    /// there is no route and nothing to record. Health is asked for in the
+    /// same breath — permission sheets belong with the rest of setting up,
+    /// not in front of someone who has just tapped Start and wants to walk —
+    /// but a refusal only costs the Health recording, so it is noted and the
+    /// launch carries on.
     private func completePermissionGate() async -> Bool {
         if launchPhase == .ready { return true }
         if let permissionGate { return await permissionGate.value }
@@ -111,6 +124,12 @@ final class WatchModel: ObservableObject {
                 launchPhase = .blocked("Allow location access in Settings so Looper can record your route, then try again.")
                 return false
             }
+
+            // The delegate callback records the choice before watchOS has
+            // necessarily finished dismissing its sheet. Leave that short
+            // transition clear before presenting HealthKit's larger sheet.
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            canRecordToHealth = await workout.requestAuthorization()
 
             launchPhase = .ready
             return true
@@ -166,8 +185,15 @@ final class WatchModel: ObservableObject {
         do {
             try await workout.start(activity: activity, sessionID: plan.sessionID)
             recordsWorkout = true
+            canRecordToHealth = true
+            // Starting is not instant, and the phone's first state updates
+            // can land in the middle of it — at which point the workout is
+            // not yet running and looks, to the rule below, like a Watch
+            // that can't record. The outcome here is the one that counts.
+            guidanceOnly = false
         } catch {
             guidanceOnly = true
+            canRecordToHealth = workout.isAuthorizedToRecord
             notice = "Guidance only · Apple Health recording is off"
             // The phone owns the Health record when the Watch can't take it —
             // it is told so explicitly rather than left to guess.
@@ -267,7 +293,10 @@ final class WatchModel: ObservableObject {
                 requestPlan()
             }
             state = incoming
-            if !workout.isRunning, incoming.phase == .active || incoming.phase == .paused {
+            // A phone walking an outing this Watch has no workout for means
+            // guidance only — but not while a workout is still starting, and
+            // not once one is running.
+            if !workout.isRunning, !starting, incoming.phase == .active || incoming.phase == .paused {
                 guidanceOnly = true
             }
             lastStateAt = Date()

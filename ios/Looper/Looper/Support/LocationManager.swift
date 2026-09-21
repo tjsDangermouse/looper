@@ -22,6 +22,11 @@ final class LocationManager: NSObject {
     private var oneShotTimeout: DispatchWorkItem?
     private var positionContinuation: AsyncStream<PositionUpdate>.Continuation?
     private var headingContinuation: AsyncStream<Double>.Continuation?
+    /// The app's own claim on background running time, held for exactly as
+    /// long as a walk is being tracked. This is what keeps the phone awake
+    /// with the screen off — not the Apple Watch, not a workout session, and
+    /// not anything else outside this app.
+    private var backgroundSession: CLBackgroundActivitySession?
 
     override init() {
         super.init()
@@ -89,16 +94,45 @@ final class LocationManager: NSObject {
 
     /// Watches position for the duration the stream is being iterated —
     /// terminate iteration (e.g. leave the walk screen) to stop the watch.
+    ///
+    /// Everything needed to survive a locked screen is claimed here, at the
+    /// start of the walk, and given back when the walk ends. A tracked outing
+    /// therefore keeps recording on its own terms; nothing about it depends
+    /// on whether an Apple Watch is present or what it managed to start.
     func positionUpdates() -> AsyncStream<PositionUpdate> {
         AsyncStream { continuation in
             positionContinuation = continuation
             manager.requestAlwaysAuthorization()
             updateBackgroundCapability()
+            beginBackgroundSession()
             manager.startUpdatingLocation()
             continuation.onTermination = { [weak self] _ in
-                self?.manager.stopUpdatingLocation()
+                Task { @MainActor in
+                    self?.manager.stopUpdatingLocation()
+                    self?.endBackgroundSession()
+                }
             }
         }
+    }
+
+    /// `CLBackgroundActivitySession` is how an app says, in its own right,
+    /// that it is doing something that must carry on with the screen off. It
+    /// is what makes background location dependable under "While Using" as
+    /// well as "Always", and it puts the system's own indicator on screen so
+    /// the walker can see the tracking is running.
+    private func beginBackgroundSession() {
+        guard backgroundSession == nil else { return }
+        switch manager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            backgroundSession = CLBackgroundActivitySession()
+        default:
+            break
+        }
+    }
+
+    private func endBackgroundSession() {
+        backgroundSession?.invalidate()
+        backgroundSession = nil
     }
 
     /// Watches heading for the duration the stream is being iterated — the
@@ -113,8 +147,19 @@ final class LocationManager: NSObject {
         }
     }
 
+    /// Keeping the track going with the screen off is the whole point of a
+    /// walk recording, and "While Using" is enough for it: background updates
+    /// are permitted under that grant too, with the system's own indicator
+    /// shown while they run. Restricting this to "Always" used to be masked
+    /// by the mirrored Watch workout keeping the app awake anyway, which hid
+    /// the gap rather than filling it.
     private func updateBackgroundCapability() {
-        manager.allowsBackgroundLocationUpdates = manager.authorizationStatus == .authorizedAlways
+        switch manager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            manager.allowsBackgroundLocationUpdates = true
+        default:
+            manager.allowsBackgroundLocationUpdates = false
+        }
         manager.pausesLocationUpdatesAutomatically = false
     }
 }
@@ -135,6 +180,10 @@ extension LocationManager: CLLocationManagerDelegate {
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         updateBackgroundCapability()
+        // A walk can begin on the same tap that asks for permission, so the
+        // grant often lands after tracking has started. Claim the background
+        // session at that point rather than leaving the outing without one.
+        if positionContinuation != nil { beginBackgroundSession() }
         guard oneShotContinuation != nil else { return }
         switch manager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:

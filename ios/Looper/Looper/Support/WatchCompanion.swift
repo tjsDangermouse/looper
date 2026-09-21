@@ -36,6 +36,21 @@ enum WatchConnection: Equatable {
         case .unavailable, .ready, .failed: return false
         }
     }
+
+    /// For the diagnostics log. The reason carried by the two unhappy cases
+    /// is included: "why did the Watch drop out" is the whole question those
+    /// entries exist to answer.
+    var diagnosticName: String {
+        switch self {
+        case .unavailable: return "unavailable"
+        case .ready: return "ready"
+        case .starting: return "starting"
+        case .live: return "live"
+        case .degraded: return "degraded"
+        case .failed(let reason): return "failed(\(reason))"
+        case .guidanceOnly(let reason): return "guidanceOnly(\(reason))"
+        }
+    }
 }
 
 /// The iPhone's whole view of the Apple Watch: WatchConnectivity for
@@ -73,9 +88,14 @@ final class WatchCompanion: NSObject, ObservableObject {
     /// 100 KB per 10 seconds and a state payload is a few hundred bytes, so
     /// this is about legibility on the wrist, not about the budget.
     private static let liveInterval: TimeInterval = 1
-    /// …and the durable copy goes out this often, so a Watch that has been
-    /// out of range still finds a recent picture waiting when it comes back.
-    private static let resilientInterval: TimeInterval = 20
+    /// …and the application-context copy goes out this often. It is the only
+    /// channel that survives a locked phone, a sleeping Watch or a dropped
+    /// mirrored session, so it is treated as the link that has to work rather
+    /// than as a fallback: it runs on this clock for every outing, whether or
+    /// not a mirrored session happens to exist. The interval is set by the
+    /// Watch's own liveness window — it has to arrive comfortably inside it,
+    /// or the wrist declares the phone gone while the phone is walking on.
+    private static let resilientInterval: TimeInterval = 5
     private var lastLiveSend = Date.distantPast
     private var lastResilientSend = Date.distantPast
     /// How long the phone waits for the Watch before walking without it.
@@ -178,6 +198,11 @@ final class WatchCompanion: NSObject, ObservableObject {
     func send(_ state: WorkoutStatePayload, force: Bool = false) {
         guard connection.canReceiveGuidance else { return }
         let now = Date()
+        // The fast paths, both of them best-effort: the mirrored channel
+        // exists only while the Watch has a workout, and `.live` is discarded
+        // the moment the pair stops being reachable — which is exactly what
+        // happens when the screen goes off. Neither is allowed to be the only
+        // way the wrist hears from the phone.
         if force || now.timeIntervalSince(lastLiveSend) >= Self.liveInterval {
             lastLiveSend = now
             if mirrored != nil {
@@ -186,8 +211,7 @@ final class WatchCompanion: NSObject, ObservableObject {
                 link.send(.state(state), delivery: .live)
             }
         }
-        // The durable copy is what a Watch that has been asleep or out of
-        // range wakes up to, so it goes out on its own slower clock.
+        // …and the copy that actually has to arrive, on its own slower clock.
         if force || now.timeIntervalSince(lastResilientSend) >= Self.resilientInterval {
             lastResilientSend = now
             link.send(.state(state), delivery: .latest)

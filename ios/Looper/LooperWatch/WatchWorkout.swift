@@ -102,16 +102,19 @@ final class WatchWorkout: NSObject, ObservableObject {
         return types
     }
 
-    /// Whether the walker has yet been asked. Used to put the reason on
-    /// screen *before* the system sheet appears, rather than leaving a
-    /// permission prompt to explain itself.
-    var needsAuthorization: Bool {
+    /// Whether Health will accept a workout from this Watch right now. Read
+    /// after a refusal to tell "declined" apart from a workout that failed
+    /// to start for some other reason, and again on later launches, so a
+    /// permission granted in Settings is picked up without being re-asked.
+    var isAuthorizedToRecord: Bool {
         guard HKHealthStore.isHealthDataAvailable() else { return false }
-        return store.authorizationStatus(for: HKObjectType.workoutType()) == .notDetermined
+        return store.authorizationStatus(for: HKObjectType.workoutType()) == .sharingAuthorized
     }
 
-    /// Asked for at the moment it is needed — the tap that starts a workout —
-    /// so the reason for the sheet is obvious from what the walker just did.
+    /// Asked for once at launch, with the other first-run permissions, so the
+    /// sheet lands while the walker is setting the app up rather than in
+    /// front of the Start button. Calling it again later is harmless: once
+    /// the choice is made watchOS answers from the stored decision.
     func requestAuthorization() async -> Bool {
         guard HKHealthStore.isHealthDataAvailable() else { return false }
         do {
