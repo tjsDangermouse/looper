@@ -41,17 +41,9 @@ public enum Activity: String, Codable, Hashable, Sendable {
     case running
 }
 
-/// Which routing implementation should find the walk.
-///
-/// A developer/testing choice rather than a walker's: both engines answer the
-/// same question and return the same kind of route, so nothing in the map, the
-/// walk screen or the spoken guidance branches on this. It exists so that the
-/// two can be compared on real ground.
-///
-/// Ordered waypoints are answered by both implementations, each in its own
-/// way; the on-device engine builds them from the backbone out — see
-/// `LocalWaypointRouter`.
-public enum RoutingEngine: String, Codable, Hashable, Sendable, CaseIterable {
+/// Historical route provenance. New routes are always `.onDevice`; `.remote`
+/// remains only so routes saved by earlier test builds can still be decoded.
+public enum RoutingEngine: String, Codable, Hashable, Sendable {
     case remote
     case onDevice
 
@@ -68,23 +60,9 @@ public enum RoutingEngine: String, Codable, Hashable, Sendable, CaseIterable {
         try container.encode(rawValue)
     }
 
-    /// What to show a tester. Deliberately short enough for a badge.
-    public var badge: String {
-        switch self {
-        case .remote: return "REMOTE"
-        case .onDevice: return "ON-DEVICE"
-        }
-    }
-
-    public var title: String {
-        switch self {
-        case .remote: return "Remote / Current"
-        case .onDevice: return "On-device / New"
-        }
-    }
 }
 
-/// What the service said about how an answer was produced. Developer-facing.
+/// Developer-facing measurements from a routing run.
 public struct RoutingEngineReport: Codable, Equatable, Sendable {
     public var routingEngine: RoutingEngine
     public var generationMs: Double?
@@ -268,10 +246,8 @@ public struct Route: Codable, Equatable, Sendable {
     public var geometry: LineGeometry
     public var steps: [Step]
     public var reversed: Bool?
-    /// Which engine produced this route. Stamped by `requestLoops` from the
-    /// answer's own report, so a route carries its provenance into the walk
-    /// screen and into a saved favourite. Nothing about the route's meaning
-    /// depends on it.
+    /// Which engine produced this route. New routes are stamped explicitly by
+    /// the local engine; the remote value remains only to decode old saves.
     public var routingEngine: RoutingEngine?
     /// Present for locally planned routes. Optional keeps
     /// saved routes and responses from older builds source-compatible.

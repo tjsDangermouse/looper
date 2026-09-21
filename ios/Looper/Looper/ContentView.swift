@@ -2,7 +2,7 @@ import LooperKit
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var model = AppModel(apiBase: Config.apiBase)
+    @StateObject private var model = AppModel()
     @State private var mapStyle: MapStyleChoice = .looper
 
     var body: some View {

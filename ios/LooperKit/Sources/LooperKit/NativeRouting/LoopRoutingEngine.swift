@@ -14,8 +14,7 @@ public struct LoopRequest: Sendable {
     public var variation: Int
     public var waypoints: [Point]
     public var excludeRoutes: [Route]
-    /// Progress while routing data is being acquired. Only an engine that
-    /// acquires data calls it; the remote engine never does.
+    /// Progress while routing data is being acquired.
     public var onDataProgress: (@Sendable (LoopDataProgress) -> Void)?
 
     public init(
@@ -65,7 +64,7 @@ public struct LoopResponse {
     public var routes: [Route]
     public var warning: String?
     public var expectationExceeded: Bool
-    /// What the service said, when a service answered. Absent on-device.
+    /// Optional developer-facing routing measurements.
     public var engine: RoutingEngineReport?
     /// What the local router did, when it was the one that answered.
     public var localDiagnostics: LocalLoopRouter.Diagnostics?
@@ -86,86 +85,9 @@ public struct LoopResponse {
     }
 }
 
-/// The seam.
-///
-/// Two implementations, and the rest of the app consumes the same route model
-/// from either. This is what makes the comparison honest: the map, the walk
-/// screen, the spoken guidance, the Watch and the saved favourites all behave
-/// identically, so the only thing a field test is comparing is the walk.
+/// The routing seam used by the app and tests.
 public protocol LoopRoutingEngine: Sendable {
     func generateLoops(_ request: LoopRequest) async throws -> LoopResponse
-}
-
-// MARK: - Remote
-
-/// The existing hosted engine, wrapped and otherwise untouched.
-///
-/// This calls `requestLoops` exactly as the app has always called it: the same
-/// URL, the same body, the same response handling. Nothing about the remote
-/// path changes because a second engine exists — it is retained so that the
-/// two can be compared on real ground, and a retained baseline that quietly
-/// drifted would be worth nothing.
-public struct RemoteLoopRoutingEngine: LoopRoutingEngine {
-    private let apiBase: String
-    private let client: LoopsHTTPClient
-
-    public init(apiBase: String, client: LoopsHTTPClient) {
-        self.apiBase = apiBase
-        self.client = client
-    }
-
-    public func generateLoops(_ request: LoopRequest) async throws -> LoopResponse {
-        let result = try await requestLoops(
-            start: request.start,
-            mode: request.mode,
-            distanceKm: request.mode == .distance ? request.distanceKm : nil,
-            durationMinutes: request.mode == .time ? request.durationMinutes : nil,
-            unit: request.unit,
-            activity: request.activity,
-            walkingPaceMinutes: request.walkingPaceMinutes,
-            walkingPaceUnit: request.walkingPaceUnit,
-            variation: request.variation,
-            waypoints: request.waypoints,
-            excludeRoutes: request.excludeRoutes,
-            apiBase: apiBase,
-            client: client
-        )
-        return LoopResponse(
-            routes: result.routes.map { route in
-                var route = route
-                route.routingEngine = .remote
-                return route
-            },
-            warning: result.warning,
-            expectationExceeded: result.expectationExceeded,
-            engine: RoutingEngineReport(routingEngine: .remote),
-            routingEngine: .remote
-        )
-    }
-}
-
-/// Counts every routing call the app makes to Looper's own service.
-///
-/// A decorator rather than a change to `URLSessionLoopsHTTPClient`, so the
-/// remote path's behaviour is identical with it and without it. Its whole
-/// purpose is that "the on-device engine made zero Looper routing calls" can
-/// be a measurement instead of a claim.
-public struct AuditingLoopsHTTPClient: LoopsHTTPClient {
-    private let wrapped: LoopsHTTPClient
-    private let audit: RoutingAudit
-
-    public init(wrapping wrapped: LoopsHTTPClient = URLSessionLoopsHTTPClient(), audit: RoutingAudit = .shared) {
-        self.wrapped = wrapped
-        self.audit = audit
-    }
-
-    public func post(url: URL, body: Data) async throws -> (data: Data, statusCode: Int) {
-        // Logged as well as counted. In On-device mode this line must never
-        // appear, and a silence nobody can see is not evidence of anything.
-        RoutingLog.remote.info("looper routing request \(url.absoluteString, privacy: .public)")
-        await audit.recordLooperRoutingRequest(url: url.absoluteString)
-        return try await wrapped.post(url: url, body: body)
-    }
 }
 
 // MARK: - On device
@@ -173,11 +95,7 @@ public struct AuditingLoopsHTTPClient: LoopsHTTPClient {
 /// The new engine: raw OSM path data straight from an external provider,
 /// cached on the phone, and every routing decision made here.
 ///
-/// Note what this type cannot do, by construction rather than by discipline:
-/// it holds no `LoopsHTTPClient`, no API base, and no reference to
-/// `RemoteLoopRoutingEngine`. There is no code path from here to Looper's
-/// routing service, which is why the "did it secretly fall back" question has
-/// a structural answer and not just a test.
+/// It receives raw OSM path data and performs every routing decision locally.
 public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
     private let data: RoutingDataManager
     private let store: RoutingChunkStore
@@ -322,10 +240,7 @@ public actor OnDeviceLoopRoutingEngine: LoopRoutingEngine {
     /// Walks through ordered pins.
     ///
     /// Separated from the ring case only so that each reads as the one thing
-    /// it is. Note what this does *not* do: reach for the remote engine. A
-    /// waypoint walk the device cannot build is reported as such, in the same
-    /// words the service would use, because an engine that quietly changes
-    /// under a comparison is not a comparison.
+    /// it is. A waypoint walk the device cannot build is reported as such.
     private func waypointLoops(
         _ request: LoopRequest, targetMetres: Double, paceMinutesPerKm: Double,
         graph: LocalWalkingGraph, index: LocalEdgeIndex

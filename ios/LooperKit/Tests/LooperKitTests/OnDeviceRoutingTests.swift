@@ -1,23 +1,6 @@
 import XCTest
 @testable import LooperKit
 
-/// A `LoopsHTTPClient` that fails the test if anything touches it.
-///
-/// This is the backend-protection guard in executable form. The on-device
-/// engine cannot be handed one of these — its initialiser takes no HTTP client
-/// and no API base — so the guard here is on the *app's* wiring: whatever the
-/// app does while On-device is selected, Looper's routing service must not
-/// hear about it.
-private final class ForbiddenLoopsClient: LoopsHTTPClient, @unchecked Sendable {
-    private(set) var wasCalled = false
-
-    func post(url: URL, body: Data) async throws -> (data: Data, statusCode: Int) {
-        wasCalled = true
-        XCTFail("the Looper routing service was called while On-device routing was selected: \(url)")
-        throw LooperAPIError.message("must not be called")
-    }
-}
-
 /// A transport that refuses every request, standing in for airplane mode.
 private struct DisconnectedTransport: OverpassTransport {
     func post(url: URL, body: Data, timeout: TimeInterval) async throws -> (data: Data, statusCode: Int) {
@@ -152,7 +135,6 @@ final class OnDeviceRoutingTests: XCTestCase {
 
         let snapshot = await audit.snapshot()
         XCTAssertEqual(snapshot.overpassCallCount, 0, "Overpass HTTP calls must be zero")
-        XCTAssertEqual(snapshot.looperRoutingCallCount, 0, "Looper routing HTTP calls must be zero")
     }
 
     /// The uncached-offline test: the answer is a local-data error, never a
@@ -160,7 +142,6 @@ final class OnDeviceRoutingTests: XCTestCase {
     func testAnUncachedAreaOfflineSaysSoRatherThanRoutingRemotely() async throws {
         let directory = makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let forbidden = ForbiddenLoopsClient()
         let engine = engine(directory: directory, transport: DisconnectedTransport())
 
         do {
@@ -173,19 +154,12 @@ final class OnDeviceRoutingTests: XCTestCase {
                 "the walker is told what is actually wrong: \(error.localizedDescription)"
             )
         }
-        XCTAssertFalse(forbidden.wasCalled)
     }
 
-    // MARK: - Backend protection
+    // MARK: - Provider isolation
 
-    /// The structural half of the guarantee: the on-device engine has no way
-    /// to reach Looper's routing service, because it holds nothing that could.
-    ///
-    /// A test cannot assert the absence of a dependency directly, but it can
-    /// assert the consequence: a full local request, from cold, records not
-    /// one Looper routing call — while the same audit demonstrably *does*
-    /// record them when the remote engine runs.
-    func testTheOnDeviceEngineNeverReachesTheLooperRoutingService() async throws {
+    /// The routing engine contacts only its configured OSM data provider.
+    func testTheOnDeviceEngineUsesOnlyTheConfiguredOSMProvider() async throws {
         let directory = makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let audit = RoutingAudit()
@@ -194,22 +168,11 @@ final class OnDeviceRoutingTests: XCTestCase {
         _ = try await engine.generateLoops(request(distanceKm: 3))
         _ = try await engine.generateLoops(request(distanceKm: 2))
         let local = await audit.snapshot()
-        XCTAssertEqual(local.looperRoutingCallCount, 0)
         XCTAssertGreaterThan(local.overpassCallCount, 0, "it did do work, over the OSM data source")
         XCTAssertTrue(
             local.overpassRequests.allSatisfy { $0.endpoint.contains("overpass.test") },
             "the only host contacted is the configured OSM data provider"
         )
-
-        // And the counter is not simply broken: the remote engine trips it.
-        let remote = RemoteLoopRoutingEngine(
-            apiBase: "https://routes.test",
-            client: AuditingLoopsHTTPClient(wrapping: StubRemoteClient(), audit: audit)
-        )
-        _ = try? await remote.generateLoops(request(distanceKm: 3))
-        let mixed = await audit.snapshot()
-        XCTAssertEqual(mixed.looperRoutingCallCount, 1)
-        XCTAssertTrue(mixed.looperRoutingRequests[0].url.hasPrefix("https://routes.test/v1/loops"))
     }
 
     // MARK: - Ordered waypoints
@@ -232,7 +195,6 @@ final class OnDeviceRoutingTests: XCTestCase {
     func testWaypointLoopsAreBuiltOnTheDevice() async throws {
         let directory = makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let client = ForbiddenLoopsClient()
         let engine = engine(directory: directory, transport: StubOverpassTransport { [data = town()] _ in data })
 
         var request = request(distanceKm: 3)
@@ -241,7 +203,6 @@ final class OnDeviceRoutingTests: XCTestCase {
 
         XCTAssertFalse(result.routes.isEmpty, "the device found no walk through two ordinary pins")
         XCTAssertEqual(result.routingEngine, .onDevice)
-        XCTAssertFalse(client.wasCalled)
         for route in result.routes {
             XCTAssertEqual(route.routingEngine, .onDevice)
             XCTAssertLessThanOrEqual(
@@ -361,13 +322,5 @@ final class OnDeviceRoutingTests: XCTestCase {
             XCTAssertLessThan(report.overpassRequests, 6)
             XCTAssertLessThan(report.storedBytes, 60 * 1024 * 1024)
         }
-    }
-}
-
-/// A stand-in for Looper's route service, so the remote engine can be exercised
-/// without one.
-private struct StubRemoteClient: LoopsHTTPClient {
-    func post(url: URL, body: Data) async throws -> (data: Data, statusCode: Int) {
-        (Data(#"{"routes":[]}"#.utf8), 200)
     }
 }

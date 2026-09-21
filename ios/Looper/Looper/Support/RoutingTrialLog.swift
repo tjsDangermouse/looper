@@ -1,8 +1,7 @@
 import Foundation
 import LooperKit
 
-/// On-device record of routing-engine trials, for field testing the on-device
-/// router against the current remote engine.
+/// On-device record of routing trials for field testing the local router.
 ///
 /// Deliberately the same shape as `NavigationLogger`: a small JSON file in
 /// Application Support, a plain-text export the tester shares from Settings
