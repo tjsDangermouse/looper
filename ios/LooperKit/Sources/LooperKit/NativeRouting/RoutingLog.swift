@@ -19,8 +19,7 @@ import os
 /// ```
 ///
 /// Categories are split so one question can be asked at a time: `data` for
-/// acquisition, `search` for what the router did, `remote` for calls to
-/// Looper's own service — which in On-device mode must produce no lines at all.
+/// acquisition and `search` for what the router did.
 public enum RoutingLog {
     public static let subsystem = "com.woollams.Looper"
 
@@ -28,10 +27,6 @@ public enum RoutingLog {
     public static let data = Logger(subsystem: subsystem, category: "routing.data")
     /// Building the graph and searching it.
     public static let search = Logger(subsystem: subsystem, category: "routing.search")
-    /// Calls to Looper's own routing service. Silence here is the point in
-    /// On-device mode, and silence is only meaningful if the line would
-    /// otherwise have been written.
-    public static let remote = Logger(subsystem: subsystem, category: "routing.remote")
 
     /// A bounding box, short enough to read in a log line.
     public static func box(_ bounds: GeographicBounds) -> String {

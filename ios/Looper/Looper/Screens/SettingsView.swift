@@ -39,18 +39,10 @@ struct SettingsView: View {
                             }
                         }
                         if RoutingTrialLog.includedInThisBuild {
-                            Picker(selection: $model.routingMode) {
-                                ForEach(RoutingEngine.allCases, id: \.self) { engine in
-                                    Text(engine.title).tag(engine)
-                                }
-                            } label: {
-                                Label("Routing engine", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
-                            }
-                            .pickerStyle(.inline)
                             NavigationLink {
                                 RoutingTrialsView(log: model.routingTrials)
                             } label: {
-                                Label("Routing engine trials", systemImage: "list.clipboard")
+                                Label("Routing trials", systemImage: "list.clipboard")
                             }
                             NavigationLink {
                                 RoutingDataView(model: model)
@@ -61,7 +53,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Temporary testing")
                     } footer: {
-                        Text("On-device finds the walk on this phone, using walking paths it downloads for the area and keeps. Waypoints work on both. A route screen says which engine actually answered.")
+                        Text("Looper finds walks on this phone using walking paths downloaded for the area and kept for later use.")
                     }
                 }
 
@@ -223,7 +215,7 @@ private struct RoutingTrialsView: View {
                 }
             }
         }
-        .navigationTitle("Routing engine trials")
+        .navigationTitle("Routing trials")
         .overlay {
             if log.trials.isEmpty {
                 ContentUnavailableView("No trials yet", systemImage: "list.clipboard",
@@ -235,10 +227,7 @@ private struct RoutingTrialsView: View {
     }
 
     private var summary: String {
-        let local = log.trials.filter { $0.routingEngine == RoutingEngine.onDevice.rawValue }.count
-        // Historical "direct" rows were also produced by the remote service.
-        let remote = log.trials.count - local
-        return "\(log.trials.count) recorded · \(local) on-device · \(remote) remote"
+        "\(log.trials.count) on-device trial\(log.trials.count == 1 ? "" : "s") recorded"
     }
 
     private func refreshExport() {

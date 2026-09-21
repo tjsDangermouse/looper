@@ -206,7 +206,6 @@ final class RoutingProviderFailoverTests: XCTestCase {
         XCTAssertEqual(snapshot.overpassRequests.count, 1)
         XCTAssertNotNil(snapshot.overpassRequests[0].failure)
         XCTAssertEqual(snapshot.overpassRequests[0].responseBytes, 0)
-        XCTAssertEqual(snapshot.looperRoutingCallCount, 0, "a failed download must not reach for the remote router")
     }
 
     /// A walker staring at "Downloading walking paths for this area…" while

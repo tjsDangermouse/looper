@@ -47,17 +47,14 @@ public actor RoutingDataManager {
     }
 
     public enum AcquisitionError: Error, LocalizedError, Equatable {
-        /// Local mode, data absent, and no way to fetch it. Deliberately its
-        /// own case: the app must say so rather than quietly falling back to
-        /// the remote router, because a comparison test in which the engine
-        /// silently changes is not a comparison.
+        /// Routing data is absent and there is no network path to fetch it.
         case dataUnavailableOffline
         case source(RoutingDataSourceError)
 
         public var errorDescription: String? {
             switch self {
             case .dataUnavailableOffline:
-                return "Routing data for this area isn’t available offline yet. Connect to download it, or switch to Remote routing."
+                return "Routing data for this area isn’t available offline yet. Connect to download it."
             case .source(let error):
                 return error.errorDescription
             }

@@ -35,24 +35,11 @@ final class AppModel: ObservableObject {
     @Published var runningPaceUnit = LooperKit.Unit(rawValue: UserDefaults.standard.string(forKey: "running-pace-unit") ?? "km") ?? .km {
         didSet { UserDefaults.standard.set(runningPaceUnit.rawValue, forKey: "running-pace-unit") }
     }
-    /// Which engine finds the walk: the existing hosted service, or the new
-    /// on-device one. A tester's choice, not a walker's — both answer the same
-    /// question and return the same kind of route — and it exists so the two
-    /// can be compared on real ground before one of them is chosen.
-    @Published var routingMode = RoutingEngine(rawValue: UserDefaults.standard.string(forKey: "routing-mode") ?? "") ?? .remote {
-        didSet {
-            UserDefaults.standard.set(routingMode.rawValue, forKey: "routing-mode")
-            dataProgress = nil
-        }
-    }
-    /// What the service said about the answer currently on screen, if it said.
-    @Published private(set) var engineReport: RoutingEngineReport?
     /// What the local engine last reported about how it found the walk.
-    /// Developer-facing, like `engineReport`, and nil whenever Remote answered.
+    /// Developer-facing diagnostics for the most recent on-device search.
     @Published private(set) var localDiagnostics: LocalLoopRouter.Diagnostics?
-    /// Set while On-device routing is fetching walking paths for an area it
-    /// has not seen before. Nil at every other moment, including throughout a
-    /// Remote request, which never downloads anything.
+    /// Set while routing is fetching walking paths for an area it has not seen
+    /// before, and nil at every other moment.
     @Published private(set) var dataProgress: LoopDataProgress?
     @Published var routes: [Route] = []
     @Published var selected: Route?
@@ -100,12 +87,9 @@ final class AppModel: ObservableObject {
     /// path through this model works with it in that state.
     let watch = WatchCompanion()
 
-    private let apiBase: String
-    private let httpClient: LoopsHTTPClient
-    /// Made on first use, so a build that never selects On-device never opens
-    /// the routing-data store. The store is held alongside the engine because
-    /// Settings reports on it and can clear it — and because the future
-    /// Offline Areas feature will fill this same store, not another one.
+    /// The store is held alongside the engine because Settings reports on it
+    /// and can clear it — and because the future Offline Areas feature will
+    /// fill this same store, not another one.
     private lazy var routingChunkStore = RoutingChunkStore.applicationDefault()
     private lazy var onDeviceEngine = OnDeviceLoopRoutingEngine(
         store: routingChunkStore,
@@ -142,20 +126,16 @@ final class AppModel: ObservableObject {
     static let waypointLimit = 4
 
     init(
-        apiBase: String,
         locationManager: LocationManager = LocationManager(),
         speechManager: SpeechManager? = nil,
-        httpClient: LoopsHTTPClient = URLSessionLoopsHTTPClient(),
         routeStore: RouteStore = RouteStore(),
         favoritesStore: FavoritesStore = FavoritesStore(),
         routeTileCache: RouteTileCache = RouteTileCache(),
         sessionStore: SessionStore = SessionStore(),
         health: HealthIntegration? = nil
     ) {
-        self.apiBase = apiBase
         self.locationManager = locationManager
         self.speechManager = speechManager ?? SpeechManager()
-        self.httpClient = AuditingLoopsHTTPClient(wrapping: httpClient)
         self.routeStore = routeStore
         self.favoritesStore = favoritesStore
         self.routeTileCache = routeTileCache
@@ -172,9 +152,9 @@ final class AppModel: ObservableObject {
 
     #if DEBUG
     /// Lets a debug build jump straight to a screen with sample data, without
-    /// a live route service — set LOOPER_PREVIEW to "choices" or "walk" in
-    /// the scheme/launch environment. LOOPER_PREVIEW=find instead exercises
-    /// the real network path against the configured apiBase.
+    /// live location — set LOOPER_PREVIEW to "choices" or "walk" in the
+    /// scheme/launch environment. LOOPER_PREVIEW=find exercises on-device
+    /// routing and its walking-path download.
     private func seedPreviewStateIfRequested() {
         guard let target = ProcessInfo.processInfo.environment["LOOPER_PREVIEW"] else { return }
         if target == "find" {
@@ -443,16 +423,7 @@ final class AppModel: ObservableObject {
         startFindingStageTimer()
         let requestedWaypoints = waypoints
 
-        let modeForRequest = routingMode
-        let engineForRequest = modeForRequest
         let askedAt = Date()
-        // The two engines are chosen between here and nowhere else. Neither
-        // knows the other exists, and On-device never falls back to Remote:
-        // a comparison in which the engine can silently change is not a
-        // comparison, so a local request that cannot be served says so.
-        let engine: LoopRoutingEngine = modeForRequest == .onDevice
-            ? onDeviceEngine
-            : RemoteLoopRoutingEngine(apiBase: apiBase, client: httpClient)
         let loopRequest = LoopRequest(
             start: start,
             mode: mode,
@@ -475,7 +446,7 @@ final class AppModel: ObservableObject {
         Task {
             defer { if seq == requestSeq { dataProgress = nil } }
             do {
-                let result = try await engine.generateLoops(loopRequest)
+                let result = try await onDeviceEngine.generateLoops(loopRequest)
                 guard seq == requestSeq else { return } // a later request already started; its result is the one that counts
                 if result.expectationExceeded {
                     let message = result.warning ?? "These waypoints need a longer loop. Increase your distance or time, or remove a waypoint."
@@ -489,7 +460,6 @@ final class AppModel: ObservableObject {
                 }
                 routes = result.routes
                 selected = result.routes.first
-                engineReport = result.engine
                 localDiagnostics = result.localDiagnostics
                 // One row per set of walks offered, written the moment they
                 // arrive. Local only — see RoutingTrialLog.
@@ -503,7 +473,7 @@ final class AppModel: ObservableObject {
                             searchMs: local.search.searchMs
                         )
                     },
-                    selectedEngine: engineForRequest,
+                    selectedEngine: .onDevice,
                     requestedMetres: distanceKm * 1000,
                     mode: mode,
                     activity: activity,
