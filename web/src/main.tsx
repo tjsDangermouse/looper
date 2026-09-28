@@ -3,27 +3,13 @@ import './styles.css'
 import './mobile.css'
 import './mapStyleEditor.css'
 import './routeDiagnostics.css'
-import { App } from './App'
+import './adminIndex.css'
+import { AdminIndex } from './AdminIndex'
 import { MapStyleEditor } from './MapStyleEditor'
 import { RouteDiagnostics } from './RouteDiagnosticViewer'
 
-const editingMapStyle = import.meta.env.DEV && window.location.pathname.replace(/\/$/, '') === '/map-style-editor'
-const viewingRouteDiagnostics = import.meta.env.DEV && window.location.pathname.replace(/\/$/, '') === '/route-diagnostics'
+const pathname = window.location.pathname.replace(/\/$/, '')
+const editingMapStyle = pathname === '/map-style-editor'
+const viewingRouteDiagnostics = pathname === '/route-diagnostics'
 
-if (!editingMapStyle && !viewingRouteDiagnostics && 'serviceWorker' in navigator) window.addEventListener('load', async () => {
-  // updateViaCache:'none' keeps the browser's HTTP cache from serving a stale
-  // sw.js, which would pin the app to an old build.
-  const registration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
-  registration.update()
-  // The new worker calls skipWaiting, so it takes control as soon as it is
-  // installed; reload once at that point to swap in the new build.
-  let reloading = false
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloading || !navigator.serviceWorker.controller) return
-    reloading = true
-    window.location.reload()
-  })
-  // Catch deploys that land while the app is open in the background.
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) registration.update() })
-})
-createRoot(document.getElementById('root')!).render(viewingRouteDiagnostics ? <RouteDiagnostics /> : editingMapStyle ? <MapStyleEditor /> : <App />)
+createRoot(document.getElementById('root')!).render(viewingRouteDiagnostics ? <RouteDiagnostics /> : editingMapStyle ? <MapStyleEditor /> : <AdminIndex />)

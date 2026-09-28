@@ -2,7 +2,7 @@
 
 Hi.
 Finding circular walks that bring you back to where you started, as a native iPhone and
-Apple Watch app and as a mobile-first web PWA.
+Apple Watch app.
 
 Looper generates its own loops. It proposes rings of waypoints around you, routes each
 leg of the ring separately while holding the ground already walked against the next leg,
@@ -10,51 +10,47 @@ measures every finished candidate, and offers only the ones that are genuinely l
 Nothing here asks a routing engine for a "round trip".
 
 ```text
-Looper iOS + watchOS  ─┐
-    (Swift/LooperKit)  │
-                       ├──►  Looper Route Service  ─────►  self-hosted GraphHopper
-Looper PWA  ───────────┘        POST /v1/loops              (walking graph)
- (Vite/React)                                                       │
-                                                             OpenStreetMap PBF
+Looper iOS + watchOS  ─────►  Looper Route Service  ─────►  self-hosted GraphHopper
+    (Swift/LooperKit)             POST /v1/loops              (walking graph)
+                                                                      │
+                                                               OpenStreetMap PBF
 
-map-styles.json  ──►  generated Swift + TypeScript palettes  ──►  both clients
-   (style editor, web dev server only)
+map-styles.json  ──►  generated Swift palette  ──►  iOS and watchOS
+   (local browser-based style editor)
 ```
 
-Two first-class clients, one API. The iOS app is native Swift — not a wrapper around the
-PWA — with an Apple Watch companion for live guidance, and it shares no source code with
-the web app. Both meet the route service only through
+The iOS app is native Swift, with an Apple Watch companion for live guidance. It meets
+the route service only through
 [Loop API v1](route-service/contracts/loop-api/v1.md).
 
 Map styling is shared rather than duplicated: a style editor served by the web development
-server writes `map-styles.json` and regenerates the Swift and TypeScript palette files
-from it, so a colour is picked once and both clients get it.
+server writes `map-styles.json` and regenerates the Swift palette used by the app. Its
+TypeScript palette remains as the editor's live preview configuration.
 
-Both apps talk to Looper's own API for routing. There is no third-party routing provider
-and no routing API key anywhere in this repository. Both clients render their basemap
-with MapLibre using OpenFreeMap's hosted Liberty vector style. The optional Looper
+The app talks to Looper's own API for routing. There is no third-party routing provider
+and no routing API key anywhere in this repository. It renders its basemap with MapLibre
+using OpenFreeMap's hosted Liberty vector style. The optional Looper
 treatment restyles those same vector layers; map data still comes from OpenStreetMap.
 
 ## Repository map
 
 | Path | What it is |
 | --- | --- |
-| `web/` | The web PWA — [web guide](web/README.md) |
+| `web/` | Local browser-based admin tools; retired web-client source is retained — [admin guide](web/README.md) |
 | `ios/` | Native iPhone and Apple Watch apps, and the shared `LooperKit` package — [iOS guide](ios/README.md) |
 | `route-service/` | Route API and all of its deployment assets — [service guide](route-service/README.md) |
-| `route-service/contracts/loop-api/v1.md` | Versioned API contract shared by the web and iOS clients |
-| `map-styles.json` | The map style catalogue: source of truth for both clients' palettes |
+| `route-service/contracts/loop-api/v1.md` | Versioned API contract used by the iOS client |
+| `map-styles.json` | The map style catalogue: source of truth for the iOS palette and admin preview |
 | `web/dev/mapStyleBackend.ts` | The style editor's backend, a Vite dev-server plugin — development only, never shipped |
 
-The three product areas have no source-code imports between them. The web and
-iOS clients meet the route service only through [Loop API v1](route-service/contracts/loop-api/v1.md).
+The iOS client meets the route service only through [Loop API v1](route-service/contracts/loop-api/v1.md).
 GraphHopper, Compose files, data documentation, and the API contract are
 operational assets owned by the route service and already sit within its
 extraction boundary.
 
 ## Admin web tools
 
-Two development-only admin interfaces are provided by the web app. From the repository
+Two development-only admin interfaces are provided by the local web admin project. From the repository
 root, start the Vite development server in a terminal:
 
 ```bash
@@ -64,9 +60,9 @@ npm run dev
 ```
 
 Vite prints the local address when it is ready; by default it is
-[`http://localhost:5173`](http://localhost:5173). Keep that terminal running while using
-either tool. These pages are available only through the development server and are not
-included as admin interfaces in the deployed PWA.
+[`http://localhost:5173`](http://localhost:5173). That root page links to both tools.
+Keep the terminal running while using either one. This project is local admin tooling
+for the iOS app; it no longer serves a consumer web app.
 
 ### Map colour themes
 
@@ -78,7 +74,7 @@ live vector-map preview for every colour change.
 Choose **Save to apps** to validate the catalogue and update all three tracked files:
 
 - `map-styles.json`, the human-readable source of truth.
-- `web/src/mapStyleConfig.generated.ts`, used by the web app.
+- `web/src/mapStyleConfig.generated.ts`, used by the admin editor's live preview.
 - `ios/LooperKit/Sources/LooperKit/MapStyleConfig.generated.swift`, used by iOS.
 
 Do not edit the generated TypeScript or Swift files directly. After saving a theme,
@@ -99,7 +95,7 @@ selection and copying happen entirely in the browser; the location data is not u
 
 ## Map rendering
 
-Both clients use MapLibre with OpenFreeMap's hosted Liberty style. The map switch offers
+The iOS app and local admin previews use MapLibre with OpenFreeMap's hosted Liberty style. The map switch offers
 the untouched style as **Default** plus every custom style saved in the catalogue.
 Looper subdues motorways and POIs, clarifies parks and woodland, and adds strong,
 separately coloured vector layers for footways, trails and cycleways. Basemap style
@@ -112,19 +108,19 @@ The backend is `web/dev/mapStyleBackend.ts`, a Vite plugin serving a single endp
 (`/__looper-style-editor/config`). Two things about it are deliberate:
 
 - **It is development-only.** It writes files in the repository, so it exists solely in the
-  dev server and is never part of a production build. Nothing in the deployed PWA can
-  reach it.
+  dev server and is never part of a production build. The admin project is not deployed.
 - **It validates before it writes.** `validateCatalogue` checks the version, style IDs,
   names, every palette key, and the route colours, and rejects unknown palette fields. The
   files it writes are generated and committed, so a bad save is a bad commit — the
-  validation is what keeps a typo out of both clients at once.
+  validation is what keeps a typo out of both generated outputs at once.
 
 Regenerated output — `web/src/mapStyleConfig.generated.ts` and
 `ios/LooperKit/Sources/LooperKit/MapStyleConfig.generated.swift` — is committed, and edited
 only through the editor. Change `map-styles.json` and the two generated files together, or
-the clients disagree about what colour something is.
+the editor preview and iOS app disagree about what colour something is.
 
-- `web/src/MapView.tsx` owns the web map, start/current-location markers, gestures and
+- `web/src/MapView.tsx` is retained with the retired web client. It owns that client's map,
+  start/current-location markers, gestures and
   camera. Routes remain screen-space SVG overlays projected by MapLibre, which keeps
   their existing selection, colour, width and chevron behaviour above the basemap.
 - `ios/Looper/Looper/Map/MapLibreMapView.swift` owns the interactive iOS map, annotations,
@@ -147,7 +143,7 @@ cp .env.example .env          # nothing secret in it; no API keys exist here
 docker compose up --build     # GraphHopper + route service
 
 cd ../web
-npm install && npm run dev    # the PWA on :5173, proxying /v1 to :8988
+npm install && npm run dev    # local admin index and tools on :5173
 ```
 
 The first `docker compose up` imports both OpenStreetMap extracts before the route service
@@ -163,8 +159,8 @@ curl -X POST localhost:8988/v1/loops -H 'content-type: application/json' \
   -d '{"start":{"lng":-4.4816,"lat":54.1506},"mode":"distance","distanceKm":5,"units":"km"}'
 ```
 
-Vite proxies `/v1` to `http://localhost:8988`, so in development the browser sees a single
-origin and no CORS. Set `LOOPER_API_URL` in `.env` if the route service is somewhere else.
+The admin server does not connect to or proxy the route service. Run the service separately
+when developing or testing the iOS app.
 
 ### Running the route service without Docker
 
@@ -230,20 +226,11 @@ while it runs. To avoid downtime, build the new graph into a second volume and s
 
 ## Deploying
 
-The front end and the routing engine deploy separately. The engine holds a multi-hundred-
-megabyte graph in memory and takes minutes to import; it cannot run in a serverless
-function.
+Only the routing engine is deployed from this repository. It holds a multi-hundred-megabyte
+graph in memory and takes minutes to import; it cannot run in a serverless function.
 
-### Front end
-
-Deploy `web/` to Vercel or any static host. Set one build-time variable:
-
-```
-VITE_LOOPER_API_BASE=https://looper-routes.example.com
-```
-
-Leave it blank only for local development, where Vite's proxy stands in for it. The value
-is baked into the bundle at build time, so changing it needs a rebuild.
+The `web/` admin project is local-only and is not deployed. Its previous PWA source and
+deployment assets are retained for now but are no longer mounted by the server.
 
 ### Routing service
 
@@ -257,8 +244,8 @@ cd route-service
 CORS_ORIGINS=https://looper.example.com docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-Set `CORS_ORIGINS` to the PWA's exact origin. It defaults to `*`, which is convenient
-locally and wrong in production.
+Restrict `CORS_ORIGINS` if a browser client is ever allowed to call this deployment. The
+native iOS app does not rely on browser CORS.
 
 ### Updating only the route service
 
@@ -427,10 +414,7 @@ cd route-service && npm run lint && npm run typecheck && npm test
   is stretched to fit — the shorter request falls back or returns nothing.
 - **Distance is a target, not a promise.** Loops are offered within ±12% of the request.
   Where the streets cannot get closer than that, nothing is offered.
-- **Live guidance needs the app open.** Browser PWAs cannot guarantee guidance while
-  backgrounded or locked.
-- **Geolocation needs HTTPS.** Test on a phone against the deployed URL, not a LAN
-  address.
+- **Live guidance needs the app active.** iOS can suspend work after the user closes it.
 
 ## Possible future work
 

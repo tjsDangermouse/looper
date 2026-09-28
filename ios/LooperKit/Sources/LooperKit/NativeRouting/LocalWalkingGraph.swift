@@ -31,6 +31,10 @@ public struct LocalWalkingGraph: Sendable {
     public let edgeWeight: [Double]
     public let edgeForward: [Bool]
     public let edgeBackward: [Bool]
+    /// This edge is an OSM pedestrian crossing (`footway=crossing` or a
+    /// crossing-tagged way). It remains a footway for access and weighting,
+    /// but guidance must not merge it into the pavement on either side.
+    public let edgeIsCrossing: [Bool]
     /// `routing.snap_preventions`: this edge is a tunnel, a bridge or a ferry,
     /// so a walker's start or waypoint is snapped onto it only when nothing
     /// else is within range. It stays fully routable — the walk may cross it.
@@ -66,6 +70,10 @@ public struct LocalWalkingGraph: Sendable {
         PedestrianAccessPolicy.RoadClass(rawValue: edgeRoadClass[edge]) ?? .other
     }
 
+    public func isCrossing(ofEdge edge: Int) -> Bool {
+        edgeIsCrossing[edge]
+    }
+
     /// Flat lon/lat pairs for one edge, `from` end first.
     public func line(ofEdge edge: Int) -> ArraySlice<Double> {
         geometry[Int(geometryStart[edge])..<Int(geometryStart[edge + 1])]
@@ -88,6 +96,7 @@ public struct LocalWalkingGraph: Sendable {
         edgeFrom: [Int32], edgeTo: [Int32], edgeMetres: [Double],
         edgeWeight: [Double] = [],
         edgeForward: [Bool], edgeBackward: [Bool],
+        edgeIsCrossing: [Bool] = [],
         edgeSnapPrevented: [Bool] = [],
         geometryStart: [Int32], geometry: [Double],
         edgeName: [Int32], edgeRoadClass: [UInt8], edgeWayID: [Int64], names: [String],
@@ -105,6 +114,8 @@ public struct LocalWalkingGraph: Sendable {
             ? edgeWeight : [Double](repeating: 1, count: edgeFrom.count)
         self.edgeForward = edgeForward
         self.edgeBackward = edgeBackward
+        self.edgeIsCrossing = edgeIsCrossing.count == edgeFrom.count
+            ? edgeIsCrossing : [Bool](repeating: false, count: edgeFrom.count)
         self.edgeSnapPrevented = edgeSnapPrevented.count == edgeFrom.count
             ? edgeSnapPrevented : [Bool](repeating: false, count: edgeFrom.count)
         self.geometryStart = geometryStart
@@ -185,6 +196,7 @@ public enum LocalWalkingGraphBuilder {
             var ids: [Int64]
             var decision: PedestrianAccessPolicy.Decision
             var name: String?
+            var isCrossing: Bool
             /// `routing.snap_preventions`: a tunnel, bridge or ferry.
             var snapPrevented: Bool
         }
@@ -196,13 +208,15 @@ public enum LocalWalkingGraphBuilder {
             guard decision.isWalkable else { continue }
             report.waysWalkable += 1
             let name = way.tags["name"] ?? way.tags["ref"]
+            let isCrossing = way.tags["footway"] == "crossing"
+                || way.tags["crossing"].map { $0 != "no" } == true
             let snapPrevented = PedestrianAccessPolicy.isSnapPrevented(way.tags)
             var current: [Int64] = []
             for id in way.nodes {
                 guard let node = nodeByID[id] else {
                     // Coordinates for this node are in a chunk we have not
                     // loaded. Close the run here rather than bridging the gap.
-                    if current.count >= 2 { runs.append(Run(wayID: way.id, ids: current, decision: decision, name: name, snapPrevented: snapPrevented)) }
+                    if current.count >= 2 { runs.append(Run(wayID: way.id, ids: current, decision: decision, name: name, isCrossing: isCrossing, snapPrevented: snapPrevented)) }
                     current = []
                     continue
                 }
@@ -214,11 +228,11 @@ public enum LocalWalkingGraphBuilder {
                     // *at* the barrier node would reconnect the two sides
                     // through the very thing that blocks them.
                     current.append(id)
-                    if current.count >= 2 { runs.append(Run(wayID: way.id, ids: current, decision: decision, name: name, snapPrevented: snapPrevented)) }
+                    if current.count >= 2 { runs.append(Run(wayID: way.id, ids: current, decision: decision, name: name, isCrossing: isCrossing, snapPrevented: snapPrevented)) }
                     current = []
                 }
             }
-            if current.count >= 2 { runs.append(Run(wayID: way.id, ids: current, decision: decision, name: name, snapPrevented: snapPrevented)) }
+            if current.count >= 2 { runs.append(Run(wayID: way.id, ids: current, decision: decision, name: name, isCrossing: isCrossing, snapPrevented: snapPrevented)) }
         }
 
         // A node is a junction if more than one run uses it, if it begins or
@@ -255,6 +269,7 @@ public enum LocalWalkingGraphBuilder {
         var edgeFrom: [Int32] = [], edgeTo: [Int32] = []
         var edgeMetres: [Double] = [], edgeWeight: [Double] = []
         var edgeForward: [Bool] = [], edgeBackward: [Bool] = []
+        var edgeIsCrossing: [Bool] = []
         var edgeSnapPrevented: [Bool] = []
         var geometryStart: [Int32] = [0]
         var geometry: [Double] = []
@@ -302,6 +317,7 @@ public enum LocalWalkingGraphBuilder {
                     edgeWeight.append(run.decision.weight)
                     edgeForward.append(run.decision.forward)
                     edgeBackward.append(run.decision.backward)
+                    edgeIsCrossing.append(run.isCrossing)
                     edgeSnapPrevented.append(run.snapPrevented)
                     edgeName.append(nameSlot)
                     edgeRoadClass.append(run.decision.roadClass.rawValue)
@@ -338,20 +354,22 @@ public enum LocalWalkingGraphBuilder {
             if keep.contains(false) {
                 report.subnetworkEdgesDropped = keep.lazy.filter { !$0 }.count
                 var nFrom: [Int32] = [], nTo: [Int32] = [], nMetres: [Double] = [], nWeight: [Double] = []
-                var nForward: [Bool] = [], nBackward: [Bool] = [], nSnap: [Bool] = []
+                var nForward: [Bool] = [], nBackward: [Bool] = [], nCrossing: [Bool] = [], nSnap: [Bool] = []
                 var nGeomStart: [Int32] = [0], nGeom: [Double] = []
                 var nName: [Int32] = [], nRoadClass: [UInt8] = [], nWayID: [Int64] = []
                 for edge in 0..<edgeFrom.count where keep[edge] {
                     nFrom.append(edgeFrom[edge]); nTo.append(edgeTo[edge])
                     nMetres.append(edgeMetres[edge]); nWeight.append(edgeWeight[edge])
                     nForward.append(edgeForward[edge]); nBackward.append(edgeBackward[edge])
+                    nCrossing.append(edgeIsCrossing[edge])
                     nSnap.append(edgeSnapPrevented[edge])
                     nName.append(edgeName[edge]); nRoadClass.append(edgeRoadClass[edge]); nWayID.append(edgeWayID[edge])
                     nGeom.append(contentsOf: geometry[Int(geometryStart[edge])..<Int(geometryStart[edge + 1])])
                     nGeomStart.append(Int32(nGeom.count))
                 }
                 edgeFrom = nFrom; edgeTo = nTo; edgeMetres = nMetres; edgeWeight = nWeight
-                edgeForward = nForward; edgeBackward = nBackward; edgeSnapPrevented = nSnap
+                edgeForward = nForward; edgeBackward = nBackward
+                edgeIsCrossing = nCrossing; edgeSnapPrevented = nSnap
                 geometryStart = nGeomStart; geometry = nGeom
                 edgeName = nName; edgeRoadClass = nRoadClass; edgeWayID = nWayID
             }
@@ -396,6 +414,7 @@ public enum LocalWalkingGraphBuilder {
             nodeOSMID: nodeOSMID, nodeLat: nodeLat, nodeLon: nodeLon,
             edgeFrom: edgeFrom, edgeTo: edgeTo, edgeMetres: edgeMetres, edgeWeight: edgeWeight,
             edgeForward: edgeForward, edgeBackward: edgeBackward,
+            edgeIsCrossing: edgeIsCrossing,
             edgeSnapPrevented: edgeSnapPrevented,
             geometryStart: geometryStart, geometry: geometry,
             edgeName: edgeName, edgeRoadClass: edgeRoadClass, edgeWayID: edgeWayID, names: names,

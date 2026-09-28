@@ -1,1 +1,10 @@
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Looper</title><meta name="theme-color" content="#08192b"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..500&display=swap"><link rel="icon" href="/icon.svg"><div id="root"></div><script type="module" src="/src/main.tsx"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Looper admin</title><meta name="theme-color" content="#101816"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..500&display=swap"><link rel="icon" href="/icon.svg"><div id="root"></div><script type="module">
+// The retired PWA registered a cache-first service worker on this origin. Remove
+// it before importing Vite's module graph or it can serve obsolete dependency URLs.
+const registrations = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistrations() : []
+const wasControlled = Boolean(navigator.serviceWorker?.controller)
+await Promise.all(registrations.map(registration => registration.unregister()))
+if ('caches' in window) await Promise.all((await caches.keys()).filter(name => name.startsWith('looper-')).map(name => caches.delete(name)))
+if (wasControlled) window.location.reload()
+else await import('/src/main.tsx')
+</script>

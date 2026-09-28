@@ -162,7 +162,8 @@ public enum LocalSpikeTrim {
             rebuilt.append(WalkLeg(
                 coordinates: runPoints, metres: untouched ? source.metres : runMetres,
                 name: source.name, roadClass: source.roadClass, physical: source.physical,
-                baseWeight: source.baseWeight, avoidancePenalty: source.avoidancePenalty
+                baseWeight: source.baseWeight, avoidancePenalty: source.avoidancePenalty,
+                isCrossing: source.isCrossing
             ))
             runPoints = []
             runMetres = 0

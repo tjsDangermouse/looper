@@ -1,55 +1,56 @@
 import Foundation
 
-/// Voice guidance. A turn is announced at most once per band, so walking through
-/// 400 m → 100 m → the corner itself gives three prompts and no repetition.
-public enum Band: String {
-    case soon
-    case near
+/// The three useful moments for walking guidance: introduce the next manoeuvre,
+/// remind the walker shortly before it, then call it at the corner itself.
+public enum AnnouncementStage: String {
+    case preview
+    case approach
     case now
 }
 
-/// Remembers how far through the announcement bands each manoeuvre has got.
+/// Remembers how far through the announcement stages each manoeuvre has got.
 /// GPS can move a matched position backwards for a fix or two; once a turn has
-/// reached `now`, that noise must not make it announce `near` again. Different
+/// reached `now`, that noise must not make it announce `approach` again. Different
 /// manoeuvres remain independent, so two close turns can both be announced.
 public struct GuidanceAnnouncementHistory {
-    private var highestBandByTurn: [Int: Int] = [:]
+    private var highestStageByTurn: [Int: Int] = [:]
 
     public init() {}
 
     public mutating func shouldAnnounce(_ turn: TurnAnnouncementInput) -> Bool {
-        guard let band = turnBand(turn.distanceAway) else { return false }
+        let stage = announcementStage(turn.distanceAway)
         let rank: Int
-        switch band {
-        case .soon: rank = 0
-        case .near: rank = 1
+        switch stage {
+        case .preview: rank = 0
+        case .approach: rank = 1
         case .now: rank = 2
         }
-        guard rank > highestBandByTurn[turn.index, default: -1] else { return false }
-        highestBandByTurn[turn.index] = rank
+        guard rank > highestStageByTurn[turn.index, default: -1] else { return false }
+
+        // If a newly active turn is already close, its preview is also its
+        // approach warning. Mark both stages consumed rather than queueing a
+        // second sentence a few seconds later.
+        let recordedRank = stage == .preview && turn.distanceAway <= 50 ? 1 : rank
+        highestStageByTurn[turn.index] = recordedRank
         return true
     }
 
     public mutating func reset() {
-        highestBandByTurn.removeAll(keepingCapacity: true)
+        highestStageByTurn.removeAll(keepingCapacity: true)
     }
 }
 
-public func turnBand(_ metresAway: Double) -> Band? {
+public func announcementStage(_ metresAway: Double) -> AnnouncementStage {
     if metresAway <= 5 { return .now }
-    if metresAway < 120 { return .near }
-    if metresAway < 450 { return .soon }
-    return nil
+    if metresAway <= 25 { return .approach }
+    return .preview
 }
 
 private func roundTo(_ value: Double, _ step: Double) -> Double {
     (value / step).rounded() * step
 }
 
-/// Say the distance that is actually left. The bands decide *when* to speak;
-/// they used to decide what was spoken too, so a turn first picked up part way
-/// into a band — right after the turn before it — was called out at the band's
-/// nominal distance: "in one hundred metres" with the corner 45 m away.
+/// Say the distance that is actually left rather than a nominal trigger distance.
 private func spokenDistance(_ metres: Double, _ unit: Unit) -> String {
     if unit == .mi {
         let yards = metres * 1.09361
@@ -99,9 +100,9 @@ extension TurnHit {
 
 public func turnAnnouncement(_ turn: TurnAnnouncementInput?, unit: Unit) -> Announcement? {
     guard let turn else { return nil }
-    guard let band = turnBand(turn.distanceAway) else { return nil }
-    let key = "\(turn.index):\(band.rawValue)"
-    let text = band == .now
+    let stage = announcementStage(turn.distanceAway)
+    let key = "\(turn.index):\(stage.rawValue)"
+    let text = stage == .now
         ? turn.instruction
         : "In \(spokenDistance(turn.distanceAway, unit)), \(joinCase(turn.instruction))"
     return Announcement(key: key, text: text)

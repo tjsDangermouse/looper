@@ -138,8 +138,9 @@ public func tidySteps(_ steps: [Step]) -> [Step] {
 /// answer on the phone, Watch and speech system.
 public func reassessDirections(_ route: Route) -> Route {
     let coordinates = route.geometry.coordinates
-    let crossings = Set(route.steps.indices.filter {
-        isStraightRoadCrossing(route.steps, at: $0, coordinates: coordinates)
+    let crossings = Set(route.steps.indices.filter { index in
+        isRoadCrossing(route.steps[index])
+            || isStraightRoadCrossing(route.steps, at: index, coordinates: coordinates)
     })
     let crossingExits = Set(crossings.map { $0 + 1 })
     var steps: [Step] = []
@@ -289,8 +290,16 @@ public func reverseRoute(_ route: Route) -> Route {
         } else {
             let joins = walked[joinsIndex]
             var turned = road
-            turned.maneuver = .name(mirrorTurn(turnKind(joins)).rawValue)
-            turned.instruction = onto(mirrorInstruction(joins.instruction), road: road.road)
+            if isRoadCrossing(road) {
+                // Crossing identity is symmetric. Keep it explicit so the
+                // reversed route gets the same speech, Watch cue and exit
+                // folding as the direction originally generated.
+                turned.maneuver = .name("cross-road")
+                turned.instruction = "Cross the road and continue straight"
+            } else {
+                turned.maneuver = .name(mirrorTurn(turnKind(joins)).rawValue)
+                turned.instruction = onto(mirrorInstruction(joins.instruction), road: road.road)
+            }
             steps.append(turned)
         }
     }

@@ -128,9 +128,9 @@ final class WalkingMathsTests: XCTestCase {
         XCTAssertNil(nextTurn(sample, 200))
     }
 
-    func testStaysSilentFarFromATurn() {
+    func testPreviewsTheNextTurnEvenWhenItIsFarAway() {
         let turn = TurnAnnouncementInput(index: 0, instruction: "Turn left", distanceAway: 900)
-        XCTAssertNil(turnAnnouncement(turn, unit: .km))
+        XCTAssertEqual(turnAnnouncement(turn, unit: .km)?.text, "In 900 metres, turn left")
     }
 
     func testLeadsInAtTheDistanceActuallyLeft() {
@@ -138,7 +138,7 @@ final class WalkingMathsTests: XCTestCase {
         XCTAssertEqual(turnAnnouncement(turn, unit: .km)?.text, "In 300 metres, turn left")
     }
 
-    func testCallsATurnPickedUpPartWayIntoABandAtItsRealDistance() {
+    func testCallsATurnPickedUpPartWayThroughAtItsRealDistance() {
         let turn = TurnAnnouncementInput(index: 0, instruction: "Turn left", distanceAway: 45)
         XCTAssertEqual(turnAnnouncement(turn, unit: .km)?.text, "In 50 metres, turn left")
     }
@@ -151,17 +151,31 @@ final class WalkingMathsTests: XCTestCase {
         XCTAssertEqual(turnAnnouncement(turn, unit: .km)?.text, "Turn left")
     }
 
-    func testKeysEachBandOnce() {
-        let turn = TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 80)
-        XCTAssertEqual(turnAnnouncement(turn, unit: .km)?.key, "2:near")
+    func testKeysEachStageOnce() {
+        let turn = TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 20)
+        XCTAssertEqual(turnAnnouncement(turn, unit: .km)?.key, "2:approach")
     }
 
-    func testGuidanceHistoryNeverMovesBackToAnEarlierBand() {
+    func testGuidanceHistoryAllowsAtMostThreeStages() {
         var history = GuidanceAnnouncementHistory()
-        XCTAssertTrue(history.shouldAnnounce(TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 80)))
+        XCTAssertTrue(history.shouldAnnounce(TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 300)))
+        XCTAssertTrue(history.shouldAnnounce(TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 20)))
         XCTAssertTrue(history.shouldAnnounce(TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 4)))
         XCTAssertFalse(history.shouldAnnounce(TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 6)))
         XCTAssertFalse(history.shouldAnnounce(TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 3)))
+    }
+
+    func testClosePreviewConsumesTheApproachStage() {
+        var history = GuidanceAnnouncementHistory()
+        XCTAssertTrue(history.shouldAnnounce(TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 40)))
+        XCTAssertFalse(history.shouldAnnounce(TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 20)))
+        XCTAssertTrue(history.shouldAnnounce(TurnAnnouncementInput(index: 2, instruction: "Turn left", distanceAway: 4)))
+    }
+
+    func testCrossingTheOldHundredMetreBoundaryDoesNotRepeatThePreview() {
+        var history = GuidanceAnnouncementHistory()
+        XCTAssertTrue(history.shouldAnnounce(TurnAnnouncementInput(index: 17, instruction: "Turn left onto Harcroft Road", distanceAway: 121.2)))
+        XCTAssertFalse(history.shouldAnnounce(TurnAnnouncementInput(index: 17, instruction: "Turn left onto Harcroft Road", distanceAway: 119.2)))
     }
 
     func testGuidanceHistoryKeepsAdjacentTurnsIndependent() {

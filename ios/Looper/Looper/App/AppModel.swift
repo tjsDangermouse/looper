@@ -999,8 +999,9 @@ final class AppModel: ObservableObject {
         walkWatchTask = nil
     }
 
-    // Speak each turn once per distance band, plus one warning when the walk
-    // strays off the loop. Falls silent on mute or on leaving the walk screen.
+    // Give each turn a preview when it becomes active, an approach reminder,
+    // and the instruction at the corner. Also warn once when the walk strays
+    // off the loop. Falls silent on mute or on leaving the walk screen.
     private func announceIfNeeded() {
         guard screen == .walk, !muted, !isPaused else {
             navigationLogger.log("guidance.suppressed", details: [

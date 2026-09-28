@@ -1,7 +1,8 @@
-# Looper web app
+# Looper admin tools
 
-The web PWA is a self-contained Vite/React project. It consumes the route
-service only through [Loop API v1](../route-service/contracts/loop-api/v1.md).
+Looper is an iOS app. This Vite/React project is only the local home for its two
+browser-based admin tools. The previous consumer web app source remains in `src`
+for now, but is not mounted by the server.
 
 ## Run and check
 
@@ -14,10 +15,9 @@ npm test
 npm run build
 ```
 
-The development server proxies `/v1` to `http://localhost:8988` by default.
-Set `LOOPER_API_URL` to use another local service, or set
-`VITE_LOOPER_API_BASE` to the deployed route-service URL when building for
-production. A deployment-ready example is in `.env.example`.
+Open [`http://localhost:5173`](http://localhost:5173) for an index linking to
+both tools. The server does not mount the consumer walking app or register its
+service worker.
 
 ## Map style editor
 
@@ -29,7 +29,7 @@ on the live vector map. **Save to apps** validates the catalogue and writes all 
 tracked files together:
 
 - `../map-styles.json` — the human-readable source of truth.
-- `src/mapStyleConfig.generated.ts` — consumed by the web app.
+- `src/mapStyleConfig.generated.ts` — consumed by the admin editor's live preview.
 - `../ios/LooperKit/Sources/LooperKit/MapStyleConfig.generated.swift` — consumed by iOS.
 
 The write endpoint exists only in the local Vite development server and refuses remote

@@ -957,6 +957,7 @@ extension LocalLoopRouter {
                 fromOSMNodeID: graph.nodeOSMID[forward ? fromNode : toNode],
                 toOSMNodeID: graph.nodeOSMID[forward ? toNode : fromNode],
                 roadClass: String(describing: leg.roadClass), road: leg.name,
+                isCrossing: leg.isCrossing ? true : nil,
                 distanceMeters: leg.metres, baseWeight: leg.baseWeight,
                 avoidancePenalty: leg.avoidancePenalty
             )

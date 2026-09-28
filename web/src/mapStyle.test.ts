@@ -3,6 +3,7 @@ import * as maplibregl from 'maplibre-gl'
 import { routeArrowsAlong, routeLineWidth } from './MapView'
 import { editorGroups } from './MapStyleEditor'
 import { applyLooperStyle, looperPalette, mapStyle, mapStyles } from './mapStyle'
+import { customMapStyles } from './mapStyleConfig.generated'
 
 describe('basemap style', () => {
   it('uses the hosted OpenFreeMap vector style', () => {
@@ -41,7 +42,7 @@ describe('basemap style', () => {
   })
 
   it('offers Default and every custom style without changing tile providers', () => {
-    expect(mapStyles.map(style => style.label)).toEqual(['Default', 'Looper', 'Dark'])
+    expect(mapStyles.map(style => style.label)).toEqual(['Default', ...customMapStyles.map(style => style.name)])
     expect(mapStyles.every(style => style.url === mapStyles[0].url)).toBe(true)
   })
 

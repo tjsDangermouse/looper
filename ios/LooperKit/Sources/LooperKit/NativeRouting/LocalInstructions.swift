@@ -7,6 +7,8 @@ public struct WalkLeg: Sendable, Equatable {
     public var metres: Double
     public var name: String?
     public var roadClass: PedestrianAccessPolicy.RoadClass
+    /// True for an OSM way explicitly mapped as a pedestrian road crossing.
+    public var isCrossing: Bool
     /// The base-graph edge this leg ran along, so retracing can be asked of the
     /// network. `-1` where the caller does not track it.
     public var physical: Int32
@@ -18,12 +20,14 @@ public struct WalkLeg: Sendable, Equatable {
     public init(
         coordinates: [Point], metres: Double, name: String?,
         roadClass: PedestrianAccessPolicy.RoadClass, physical: Int32 = -1,
-        baseWeight: Double = 1, avoidancePenalty: Double = 1
+        baseWeight: Double = 1, avoidancePenalty: Double = 1,
+        isCrossing: Bool = false
     ) {
         self.coordinates = coordinates
         self.metres = metres
         self.name = name
         self.roadClass = roadClass
+        self.isCrossing = isCrossing
         self.physical = physical
         self.baseWeight = baseWeight
         self.avoidancePenalty = avoidancePenalty
@@ -75,8 +79,8 @@ public enum LocalInstructions {
         }
 
         var pending = Pending(
-            maneuver: "continue",
-            instruction: setOff(along: legs[0].name),
+            maneuver: legs[0].isCrossing ? "cross-road" : "continue",
+            instruction: legs[0].isCrossing ? crossingInstruction : setOff(along: legs[0].name),
             road: legs[0].name,
             roadClass: legs[0].roadClass,
             metres: legs[0].metres,
@@ -87,10 +91,11 @@ public enum LocalInstructions {
         for index in 1..<legs.count {
             let previous = legs[index - 1], leg = legs[index]
             let turn = turnAngle(arriving: previous.coordinates, leaving: leg.coordinates)
-            let maneuver = maneuverName(for: turn)
+            let maneuver = leg.isCrossing ? "cross-road" : maneuverName(for: turn)
             let changedRoad = leg.name != previous.name
             let changedWalkingSurface = leg.roadClass.isPedestrianWay != previous.roadClass.isPedestrianWay
-            if maneuver == "continue" && !changedRoad && !changedWalkingSurface {
+            let changedCrossing = leg.isCrossing != previous.isCrossing
+            if maneuver == "continue" && !changedRoad && !changedWalkingSurface && !changedCrossing {
                 // The road bending round is not an instruction.
                 pending.metres += leg.metres
                 coordinateIndex += Swift.max(0, leg.coordinates.count - 1)
@@ -108,7 +113,9 @@ public enum LocalInstructions {
             ))
             pending = Pending(
                 maneuver: maneuver,
-                instruction: phrase(maneuver: maneuver, road: leg.name, roadClass: leg.roadClass),
+                instruction: leg.isCrossing
+                    ? crossingInstruction
+                    : phrase(maneuver: maneuver, road: leg.name, roadClass: leg.roadClass),
                 road: leg.name,
                 roadClass: leg.roadClass,
                 metres: leg.metres,
@@ -166,6 +173,8 @@ public enum LocalInstructions {
         guard let road else { return "Set off" }
         return "Set off along \(road)"
     }
+
+    private static let crossingInstruction = "Cross the road and continue straight"
 
     static func phrase(maneuver: String, road: String?, roadClass: PedestrianAccessPolicy.RoadClass) -> String {
         let verb: String

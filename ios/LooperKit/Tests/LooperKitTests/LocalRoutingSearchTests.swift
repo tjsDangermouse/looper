@@ -586,6 +586,40 @@ final class LocalRoutingSearchTests: XCTestCase {
         XCTAssertEqual(checkedBackwards.steps[1].distanceMeters, 114)
     }
 
+    func testMappedFootwayCrossingIsNotMergedIntoTheSidewalk() {
+        let start = SyntheticOSM.douglas
+        var pavement = leg(from: start, bearing: 0, metres: 100, name: nil)
+        pavement.roadClass = .footway
+        var crossing = leg(from: pavement.coordinates.last!, bearing: 4, metres: 14, name: nil)
+        crossing.roadClass = .footway
+        crossing.isCrossing = true
+        var onward = leg(from: crossing.coordinates.last!, bearing: 1, metres: 100, name: nil)
+        onward.roadClass = .footway
+
+        let rawSteps = LocalInstructions.steps(for: [pavement, crossing, onward])
+        XCTAssertEqual(rawSteps[1].maneuver, .name("cross-road"))
+
+        let route = Route(
+            id: "mapped-crossing", name: "Mapped crossing fixture", distanceMeters: 214,
+            durationSeconds: 154, targetDifferencePercent: 0,
+            geometry: LineGeometry(coordinates: [
+                start, pavement.coordinates.last!, crossing.coordinates.last!, onward.coordinates.last!,
+            ]),
+            steps: rawSteps
+        )
+        let checked = reassessDirections(route)
+
+        XCTAssertEqual(checked.steps.count, 3)
+        XCTAssertEqual(checked.steps[1].instruction, "Cross the road and continue straight")
+        XCTAssertEqual(checked.steps[1].maneuver, .name("cross-road"))
+        XCTAssertEqual(checked.steps[1].distanceMeters, 114)
+
+        let checkedBackwards = reassessDirections(reverseRoute(route))
+        XCTAssertEqual(checkedBackwards.steps[1].instruction, "Cross the road and continue straight")
+        XCTAssertEqual(checkedBackwards.steps[1].maneuver, .name("cross-road"))
+        XCTAssertEqual(checkedBackwards.steps[1].distanceMeters, 114)
+    }
+
     func testLocalInstructionsPreserveRoadClassTransitionsForTheRouteStartCheck() {
         let start = SyntheticOSM.douglas
         var pavement = leg(from: start, bearing: 0, metres: 100, name: nil)

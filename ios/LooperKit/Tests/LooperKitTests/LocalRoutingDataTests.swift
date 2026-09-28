@@ -223,6 +223,18 @@ final class LocalRoutingDataTests: XCTestCase {
         XCTAssertEqual(graph.edgeMetres[0], 400, accuracy: 2)
     }
 
+    func testGraphPreservesAnExplicitOSMFootwayCrossing() {
+        var data = SyntheticOSM.line(from: SyntheticOSM.douglas, size: 2, spacingMetres: 14)
+        data.ways[0].tags["footway"] = "crossing"
+        data.ways[0].tags["crossing"] = "unmarked"
+
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: data)
+
+        XCTAssertEqual(graph.edgeCount, 1)
+        XCTAssertEqual(graph.roadClass(ofEdge: 0), .footway)
+        XCTAssertTrue(graph.isCrossing(ofEdge: 0))
+    }
+
     func testALockedGateSeversTheWay() {
         var data = SyntheticOSM.line(from: SyntheticOSM.douglas, size: 5, spacingMetres: 100)
         data.nodes[2].tags = ["barrier": "gate", "locked": "yes"]

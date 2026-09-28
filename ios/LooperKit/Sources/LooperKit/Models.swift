@@ -169,6 +169,8 @@ public struct RoutePlanningDiagnostics: Codable, Equatable, Sendable {
         public var toOSMNodeID: Int64
         public var roadClass: String
         public var road: String?
+        /// The traversed OSM way is explicitly tagged as a pedestrian crossing.
+        public var isCrossing: Bool?
         public var distanceMeters: Double
         /// Cost per metre from the pedestrian profile before loop avoidance.
         public var baseWeight: Double
