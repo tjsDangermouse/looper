@@ -291,6 +291,13 @@ final class WorkoutStatePayloadTests: XCTestCase {
         XCTAssertEqual(makeLoopPlanPayload(source).plannedGeometry, source.plannedGeometry)
     }
 
+    func testPreparedTurnsCanBeDownloadedBeforeTheWalkStarts() {
+        let turns = plannedManeuvers(route)
+        XCTAssertEqual(turns.map(\.stepIndex), [1, 2])
+        XCTAssertEqual(turns.map(\.coordinate), Array(route.geometry.coordinates[1...2]))
+        XCTAssertEqual(turns.map(\.distanceMeters), [400, 500])
+    }
+
     func testTheNextManoeuvreIsThePhonesAndItsDistanceIsMeasuredFromProgress() {
         let payload = makeWorkoutState(
             record: record(progress: 350), route: route, phase: .active, offRoute: false,
@@ -300,6 +307,46 @@ final class WorkoutStatePayloadTests: XCTestCase {
         XCTAssertEqual(payload.next?.distanceMeters, 50)
         XCTAssertEqual(payload.next?.turnKind, .left)
         XCTAssertEqual(payload.next?.coordinate, route.geometry.coordinates[1])
+    }
+
+    func testTheWatchReceivesTheLatestUsableGPSFixAndCourse() {
+        var source = record(progress: 350)
+        source.track = [
+            TrackPoint(
+                lng: -4.490, lat: 54.140, horizontalAccuracy: 8,
+                course: 42, timestamp: epoch.addingTimeInterval(1)
+            ),
+            TrackPoint(
+                lng: -4.480, lat: 54.150, horizontalAccuracy: -1,
+                course: 90, timestamp: epoch.addingTimeInterval(2)
+            ),
+        ]
+
+        let payload = makeWorkoutState(
+            record: source, route: route, phase: .active, offRoute: false,
+            now: epoch.addingTimeInterval(600)
+        )
+
+        XCTAssertEqual(payload.position, Point(-4.490, 54.140))
+        XCTAssertEqual(payload.courseDegrees, 42)
+    }
+
+    func testAnInvalidCourseIsNotSentToTheWatchCamera() {
+        var source = record(progress: 350)
+        source.track = [
+            TrackPoint(
+                lng: -4.490, lat: 54.140, horizontalAccuracy: 8,
+                course: -1, timestamp: epoch
+            ),
+        ]
+
+        let payload = makeWorkoutState(
+            record: source, route: route, phase: .active, offRoute: false,
+            now: epoch.addingTimeInterval(600)
+        )
+
+        XCTAssertEqual(payload.position, Point(-4.490, 54.140))
+        XCTAssertNil(payload.courseDegrees)
     }
 
     /// Two turns half a kilometre apart are two separate instructions, and

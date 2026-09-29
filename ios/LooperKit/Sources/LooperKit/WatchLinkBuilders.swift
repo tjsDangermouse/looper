@@ -38,6 +38,28 @@ private func maneuver(_ hit: TurnHit, route: Route) -> ManeuverPayload {
     )
 }
 
+/// The complete, compact turn list sent once with a prepared Watch route.
+/// Distances are measured from the start here; live state replaces them with
+/// distance remaining before anything is displayed.
+public func plannedManeuvers(_ route: Route) -> [ManeuverPayload] {
+    var distance = 0.0
+    return route.steps.enumerated().compactMap { index, step in
+        defer { distance += step.distanceMeters }
+        guard index > 0,
+              turnKind(step) != .arrive,
+              let coordinateIndex = step.startIndex,
+              route.geometry.coordinates.indices.contains(coordinateIndex)
+        else { return nil }
+        return ManeuverPayload(
+            stepIndex: index,
+            turn: turnKind(step),
+            instruction: step.instruction,
+            distanceMeters: distance,
+            coordinate: route.geometry.coordinates[coordinateIndex]
+        )
+    }
+}
+
 /// What the Watch should show before an outing starts.
 public func makeLoopPlanPayload(_ record: LoopSessionRecord, preparedAt: Date = Date()) -> LoopPlanPayload {
     LoopPlanPayload(
@@ -73,6 +95,7 @@ public func makeWorkoutState(
     let pace = (distance >= 100 && elapsed >= 60) ? elapsed / (distance / 1000) : nil
     let planned = record.plannedDistanceMeters
     let hit = route.flatMap { nextTurn($0, record.progressMeters) }
+    let latestFix = record.track.last(where: { $0.isUsable })
 
     var then: ManeuverPayload?
     if let route, let hit, let following = turnAfter(route, hit),
@@ -90,6 +113,8 @@ public func makeWorkoutState(
         progressFraction: planned > 0 ? min(1, max(0, record.progressMeters / planned)) : 0,
         remainingMeters: max(0, planned - record.progressMeters),
         offRoute: offRoute,
+        position: latestFix?.point,
+        courseDegrees: latestFix?.course.flatMap { $0 >= 0 ? $0 : nil },
         next: route.flatMap { route in hit.map { maneuver($0, route: route) } },
         then: then,
         updatedAt: now

@@ -12,7 +12,7 @@ public enum WatchLink {
     /// version it doesn't know throws rather than decoding half a message —
     /// the two devices can be updated separately, and an old Watch app
     /// guessing at a new phone's payload is worse than a stale screen.
-    public static let version = 3
+    public static let version = 5
 }
 
 /// Where the outing has got to, as both devices understand it. This is the
@@ -64,6 +64,11 @@ public struct LoopPlanPayload: Codable, Equatable, Sendable {
     /// Optional so a plan stored by an older Watch build still decodes. Route
     /// geometry is sent once with the plan, not repeated in live state.
     public var plannedGeometry: [Point]?
+    /// Every turn the Watch may need to draw during this outing. Sent with
+    /// the plan so the wrist can download its small turn maps while it still
+    /// has a connection, rather than discovering each map after setting off.
+    /// Optional so a plan saved by an older Watch build can still be read.
+    public var plannedManeuvers: [ManeuverPayload]?
     /// When the phone prepared this loop. The Watch shows the most recent
     /// plan, and an older one arriving late must not replace a newer one.
     public var preparedAt: Date
@@ -80,6 +85,7 @@ public struct LoopPlanPayload: Codable, Equatable, Sendable {
         plannedDistanceMeters: Double,
         plannedDurationSeconds: Double,
         plannedGeometry: [Point]? = nil,
+        plannedManeuvers: [ManeuverPayload]? = nil,
         preparedAt: Date = Date()
     ) {
         self.sessionID = sessionID
@@ -93,6 +99,7 @@ public struct LoopPlanPayload: Codable, Equatable, Sendable {
         self.plannedDistanceMeters = plannedDistanceMeters
         self.plannedDurationSeconds = plannedDurationSeconds
         self.plannedGeometry = plannedGeometry
+        self.plannedManeuvers = plannedManeuvers
         self.preparedAt = preparedAt
     }
 
@@ -160,6 +167,12 @@ public struct WorkoutStatePayload: Codable, Equatable, Sendable {
     public var progressFraction: Double
     public var remainingMeters: Double
     public var offRoute: Bool
+    /// The phone's latest usable GPS fix. The Watch draws this exact point;
+    /// it must never infer the location from distance remaining to a turn.
+    public var position: Point?
+    /// Direction of travel reported by Core Location, in degrees clockwise
+    /// from true north. Absent while the phone has no reliable course.
+    public var courseDegrees: Double?
     public var next: ManeuverPayload?
     /// Only sent when it is close enough behind the next one to be worth
     /// reading — a "then" fifteen minutes away is noise on a small screen.
@@ -175,6 +188,8 @@ public struct WorkoutStatePayload: Codable, Equatable, Sendable {
         progressFraction: Double,
         remainingMeters: Double,
         offRoute: Bool,
+        position: Point? = nil,
+        courseDegrees: Double? = nil,
         next: ManeuverPayload? = nil,
         then: ManeuverPayload? = nil,
         updatedAt: Date = Date()
@@ -187,6 +202,8 @@ public struct WorkoutStatePayload: Codable, Equatable, Sendable {
         self.progressFraction = progressFraction
         self.remainingMeters = remainingMeters
         self.offRoute = offRoute
+        self.position = position
+        self.courseDegrees = courseDegrees
         self.next = next
         self.then = then
         self.updatedAt = updatedAt

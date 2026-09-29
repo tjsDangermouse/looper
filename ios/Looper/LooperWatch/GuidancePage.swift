@@ -1,206 +1,587 @@
 import LooperKit
 import MapKit
+import Network
 import SwiftUI
+import WatchKit
 
-/// The route and current position stay visible edge-to-edge, with the turn the
-/// phone says is next in a compact glass panel at the bottom.
-///
-/// Everything here is rendered exactly as the phone's navigation engine
-/// decided it. The route line is only a visual reference: no route is
-/// recalculated on the wrist, and when the phone stops being heard the panel
-/// says so instead of holding a stale turn up as if it were still true.
+struct WatchNavigationScene {
+    let snapshot: MKMapSnapshotter.Snapshot
+    let route: [Point]
+    let turn: Point
+}
+
+/// Downloads the small map around every turn as soon as a loop reaches the
+/// Watch. Unlike an interactive Map, these snapshots remain usable when the
+/// Watch loses its data connection later in the route.
+@MainActor
+final class WatchNavigationMapCache: ObservableObject {
+    @Published private(set) var scenes: [Int: WatchNavigationScene] = [:]
+    @Published private(set) var isPreparing = false
+    @Published private(set) var networkAvailable = true
+
+    private var sessionID: String?
+    private var task: Task<Void, Never>?
+    private let networkMonitor = NWPathMonitor()
+    private let networkQueue = DispatchQueue(label: "com.woollams.Looper.watch-map-network")
+
+    init() {
+        networkMonitor.pathUpdateHandler = { [weak self] path in
+            DispatchQueue.main.async {
+                self?.networkAvailable = path.status == .satisfied
+            }
+        }
+        networkMonitor.start(queue: networkQueue)
+    }
+
+    deinit {
+        networkMonitor.cancel()
+    }
+
+    func prepare(_ plan: LoopPlanPayload) {
+        if sessionID != plan.sessionID {
+            task?.cancel()
+            sessionID = plan.sessionID
+            scenes = [:]
+            isPreparing = false
+        }
+        let geometry = plan.plannedGeometry ?? []
+        let maneuvers = plan.plannedManeuvers ?? []
+        guard !geometry.isEmpty, !maneuvers.isEmpty else {
+            isPreparing = false
+            return
+        }
+
+        if sessionID == plan.sessionID, isPreparing { return }
+        let missing = maneuvers.filter { scenes[$0.stepIndex] == nil }
+        guard !missing.isEmpty else { return }
+
+        isPreparing = true
+        task = Task { [weak self] in
+            // Route order is intentional: the first map needed is downloaded
+            // first, while later turns continue filling in behind it.
+            for maneuver in missing {
+                guard !Task.isCancelled, let turn = maneuver.coordinate else { break }
+                let route = Self.routeWindow(around: turn, in: geometry)
+                do {
+                    let snapshot = try await Self.download(turn: turn, route: route)
+                    guard !Task.isCancelled else { break }
+                    self?.scenes[maneuver.stepIndex] = WatchNavigationScene(
+                        snapshot: snapshot, route: route, turn: turn
+                    )
+                } catch {
+                    // The vector route remains available without map data. A
+                    // failed later snapshot does not discard completed ones.
+                }
+            }
+            guard self?.sessionID == plan.sessionID else { return }
+            self?.isPreparing = false
+            self?.task = nil
+        }
+    }
+
+    func release() {
+        task?.cancel()
+        task = nil
+        sessionID = nil
+        scenes = [:]
+        isPreparing = false
+    }
+
+    private static func download(turn: Point, route: [Point]) async throws -> MKMapSnapshotter.Snapshot {
+        let options = MKMapSnapshotter.Options()
+        let approach = pointBeforeTurn(130, turn: turn, route: route)
+        let camera = MKMapCamera(
+            lookingAtCenter: CLLocationCoordinate2D(latitude: approach.lat, longitude: approach.lng),
+            fromDistance: 600,
+            pitch: 0,
+            heading: bearing(from: approach, to: turn)
+        )
+        options.camera = camera
+        options.size = WKInterfaceDevice.current().screenBounds.size
+        options.scale = WKInterfaceDevice.current().screenScale
+
+        return try await withCheckedThrowingContinuation { continuation in
+            MKMapSnapshotter(options: options).start { snapshot, error in
+                if let snapshot {
+                    continuation.resume(returning: snapshot)
+                } else {
+                    continuation.resume(throwing: error ?? CocoaError(.fileReadUnknown))
+                }
+            }
+        }
+    }
+
+    /// About 260 m of approach and 100 m beyond the corner gives junction
+    /// context without turning this into a whole-route overview.
+    static func routeWindow(around turn: Point, in geometry: [Point]) -> [Point] {
+        guard geometry.count > 1 else { return geometry }
+        let pivot = geometry.indices.min {
+            haversine(geometry[$0], turn) < haversine(geometry[$1], turn)
+        } ?? 0
+        var first = pivot
+        var distance = 0.0
+        while first > 0, distance < 260 {
+            distance += haversine(geometry[first], geometry[first - 1])
+            first -= 1
+        }
+        var last = pivot
+        distance = 0
+        while last < geometry.count - 1, distance < 100 {
+            distance += haversine(geometry[last], geometry[last + 1])
+            last += 1
+        }
+        return Array(geometry[first...last])
+    }
+
+    /// The route still ahead of the live fix, through the next junction and
+    /// briefly beyond it. A closed loop can legitimately wrap past the end
+    /// of its geometry, so that case joins the tail and head without ever
+    /// switching to a whole-route overview.
+    static func routeWindow(from position: Point, through turn: Point, in geometry: [Point]) -> [Point] {
+        guard geometry.count > 1 else { return [position, turn] }
+        let start = geometry.indices.min {
+            haversine(geometry[$0], position) < haversine(geometry[$1], position)
+        } ?? 0
+        let pivot = geometry.indices.min {
+            haversine(geometry[$0], turn) < haversine(geometry[$1], turn)
+        } ?? start
+
+        var result: [Point]
+        if start <= pivot {
+            result = Array(geometry[start...pivot])
+        } else {
+            result = Array(geometry[start...]) + Array(geometry[...pivot])
+        }
+
+        var distance = 0.0
+        var index = pivot
+        while distance < 100, index < geometry.count - 1 {
+            distance += haversine(geometry[index], geometry[index + 1])
+            index += 1
+            result.append(geometry[index])
+        }
+        return result.count > 1 ? result : [position, turn]
+    }
+
+    static func pointBeforeTurn(_ metres: Double, turn: Point, route: [Point]) -> Point {
+        guard route.count > 1 else { return turn }
+        let pivot = route.indices.min {
+            haversine(route[$0], turn) < haversine(route[$1], turn)
+        } ?? route.count - 1
+        var remaining = metres
+        var index = pivot
+        while index > 0 {
+            let segment = haversine(route[index - 1], route[index])
+            if segment >= remaining, segment > 0 {
+                let fraction = remaining / segment
+                return Point(
+                    route[index].lng + (route[index - 1].lng - route[index].lng) * fraction,
+                    route[index].lat + (route[index - 1].lat - route[index].lat) * fraction
+                )
+            }
+            remaining -= segment
+            index -= 1
+        }
+        return route[0]
+    }
+
+    static func bearing(from: Point, to: Point) -> CLLocationDirection {
+        let radians = Double.pi / 180
+        let lat1 = from.lat * radians, lat2 = to.lat * radians
+        let delta = (to.lng - from.lng) * radians
+        let y = sin(delta) * cos(lat2)
+        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(delta)
+        return (atan2(y, x) / radians + 360).truncatingRemainder(dividingBy: 360)
+    }
+}
+
+/// A glanceable navigation map: no scrolling, no zooming, and no whole-loop
+/// overview. Its camera follows the phone's live GPS fix while the cached
+/// turn image remains available before the first fix or without map data.
 struct GuidancePage: View {
     @ObservedObject var model: WatchModel
-    @State private var cameraPosition: MapCameraPosition = .userLocation(
-        followsHeading: true,
-        fallback: .automatic
-    )
+    @ObservedObject private var navigationMaps: WatchNavigationMapCache
+
+    init(model: WatchModel) {
+        self.model = model
+        _navigationMaps = ObservedObject(wrappedValue: model.navigationMaps)
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Map(position: $cameraPosition) {
-                if routeCoordinates.count > 1 {
-                    MapPolyline(coordinates: routeCoordinates)
-                        .stroke(
-                            .black.opacity(0.68),
-                            style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round)
-                        )
-                    MapPolyline(coordinates: routeCoordinates)
-                        .stroke(
-                            Color.looperAccent,
-                            style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
-                        )
+            Group {
+                if navigationMaps.networkAvailable,
+                   let position = model.state?.position,
+                   let next,
+                   let turn = next.coordinate {
+                    LiveNavigationMap(
+                        position: position,
+                        courseDegrees: model.state?.courseDegrees,
+                        route: liveRoute(from: position, through: turn),
+                        turn: turn,
+                        turnKind: next.turnKind,
+                        distanceToTurn: next.distanceMeters,
+                        updatedAt: model.state?.updatedAt ?? .distantPast
+                    )
+                } else {
+                    TurnMapArtwork(
+                        scene: next.flatMap { navigationMaps.scenes[$0.stepIndex] },
+                        fallbackRoute: fallbackRoute,
+                        turn: next?.coordinate,
+                        turnKind: next?.turnKind,
+                        position: model.state?.position
+                    )
                 }
-                if let turnCoordinate {
-                    Annotation("Next turn", coordinate: turnCoordinate) {
-                        Image(systemName: turnSymbolName(model.state?.next?.turnKind ?? .straight))
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.black)
-                            .padding(7)
-                            .background(Color.looperAccent, in: Circle())
-                            .overlay { Circle().strokeBorder(.black.opacity(0.65), lineWidth: 2) }
-                    }
-                }
-                UserAnnotation()
             }
-            .mapStyle(.standard(elevation: .flat))
             .ignoresSafeArea()
 
-            guidancePanel
+            guidanceBanner
                 .padding(.horizontal, 7)
-                .padding(.bottom, 8)
+                .padding(.bottom, 22)
         }
         .ignoresSafeArea()
     }
 
-    private var routeCoordinates: [CLLocationCoordinate2D] {
-        (model.plan?.plannedGeometry ?? []).map {
-            CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)
-        }
+    private var next: ManeuverPayload? {
+        guard let next = model.state?.next, next.turnKind != .arrive else { return nil }
+        return next
     }
 
-    private var turnCoordinate: CLLocationCoordinate2D? {
-        guard let point = model.state?.next?.coordinate else { return nil }
-        return CLLocationCoordinate2D(latitude: point.lat, longitude: point.lng)
+    private var fallbackRoute: [Point] {
+        guard let turn = next?.coordinate, let geometry = model.plan?.plannedGeometry else { return [] }
+        return WatchNavigationMapCache.routeWindow(around: turn, in: geometry)
+    }
+
+    private func liveRoute(from position: Point, through turn: Point) -> [Point] {
+        guard let geometry = model.plan?.plannedGeometry else { return [position, turn] }
+        return WatchNavigationMapCache.routeWindow(from: position, through: turn, in: geometry)
     }
 
     @ViewBuilder
-    private var guidancePanel: some View {
-        Group {
-            if !model.isPhoneLive {
-                Disconnected()
-            } else if model.state?.offRoute == true {
-                OffRoute()
-            } else if let next = model.state?.next, next.turnKind != .arrive {
-                Turning(next: next, then: model.state?.then, unit: model.plan?.displayUnit ?? .km)
-            } else {
-                Arriving()
+    private var guidanceBanner: some View {
+        if !model.isPhoneLive {
+            StatusBanner(
+                icon: "iphone.slash", title: "iPhone disconnected",
+                detail: "Map saved · Guidance paused", tint: .orange
+            )
+        } else if model.state?.offRoute == true {
+            StatusBanner(
+                icon: "exclamationmark.triangle.fill", title: "Off route",
+                detail: "Check your iPhone", tint: .orange
+            )
+        } else if let next {
+            Turning(next: next, unit: model.plan?.displayUnit ?? .km)
+        } else {
+            StatusBanner(
+                icon: "checkmark.circle.fill", title: "On route",
+                detail: "No turns coming up", tint: Color.looperAccent
+            )
+        }
+    }
+}
+
+/// The active navigation map. Interaction is intentionally disabled: this is
+/// the follow view, not route overview, so a stray sleeve or tap cannot leave
+/// the walker looking at stale ground.
+private struct LiveNavigationMap: View {
+    let position: Point
+    let courseDegrees: Double?
+    let route: [Point]
+    let turn: Point
+    let turnKind: Turn
+    let distanceToTurn: Double
+    let updatedAt: Date
+
+    @State private var cameraPosition: MapCameraPosition = .automatic
+
+    var body: some View {
+        Map(position: $cameraPosition, interactionModes: []) {
+            if route.count > 1 {
+                MapPolyline(coordinates: route.map(\.coordinate))
+                    .stroke(.black.opacity(0.72), lineWidth: 9)
+                MapPolyline(coordinates: route.map(\.coordinate))
+                    .stroke(Color.appleMapsRoute, lineWidth: 6)
+            }
+
+            Annotation("", coordinate: position.coordinate) {
+                LocationPuck()
+            }
+
+            Annotation("", coordinate: turn.coordinate) {
+                ZStack {
+                    Circle()
+                        .fill(Color.appleMapsRoute)
+                        .frame(width: 22, height: 22)
+                    Circle()
+                        .stroke(.white, lineWidth: 2)
+                        .frame(width: 22, height: 22)
+                    Image(systemName: turnSymbolName(turnKind))
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .foregroundStyle(.white)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(.white.opacity(0.16), lineWidth: 0.5)
+        .mapStyle(.standard(elevation: .flat, emphasis: .muted))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .onAppear(perform: updateCamera)
+        .onChange(of: updatedAt) { _, _ in updateCamera() }
+    }
+
+    private func updateCamera() {
+        let heading = validCourse ?? WatchNavigationMapCache.bearing(from: position, to: turn)
+        let centre = cameraCentre(from: position, toward: turn)
+        // Keep both the real location and upcoming junction on screen. The
+        // cap avoids becoming a whole-route overview when the next turn is a
+        // long way off; the camera naturally closes in as the distance falls.
+        let distance = min(1_000, max(180, distanceToTurn * 2.4))
+        withAnimation(.easeInOut(duration: 0.65)) {
+            cameraPosition = .camera(
+                MapCamera(
+                    centerCoordinate: centre.coordinate,
+                    distance: distance,
+                    heading: heading,
+                    pitch: 0
+                )
+            )
+        }
+    }
+
+    private var validCourse: CLLocationDirection? {
+        guard let courseDegrees, courseDegrees >= 0, courseDegrees < 360 else { return nil }
+        return courseDegrees
+    }
+
+    /// Lead the camera slightly ahead so the puck sits low and the next turn
+    /// occupies the useful upper portion of the small display.
+    private func cameraCentre(from start: Point, toward end: Point) -> Point {
+        let distance = haversine(start, end)
+        guard distance > 0 else { return start }
+        let lead = min(120, distance * 0.35)
+        let fraction = lead / distance
+        return Point(
+            start.lng + (end.lng - start.lng) * fraction,
+            start.lat + (end.lat - start.lat) * fraction
+        )
+    }
+}
+
+private struct LocationPuck: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(.white)
+                .frame(width: 18, height: 18)
+                .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
+            Circle()
+                .fill(Color.appleMapsRoute)
+                .frame(width: 12, height: 12)
+        }
+    }
+}
+
+private struct TurnMapArtwork: View {
+    let scene: WatchNavigationScene?
+    let fallbackRoute: [Point]
+    let turn: Point?
+    let turnKind: Turn?
+    let position: Point?
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                if let scene {
+                    Image(uiImage: scene.snapshot.image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Color(red: 0.12, green: 0.14, blue: 0.15)
+                }
+
+                Canvas { context, size in
+                    let route = scene?.route ?? fallbackRoute
+                    guard route.count > 1 else { return }
+                    let points = projected(route, scene: scene, size: size)
+                    var line = Path()
+                    line.move(to: points[0])
+                    for point in points.dropFirst() { line.addLine(to: point) }
+                    context.stroke(
+                        line, with: .color(.black.opacity(0.72)),
+                        style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round)
+                    )
+                    context.stroke(
+                        line, with: .color(Color.appleMapsRoute),
+                        style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
+                    )
+
+                    let markerPoint: CGPoint? = if let scene, let turnPoint = turn {
+                        projected([turnPoint], scene: scene, size: size).first
+                    } else if let turn {
+                        route.indices.min {
+                            haversine(route[$0], turn) < haversine(route[$1], turn)
+                        }.map { points[$0] }
+                    } else {
+                        nil
+                    }
+                    if let point = markerPoint {
+                        let marker = Path(
+                            ellipseIn: CGRect(x: point.x - 11, y: point.y - 11, width: 22, height: 22)
+                        )
+                        context.fill(marker, with: .color(Color.appleMapsRoute))
+                        context.stroke(marker, with: .color(.white), lineWidth: 2)
+                        if let turnKind {
+                            let symbol = context.resolve(
+                                Text(Image(systemName: turnSymbolName(turnKind)))
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.white)
+                            )
+                            context.draw(symbol, at: point)
+                        }
+                    }
+
+                    if let position {
+                        let locationPoint: CGPoint? = if let scene {
+                            projected([position], scene: scene, size: size).first
+                        } else {
+                            route.indices.min {
+                                haversine(route[$0], position) < haversine(route[$1], position)
+                            }.map { points[$0] }
+                        }
+                        if let locationPoint {
+                            let outer = Path(
+                                ellipseIn: CGRect(
+                                    x: locationPoint.x - 9, y: locationPoint.y - 9,
+                                    width: 18, height: 18
+                                )
+                            )
+                            let inner = Path(
+                                ellipseIn: CGRect(
+                                    x: locationPoint.x - 6, y: locationPoint.y - 6,
+                                    width: 12, height: 12
+                                )
+                            )
+                            context.fill(outer, with: .color(.white))
+                            context.fill(inner, with: .color(Color.appleMapsRoute))
+                        }
+                    }
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private func projected(_ coordinates: [Point], scene: WatchNavigationScene?, size: CGSize) -> [CGPoint] {
+        if let scene {
+            let imageSize = scene.snapshot.image.size
+            let scale = max(size.width / imageSize.width, size.height / imageSize.height)
+            let xInset = (size.width - imageSize.width * scale) / 2
+            let yInset = (size.height - imageSize.height * scale) / 2
+            return coordinates.map {
+                let point = scene.snapshot.point(
+                    for: CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)
+                )
+                return CGPoint(x: point.x * scale + xInset, y: point.y * scale + yInset)
+            }
+        }
+
+        let latitudes = coordinates.map(\.lat)
+        let longitudes = coordinates.map(\.lng)
+        guard let minLat = latitudes.min(), let maxLat = latitudes.max(),
+              let minLng = longitudes.min(), let maxLng = longitudes.max() else { return [] }
+        let padding = 28.0
+        let width = max(0.000_001, maxLng - minLng)
+        let height = max(0.000_001, maxLat - minLat)
+        return coordinates.map {
+            CGPoint(
+                x: padding + (($0.lng - minLng) / width) * (size.width - padding * 2),
+                y: padding + ((maxLat - $0.lat) / height) * (size.height - padding * 2)
+            )
         }
     }
 }
 
 private struct Turning: View {
     let next: ManeuverPayload
-    let then: ManeuverPayload?
     let unit: LooperKit.Unit
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .center, spacing: 8) {
-                Image(systemName: turnSymbolName(next.turnKind))
-                    .font(.system(size: 30, weight: .bold))
-                    .foregroundStyle(Color.looperAccent)
-                    .frame(width: 34)
+        HStack(alignment: .center, spacing: 8) {
+            Image(systemName: turnSymbolName(next.turnKind))
+                .font(.system(size: 25, weight: .bold))
+                .foregroundStyle(Color.appleMapsRoute)
+                .frame(width: 30)
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(distanceText)
-                        .font(.system(.title3, design: .rounded).weight(.bold))
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
-
-                    Text(next.instruction)
-                        .font(.system(.footnote, design: .rounded).weight(.semibold))
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.72)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            if let then {
-                Label(then.instruction, systemImage: turnSymbolName(then.turnKind))
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.72))
+            VStack(alignment: .leading, spacing: 0) {
+                Text(distanceText)
+                    .font(.system(.headline, design: .rounded).weight(.bold))
                     .lineLimit(1)
-                    .padding(.leading, 42)
-                    .accessibilityLabel("Then, \(then.instruction)")
+                Text(next.instruction)
+                    .font(.system(.caption2, design: .rounded).weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
             }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .foregroundStyle(.white)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(.white.opacity(0.14), lineWidth: 0.5)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("In \(distanceText), \(next.instruction)")
     }
 
-    /// Metres up close, the walker's own unit further out — the same way the
-    /// phone's spoken guidance already says it.
     private var distanceText: String {
         next.distanceMeters < 300
             ? "\(Int((next.distanceMeters / 10).rounded() * 10)) m"
             : formatDistance(next.distanceMeters, unit: unit)
     }
+
 }
 
-private struct OffRoute: View {
-    var body: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 25))
-                .foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Off route")
-                    .font(.headline)
-                Text("Check your iPhone for the route.")
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.72))
-                    .lineLimit(2)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Off route. Check your iPhone for the route.")
-    }
-}
+private struct StatusBanner: View {
+    let icon: String
+    let title: String
+    let detail: String
+    let tint: Color
 
-private struct Arriving: View {
     var body: some View {
         HStack(spacing: 9) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 25))
-                .foregroundStyle(Color.looperAccent)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("On route")
-                    .font(.headline)
-                Text("No turns coming up")
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.72))
+            Image(systemName: icon)
+                .font(.system(size: 25, weight: .semibold))
+                .foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title).font(.headline)
+                Text(detail).font(.caption2).foregroundStyle(.white.opacity(0.72))
             }
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .foregroundStyle(.white)
+        .background(.black.opacity(0.88), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 }
 
-/// The honest empty state: the workout is still recording, but nothing on
-/// this screen can be trusted until the phone is back.
-private struct Disconnected: View {
-    var body: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "iphone.slash")
-                .font(.system(size: 25))
-                .foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("No guidance")
-                    .font(.headline)
-                Text("iPhone disconnected · Workout recording")
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.72))
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("No guidance. Your iPhone isn’t connected. Your workout is still recording.")
+private extension Color {
+    static let appleMapsRoute = Color(red: 0.04, green: 0.52, blue: 1.0)
+}
+
+private extension Point {
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: lat, longitude: lng)
     }
 }
 
-/// The same arrows the phone's walk screen uses, so a turn looks the same on
-/// both devices.
 func turnSymbolName(_ turn: Turn) -> String {
     switch turn {
     case .left: return "arrow.turn.up.left"

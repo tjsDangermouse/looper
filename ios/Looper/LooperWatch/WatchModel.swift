@@ -51,6 +51,7 @@ final class WatchModel: ObservableObject {
     @Published private(set) var canRecordToHealth = true
 
     let workout = WatchWorkout()
+    let navigationMaps = WatchNavigationMapCache()
     private let link = WatchLinkSession()
     private let haptics = WatchHapticPlayer()
     private var freshnessTask: Task<Void, Never>?
@@ -73,7 +74,46 @@ final class WatchModel: ObservableObject {
         link.onVersionMismatch = { [weak self] version in
             self?.notice = "Your iPhone is running a different version of Looper (v\(version))."
         }
+        if let plan { navigationMaps.prepare(plan) }
+        #if DEBUG
+        seedGuidancePreviewIfRequested()
+        #endif
     }
+
+    #if DEBUG
+    /// A simulator-only route into the live guidance page for visual QA.
+    /// It deliberately reuses the last real plan stored on this Watch.
+    private func seedGuidancePreviewIfRequested() {
+        guard ProcessInfo.processInfo.environment["LOOPER_WATCH_PREVIEW"] == "guidance",
+              let plan,
+              var maneuver = plan.plannedManeuvers?.first else { return }
+        maneuver.distanceMeters = 240
+        let previewPosition = maneuver.coordinate.map {
+            WatchNavigationMapCache.pointBeforeTurn(
+                maneuver.distanceMeters,
+                turn: $0,
+                route: plan.plannedGeometry ?? []
+            )
+        }
+        state = WorkoutStatePayload(
+            sessionID: plan.sessionID,
+            phase: .active,
+            distanceMeters: 500,
+            elapsedSeconds: 360,
+            progressFraction: 0.15,
+            remainingMeters: max(0, plan.plannedDistanceMeters - 500),
+            offRoute: false,
+            position: previewPosition,
+            courseDegrees: previewPosition.flatMap { position in
+                maneuver.coordinate.map { WatchNavigationMapCache.bearing(from: position, to: $0) }
+            },
+            next: maneuver
+        )
+        launchPhase = .ready
+        guidanceOnly = true
+        isPhoneLive = true
+    }
+    #endif
 
     var screen: Screen {
         if result != nil { return .finished }
@@ -177,6 +217,7 @@ final class WatchModel: ObservableObject {
         defer { starting = false }
         notice = nil
         haptics.reset(for: activity)
+        navigationMaps.prepare(plan)
         state = nil
         result = nil
         guidanceOnly = false
@@ -275,6 +316,7 @@ final class WatchModel: ObservableObject {
             }
             plan = incoming
             storePlan(incoming)
+            navigationMaps.prepare(incoming)
             haptics.reset(for: incoming.activity)
         case .clearPlan(let clearedAt):
             // The phone left the loop-choosing screen with nothing started.
@@ -284,6 +326,7 @@ final class WatchModel: ObservableObject {
             guard let plan, plan.preparedAt <= clearedAt else { return }
             self.plan = nil
             clearStoredPlan()
+            navigationMaps.release()
         case .state(let incoming):
             // A state for an outing this Watch has never heard of means the
             // plan didn't reach us — most likely the phone chose a different

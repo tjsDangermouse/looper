@@ -7,9 +7,19 @@ import SwiftUI
 /// mid-run lands where it expects to.
 struct WorkoutPages: View {
     @ObservedObject var model: WatchModel
-    @State private var page = Page.metrics
+    @State private var page: Page
 
     enum Page: Hashable { case controls, metrics, guidance }
+
+    init(model: WatchModel) {
+        self.model = model
+        #if DEBUG
+        let previewingGuidance = ProcessInfo.processInfo.environment["LOOPER_WATCH_PREVIEW"] == "guidance"
+        _page = State(initialValue: previewingGuidance ? .guidance : .metrics)
+        #else
+        _page = State(initialValue: .metrics)
+        #endif
+    }
 
     var body: some View {
         TabView(selection: $page) {
