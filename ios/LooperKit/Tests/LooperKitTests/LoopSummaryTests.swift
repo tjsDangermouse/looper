@@ -307,6 +307,28 @@ final class ArrivalTests: XCTestCase {
         XCTAssertTrue(hasArrived(loop, progressMeters: 420))
     }
 
+    func testArrivesInFinishZoneWithoutCompletingThePlannedRoute() {
+        let nearStart = Point(0.00005, 0)
+        XCTAssertNotNil(nextTurn(loop, 100))
+        XCTAssertTrue(hasArrived(loop, progressMeters: 100, at: nearStart))
+    }
+
+    func testFinishZoneDoesNotCompleteAnOutingAtDeparture() {
+        XCTAssertFalse(hasArrived(loop, progressMeters: 0, at: loop.geometry.coordinates[0]))
+    }
+
+    func testFinishZoneRequiresPhysicalProximityToStart() {
+        XCTAssertFalse(hasArrived(loop, progressMeters: 299, at: Point(0.001, 0)))
+    }
+
+    func testFinishZoneRequiresTheDepartureBuffer() {
+        XCTAssertFalse(hasArrived(
+            loop,
+            progressMeters: loopArrivalDepartureBufferMeters - 1,
+            at: loop.geometry.coordinates[0]
+        ))
+    }
+
     /// A route with nothing to walk must not read as finished the instant it
     /// starts, even though its turn list is empty from the outset.
     func testARouteWithNothingToWalkIsNeverArrivedAt() {

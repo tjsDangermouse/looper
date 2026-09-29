@@ -37,6 +37,23 @@ public func hasArrived(_ route: Route, progressMeters: Double) -> Bool {
     return nextTurn(route, progressMeters) == nil
 }
 
+/// How close to the shared start/finish counts as being home.
+public let loopArrivalRadiusMeters: Double = 20
+
+/// Enough movement away from the initial fix to arm automatic arrival. This
+/// is deliberately small: returning early is still returning to the start.
+public let loopArrivalDepartureBufferMeters: Double = 50
+
+/// Whether the GPS fix is back in the finish zone after the outing has begun.
+/// Planned completion is intentionally irrelevant: someone may shorten their
+/// route and should finish automatically when they return to their start.
+public func hasArrived(_ route: Route, progressMeters: Double, at location: Point) -> Bool {
+    guard route.steps.contains(where: { $0.distanceMeters > 0 }) else { return false }
+    guard let start = route.geometry.coordinates.first else { return false }
+    guard progressMeters >= loopArrivalDepartureBufferMeters else { return false }
+    return haversine(location, start) <= loopArrivalRadiusMeters
+}
+
 /// A loop's first and last coordinates occupy the same patch of ground. GPS
 /// noise can therefore make the final segment a slightly closer match than
 /// the first one before the outing has properly begun. Refuse that impossible

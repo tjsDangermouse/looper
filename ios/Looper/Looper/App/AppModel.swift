@@ -748,7 +748,8 @@ final class AppModel: ObservableObject {
         // silenced by mute and by leaving the walk screen, and finishing the
         // loop is a fact about the outing either way.
         var justArrived = false
-        if record.arrivedAt == nil, hasArrived(route, progressMeters: progress) {
+        if record.arrivedAt == nil,
+           hasArrived(route, progressMeters: progress, at: update.point) {
             record.arrivedAt = location.timestamp
             justArrived = true
         }
@@ -769,7 +770,10 @@ final class AppModel: ObservableObject {
         record.endedAt = Date()
         record.progressMeters = progress
         record.endedOffRoute = offRoute
-        if record.arrivedAt == nil, let route = selected, hasArrived(route, progressMeters: progress) {
+        if record.arrivedAt == nil,
+           let route = selected,
+           let position,
+           hasArrived(route, progressMeters: progress, at: position) {
             record.arrivedAt = record.endedAt
         }
         session = record
@@ -1032,7 +1036,8 @@ final class AppModel: ObservableObject {
         }
         if turn == nil,
            let selected,
-           hasArrived(selected, progressMeters: progress),
+           let position,
+           hasArrived(selected, progressMeters: progress, at: position),
            spoken != "home" {
             announceArrivalThenEnd()
         }
