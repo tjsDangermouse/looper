@@ -237,6 +237,22 @@ final class WorkoutOwnershipTests: XCTestCase {
         XCTAssertFalse(live.canAttemptHealthSave)
     }
 
+    func testADeveloperSimulationIsNeverSavedToHealth() {
+        var simulated = record(health: .notAttempted)
+        simulated.simulated = true
+        XCTAssertFalse(simulated.canAttemptHealthSave)
+    }
+
+    func testOlderNonSimulatedRecordsRemainSaveable() throws {
+        let original = record(health: .notAttempted)
+        let decoded = try JSONDecoder().decode(
+            LoopSessionRecord.self,
+            from: JSONEncoder().encode(original)
+        )
+        XCTAssertNotEqual(decoded.simulated, true)
+        XCTAssertTrue(decoded.canAttemptHealthSave)
+    }
+
     func testTheWatchsWorkoutIdIsKeptWhereTheSummaryLooksForIt() {
         XCTAssertEqual(record(health: .savedOnWatch(workoutID: "workout-7"), owner: .watch).savedWorkoutID, "workout-7")
     }

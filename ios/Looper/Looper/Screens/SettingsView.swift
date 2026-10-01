@@ -57,6 +57,16 @@ struct SettingsView: View {
                     }
                 }
 
+                #if DEBUG
+                Section {
+                    Toggle("Simulate walked route", isOn: $model.simulatesWalk)
+                } header: {
+                    Text("Developer demo")
+                } footer: {
+                    Text("The next route walks its full geometry at three times the planned pace on this iPhone and its paired Watch. It never saves to Apple Health.")
+                }
+                #endif
+
                 Section {
                     AppleHealthRow(health: model.health)
                     AppleWatchRow(watch: model.watch)

@@ -89,6 +89,15 @@ struct WalkView: View {
                     .padding(.top, 8)
             }
 
+            #if DEBUG
+            if model.isSimulatingWalk {
+                Label("Developer route simulation", systemImage: "hare.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color.looperAccent)
+                    .padding(.top, 8)
+            }
+            #endif
+
             if !model.locationState.isEmpty {
                 Text(model.locationState)
                     .font(.footnote)

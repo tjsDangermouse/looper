@@ -260,29 +260,36 @@ private struct HealthSaveRow: View {
 
     @ViewBuilder
     private var icon: some View {
-        switch state {
-        case .saving:
-            ProgressView().frame(width: 22)
-        case .saved:
-            Image(systemName: "checkmark.circle.fill")
+        if model.session?.simulated == true {
+            Image(systemName: "hare.fill")
                 .foregroundStyle(Color.looperAccent)
                 .frame(width: 22)
-        case .savedOnWatch:
-            Image(systemName: "applewatch")
-                .foregroundStyle(Color.looperAccent)
-                .frame(width: 22)
-        case .failed:
-            Image(systemName: "exclamationmark.circle")
-                .foregroundStyle(.orange)
-                .frame(width: 22)
-        case .notAttempted, .skipped:
-            Image(systemName: "heart.text.square")
-                .foregroundStyle(.secondary)
-                .frame(width: 22)
+        } else {
+            switch state {
+            case .saving:
+                ProgressView().frame(width: 22)
+            case .saved:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Color.looperAccent)
+                    .frame(width: 22)
+            case .savedOnWatch:
+                Image(systemName: "applewatch")
+                    .foregroundStyle(Color.looperAccent)
+                    .frame(width: 22)
+            case .failed:
+                Image(systemName: "exclamationmark.circle")
+                    .foregroundStyle(.orange)
+                    .frame(width: 22)
+            case .notAttempted, .skipped:
+                Image(systemName: "heart.text.square")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22)
+            }
         }
     }
 
     private var title: String {
+        if model.session?.simulated == true { return "Developer simulation" }
         switch state {
         case .saving: return "Saving to Apple Health…"
         case .saved: return "Saved to Apple Health"
@@ -293,6 +300,9 @@ private struct HealthSaveRow: View {
     }
 
     private var detail: String? {
+        if model.session?.simulated == true {
+            return "This demo was not saved to Apple Health."
+        }
         switch state {
         case .failed(let message): return message
         case .skipped(let reason): return reason
@@ -310,23 +320,27 @@ private struct HealthSaveRow: View {
 
     @ViewBuilder
     private var action: some View {
-        switch state {
-        case .saving, .saved, .savedOnWatch:
+        if model.session?.simulated == true {
             EmptyView()
-        case .failed:
-            Button("Try again") { Task { await model.saveToHealth() } }
-                .buttonStyle(TextLinkButtonStyle())
-        case .notAttempted, .skipped:
-            if model.health.availability == .denied {
-                Button("Open Settings") { model.health.openSystemSettings() }
-                    .buttonStyle(TextLinkButtonStyle())
-            } else if model.health.availability == .unavailable {
+        } else {
+            switch state {
+            case .saving, .saved, .savedOnWatch:
                 EmptyView()
-            } else if model.health.isRequesting {
-                ProgressView()
-            } else {
-                Button("Connect") { Task { await model.connectHealthAndSave() } }
+            case .failed:
+                Button("Try again") { Task { await model.saveToHealth() } }
                     .buttonStyle(TextLinkButtonStyle())
+            case .notAttempted, .skipped:
+                if model.health.availability == .denied {
+                    Button("Open Settings") { model.health.openSystemSettings() }
+                        .buttonStyle(TextLinkButtonStyle())
+                } else if model.health.availability == .unavailable {
+                    EmptyView()
+                } else if model.health.isRequesting {
+                    ProgressView()
+                } else {
+                    Button("Connect") { Task { await model.connectHealthAndSave() } }
+                        .buttonStyle(TextLinkButtonStyle())
+                }
             }
         }
     }

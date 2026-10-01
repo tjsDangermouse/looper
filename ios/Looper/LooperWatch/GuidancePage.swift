@@ -1,6 +1,5 @@
 import LooperKit
 import MapKit
-import Network
 import SwiftUI
 import WatchKit
 
@@ -16,32 +15,25 @@ struct WatchNavigationScene {
 @MainActor
 final class WatchNavigationMapCache: ObservableObject {
     @Published private(set) var scenes: [Int: WatchNavigationScene] = [:]
+    @Published private(set) var liveScene: WatchNavigationScene?
+    @Published private(set) var liveStepIndex: Int?
     @Published private(set) var isPreparing = false
-    @Published private(set) var networkAvailable = true
 
     private var sessionID: String?
     private var task: Task<Void, Never>?
-    private let networkMonitor = NWPathMonitor()
-    private let networkQueue = DispatchQueue(label: "com.woollams.Looper.watch-map-network")
-
-    init() {
-        networkMonitor.pathUpdateHandler = { [weak self] path in
-            DispatchQueue.main.async {
-                self?.networkAvailable = path.status == .satisfied
-            }
-        }
-        networkMonitor.start(queue: networkQueue)
-    }
-
-    deinit {
-        networkMonitor.cancel()
-    }
+    private var liveTask: Task<Void, Never>?
+    private var liveAnchor: Point?
+    private var requestedLiveStepIndex: Int?
 
     func prepare(_ plan: LoopPlanPayload) {
         if sessionID != plan.sessionID {
             task?.cancel()
             sessionID = plan.sessionID
             scenes = [:]
+            liveScene = nil
+            liveStepIndex = nil
+            liveAnchor = nil
+            requestedLiveStepIndex = nil
             isPreparing = false
         }
         let geometry = plan.plannedGeometry ?? []
@@ -52,7 +44,10 @@ final class WatchNavigationMapCache: ObservableObject {
         }
 
         if sessionID == plan.sessionID, isPreparing { return }
-        let missing = maneuvers.filter { scenes[$0.stepIndex] == nil }
+        // Simulator tile rendering is particularly easy to overwhelm. The
+        // first junction is useful before live fixes arrive; subsequent live
+        // snapshots are requested as the walker approaches them.
+        let missing = maneuvers.prefix(1).filter { scenes[$0.stepIndex] == nil }
         guard !missing.isEmpty else { return }
 
         isPreparing = true
@@ -81,20 +76,92 @@ final class WatchNavigationMapCache: ObservableObject {
 
     func release() {
         task?.cancel()
+        liveTask?.cancel()
         task = nil
+        liveTask = nil
         sessionID = nil
         scenes = [:]
+        liveScene = nil
+        liveStepIndex = nil
+        liveAnchor = nil
+        requestedLiveStepIndex = nil
         isPreparing = false
     }
 
+    /// watchOS maps are static snapshots. Refresh one after meaningful
+    /// movement so the basemap follows the full walk without continuously
+    /// downloading and rendering a new image for every one-second fix.
+    func prepareLive(position: Point, next: ManeuverPayload, geometry: [Point]) {
+        guard let turn = next.coordinate, geometry.count > 1 else { return }
+        if requestedLiveStepIndex == next.stepIndex,
+           let liveAnchor,
+           haversine(liveAnchor, position) < 60 { return }
+
+        liveTask?.cancel()
+        liveAnchor = position
+        requestedLiveStepIndex = next.stepIndex
+        let route = Self.routeWindow(from: position, through: turn, in: geometry)
+        liveTask = Task { [weak self] in
+            do {
+                let snapshot = try await Self.download(
+                    position: position,
+                    turn: turn,
+                    route: route,
+                    distanceToTurn: next.distanceMeters
+                )
+                guard !Task.isCancelled else { return }
+                self?.liveScene = WatchNavigationScene(snapshot: snapshot, route: route, turn: turn)
+                self?.liveStepIndex = next.stepIndex
+                self?.liveTask = nil
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.liveTask = nil
+                #if DEBUG
+                print("[Looper Watch map] Snapshot failed: \(error.localizedDescription)")
+                #endif
+            }
+        }
+    }
+
     private static func download(turn: Point, route: [Point]) async throws -> MKMapSnapshotter.Snapshot {
-        let options = MKMapSnapshotter.Options()
         let approach = pointBeforeTurn(130, turn: turn, route: route)
-        let camera = MKMapCamera(
-            lookingAtCenter: CLLocationCoordinate2D(latitude: approach.lat, longitude: approach.lng),
-            fromDistance: 600,
-            pitch: 0,
+        return try await snapshot(
+            center: approach,
+            distance: 600,
             heading: bearing(from: approach, to: turn)
+        )
+    }
+
+    private static func download(
+        position: Point,
+        turn: Point,
+        route: [Point],
+        distanceToTurn: Double
+    ) async throws -> MKMapSnapshotter.Snapshot {
+        let directDistance = haversine(position, turn)
+        let lead = directDistance > 0 ? min(120, directDistance * 0.35) / directDistance : 0
+        let center = Point(
+            position.lng + (turn.lng - position.lng) * lead,
+            position.lat + (turn.lat - position.lat) * lead
+        )
+        return try await snapshot(
+            center: center,
+            distance: min(1_000, max(180, distanceToTurn * 2.4)),
+            heading: bearing(from: position, to: turn)
+        )
+    }
+
+    private static func snapshot(
+        center: Point,
+        distance: CLLocationDistance,
+        heading: CLLocationDirection
+    ) async throws -> MKMapSnapshotter.Snapshot {
+        let options = MKMapSnapshotter.Options()
+        let camera = MKMapCamera(
+            lookingAtCenter: center.coordinate,
+            fromDistance: distance,
+            pitch: 0,
+            heading: heading
         )
         options.camera = camera
         options.size = WKInterfaceDevice.current().screenBounds.size
@@ -160,6 +227,15 @@ final class WatchNavigationMapCache: ObservableObject {
             index += 1
             result.append(geometry[index])
         }
+        // The live fix normally lies between two geometry vertices. Keep the
+        // exact point at the head of the window so both the route line and
+        // the vector fallback move continuously rather than waiting for the
+        // nearest vertex to change.
+        if result.first.map({ haversine($0, position) > 0.5 }) ?? true {
+            result.insert(position, at: 0)
+        } else {
+            result[0] = position
+        }
         return result.count > 1 ? result : [position, turn]
     }
 
@@ -210,28 +286,13 @@ struct GuidancePage: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             Group {
-                if navigationMaps.networkAvailable,
-                   let position = model.state?.position,
-                   let next,
-                   let turn = next.coordinate {
-                    LiveNavigationMap(
-                        position: position,
-                        courseDegrees: model.state?.courseDegrees,
-                        route: liveRoute(from: position, through: turn),
-                        turn: turn,
-                        turnKind: next.turnKind,
-                        distanceToTurn: next.distanceMeters,
-                        updatedAt: model.state?.updatedAt ?? .distantPast
-                    )
-                } else {
-                    TurnMapArtwork(
-                        scene: next.flatMap { navigationMaps.scenes[$0.stepIndex] },
-                        fallbackRoute: fallbackRoute,
-                        turn: next?.coordinate,
-                        turnKind: next?.turnKind,
-                        position: model.state?.position
-                    )
-                }
+                TurnMapArtwork(
+                    scene: currentScene,
+                    fallbackRoute: fallbackRoute,
+                    turn: next?.coordinate,
+                    turnKind: next?.turnKind,
+                    position: model.state?.position
+                )
             }
             .ignoresSafeArea()
 
@@ -240,6 +301,8 @@ struct GuidancePage: View {
                 .padding(.bottom, 22)
         }
         .ignoresSafeArea()
+        .onAppear(perform: prepareLiveMap)
+        .onChange(of: model.state?.updatedAt) { _, _ in prepareLiveMap() }
     }
 
     private var next: ManeuverPayload? {
@@ -249,12 +312,24 @@ struct GuidancePage: View {
 
     private var fallbackRoute: [Point] {
         guard let turn = next?.coordinate, let geometry = model.plan?.plannedGeometry else { return [] }
+        if let position = model.state?.position {
+            return WatchNavigationMapCache.routeWindow(from: position, through: turn, in: geometry)
+        }
         return WatchNavigationMapCache.routeWindow(around: turn, in: geometry)
     }
 
-    private func liveRoute(from position: Point, through turn: Point) -> [Point] {
-        guard let geometry = model.plan?.plannedGeometry else { return [position, turn] }
-        return WatchNavigationMapCache.routeWindow(from: position, through: turn, in: geometry)
+    private var currentScene: WatchNavigationScene? {
+        guard let next else { return nil }
+        if navigationMaps.liveStepIndex == next.stepIndex,
+           let scene = navigationMaps.liveScene { return scene }
+        return navigationMaps.scenes[next.stepIndex]
+    }
+
+    private func prepareLiveMap() {
+        guard let position = model.state?.position,
+              let next,
+              let geometry = model.plan?.plannedGeometry else { return }
+        navigationMaps.prepareLive(position: position, next: next, geometry: geometry)
     }
 
     @ViewBuilder
@@ -276,106 +351,6 @@ struct GuidancePage: View {
                 icon: "checkmark.circle.fill", title: "On route",
                 detail: "No turns coming up", tint: Color.looperAccent
             )
-        }
-    }
-}
-
-/// The active navigation map. Interaction is intentionally disabled: this is
-/// the follow view, not route overview, so a stray sleeve or tap cannot leave
-/// the walker looking at stale ground.
-private struct LiveNavigationMap: View {
-    let position: Point
-    let courseDegrees: Double?
-    let route: [Point]
-    let turn: Point
-    let turnKind: Turn
-    let distanceToTurn: Double
-    let updatedAt: Date
-
-    @State private var cameraPosition: MapCameraPosition = .automatic
-
-    var body: some View {
-        Map(position: $cameraPosition, interactionModes: []) {
-            if route.count > 1 {
-                MapPolyline(coordinates: route.map(\.coordinate))
-                    .stroke(.black.opacity(0.72), lineWidth: 9)
-                MapPolyline(coordinates: route.map(\.coordinate))
-                    .stroke(Color.appleMapsRoute, lineWidth: 6)
-            }
-
-            Annotation("", coordinate: position.coordinate) {
-                LocationPuck()
-            }
-
-            Annotation("", coordinate: turn.coordinate) {
-                ZStack {
-                    Circle()
-                        .fill(Color.appleMapsRoute)
-                        .frame(width: 22, height: 22)
-                    Circle()
-                        .stroke(.white, lineWidth: 2)
-                        .frame(width: 22, height: 22)
-                    Image(systemName: turnSymbolName(turnKind))
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-            }
-        }
-        .mapStyle(.standard(elevation: .flat, emphasis: .muted))
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-        .onAppear(perform: updateCamera)
-        .onChange(of: updatedAt) { _, _ in updateCamera() }
-    }
-
-    private func updateCamera() {
-        let heading = validCourse ?? WatchNavigationMapCache.bearing(from: position, to: turn)
-        let centre = cameraCentre(from: position, toward: turn)
-        // Keep both the real location and upcoming junction on screen. The
-        // cap avoids becoming a whole-route overview when the next turn is a
-        // long way off; the camera naturally closes in as the distance falls.
-        let distance = min(1_000, max(180, distanceToTurn * 2.4))
-        withAnimation(.easeInOut(duration: 0.65)) {
-            cameraPosition = .camera(
-                MapCamera(
-                    centerCoordinate: centre.coordinate,
-                    distance: distance,
-                    heading: heading,
-                    pitch: 0
-                )
-            )
-        }
-    }
-
-    private var validCourse: CLLocationDirection? {
-        guard let courseDegrees, courseDegrees >= 0, courseDegrees < 360 else { return nil }
-        return courseDegrees
-    }
-
-    /// Lead the camera slightly ahead so the puck sits low and the next turn
-    /// occupies the useful upper portion of the small display.
-    private func cameraCentre(from start: Point, toward end: Point) -> Point {
-        let distance = haversine(start, end)
-        guard distance > 0 else { return start }
-        let lead = min(120, distance * 0.35)
-        let fraction = lead / distance
-        return Point(
-            start.lng + (end.lng - start.lng) * fraction,
-            start.lat + (end.lat - start.lat) * fraction
-        )
-    }
-}
-
-private struct LocationPuck: View {
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(.white)
-                .frame(width: 18, height: 18)
-                .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
-            Circle()
-                .fill(Color.appleMapsRoute)
-                .frame(width: 12, height: 12)
         }
     }
 }
@@ -414,14 +389,8 @@ private struct TurnMapArtwork: View {
                         style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
                     )
 
-                    let markerPoint: CGPoint? = if let scene, let turnPoint = turn {
-                        projected([turnPoint], scene: scene, size: size).first
-                    } else if let turn {
-                        route.indices.min {
-                            haversine(route[$0], turn) < haversine(route[$1], turn)
-                        }.map { points[$0] }
-                    } else {
-                        nil
+                    let markerPoint = turn.flatMap {
+                        projected($0, against: route, scene: scene, size: size)
                     }
                     if let point = markerPoint {
                         let marker = Path(
@@ -440,13 +409,9 @@ private struct TurnMapArtwork: View {
                     }
 
                     if let position {
-                        let locationPoint: CGPoint? = if let scene {
-                            projected([position], scene: scene, size: size).first
-                        } else {
-                            route.indices.min {
-                                haversine(route[$0], position) < haversine(route[$1], position)
-                            }.map { points[$0] }
-                        }
+                        let locationPoint = projected(
+                            position, against: route, scene: scene, size: size
+                        )
                         if let locationPoint {
                             let outer = Path(
                                 ellipseIn: CGRect(
@@ -500,6 +465,22 @@ private struct TurnMapArtwork: View {
                 y: padding + ((maxLat - $0.lat) / height) * (size.height - padding * 2)
             )
         }
+    }
+
+    /// Projects an overlay point in the same coordinate space as the route.
+    /// In the no-tiles fallback this is important: projecting the point on
+    /// its own has no extent, while snapping it to a route vertex makes a
+    /// smoothly simulated walk appear frozen until the next vertex.
+    private func projected(
+        _ coordinate: Point,
+        against route: [Point],
+        scene: WatchNavigationScene?,
+        size: CGSize
+    ) -> CGPoint? {
+        if let scene {
+            return projected([coordinate], scene: scene, size: size).first
+        }
+        return projected(route + [coordinate], scene: nil, size: size).last
     }
 }
 

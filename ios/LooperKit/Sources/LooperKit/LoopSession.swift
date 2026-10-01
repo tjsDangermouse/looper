@@ -114,6 +114,10 @@ public struct LoopSessionRecord: Codable, Equatable {
     /// Total seconds spent paused. Optional so records from before pausing
     /// existed read back unchanged.
     public var pausedSeconds: Double?
+    /// Developer route playback is persisted like a normal session so it can
+    /// exercise summaries and relaunches, but it must never become an Apple
+    /// Health workout. Optional keeps records from older builds decodable.
+    public var simulated: Bool?
 
     public init(
         id: String = UUID().uuidString,
@@ -136,7 +140,8 @@ public struct LoopSessionRecord: Codable, Equatable {
         health: HealthSaveState = .notAttempted,
         summaryAcknowledged: Bool = false,
         healthOwner: HealthWorkoutOwner? = nil,
-        pausedSeconds: Double? = nil
+        pausedSeconds: Double? = nil,
+        simulated: Bool? = nil
     ) {
         self.id = id
         self.activity = activity
@@ -159,6 +164,7 @@ public struct LoopSessionRecord: Codable, Equatable {
         self.summaryAcknowledged = summaryAcknowledged
         self.healthOwner = healthOwner
         self.pausedSeconds = pausedSeconds
+        self.simulated = simulated
     }
 
     public var isFinished: Bool { endedAt != nil }
@@ -168,7 +174,7 @@ public struct LoopSessionRecord: Codable, Equatable {
     /// what stops a repeated completion callback, a reopened summary, or a
     /// manual retry from writing a second workout.
     public var canAttemptHealthSave: Bool {
-        guard isFinished else { return false }
+        guard isFinished, simulated != true else { return false }
         switch health {
         case .saved, .saving, .savedOnWatch: return false
         case .notAttempted, .failed, .skipped: return true

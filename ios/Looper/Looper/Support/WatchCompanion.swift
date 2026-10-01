@@ -131,6 +131,21 @@ final class WatchCompanion: NSObject, ObservableObject {
         link.send(.plan(plan), delivery: .latest)
     }
 
+    #if DEBUG
+    /// Opens the Watch's normal guidance UI without creating a HealthKit
+    /// workout. Live simulated fixes then travel over the exact same
+    /// WatchConnectivity state channel as a real walk.
+    func startSimulation(for plan: LoopPlanPayload) {
+        currentSessionID = plan.sessionID
+        guard link.reach.canPreload else {
+            connection = .unavailable
+            return
+        }
+        connection = .guidanceOnly("Developer route simulation")
+        link.send(.plan(plan), delivery: .latest)
+    }
+    #endif
+
     /// The phone has left the loop-choosing screen with nothing started. The
     /// Watch is told to stop offering the loop it was last shown, rather than
     /// sitting on a Start button for a route no longer on screen.

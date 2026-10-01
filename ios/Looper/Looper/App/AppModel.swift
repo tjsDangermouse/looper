@@ -73,6 +73,16 @@ final class AppModel: ObservableObject {
     /// fixes are recorded, progress doesn't move, nothing is announced, and
     /// the elapsed clock stops.
     @Published private(set) var isPaused = false
+    #if DEBUG
+    /// When enabled, Start traces the complete chosen geometry at three times
+    /// the route's planned pace.
+    /// The Watch receives normal plan/state/result messages, but neither
+    /// device creates an Apple Health workout.
+    @Published var simulatesWalk = UserDefaults.standard.bool(forKey: "developer-simulates-walk") {
+        didSet { UserDefaults.standard.set(simulatesWalk, forKey: "developer-simulates-walk") }
+    }
+    @Published private(set) var isSimulatingWalk = false
+    #endif
 
     let compassAvailable = LocationManager.headingAvailable
     let health: HealthIntegration
@@ -191,10 +201,10 @@ final class AppModel: ObservableObject {
                 targetDifferencePercent: 4,
                 geometry: LineGeometry(coordinates: [start, Point(start.lng + 0.01, start.lat + 0.005), Point(start.lng + 0.02, start.lat), start]),
                 steps: [
-                    Step(instruction: "Head along Peel Road", distanceMeters: 1500, durationSeconds: 1100, road: "Peel Road"),
-                    Step(instruction: "Turn left onto Strang Road", distanceMeters: 1700, durationSeconds: 1200, maneuver: .code(0), road: "Strang Road"),
-                    Step(instruction: "Turn right onto Union Road", distanceMeters: 1000, durationSeconds: 700, maneuver: .code(1), road: "Union Road"),
-                    Step(instruction: "Arrive at your starting point", distanceMeters: 0, durationSeconds: 0, maneuver: .code(10)),
+                    Step(instruction: "Head along Peel Road", distanceMeters: 1500, durationSeconds: 1100, startIndex: 0, endIndex: 1, road: "Peel Road"),
+                    Step(instruction: "Turn left onto Strang Road", distanceMeters: 1700, durationSeconds: 1200, startIndex: 1, endIndex: 2, maneuver: .code(0), road: "Strang Road"),
+                    Step(instruction: "Turn right onto Union Road", distanceMeters: 1000, durationSeconds: 700, startIndex: 2, endIndex: 3, maneuver: .code(1), road: "Union Road"),
+                    Step(instruction: "Arrive at your starting point", distanceMeters: 0, durationSeconds: 0, startIndex: 3, endIndex: 3, maneuver: .code(10)),
                 ]
             )
         }
@@ -582,13 +592,29 @@ final class AppModel: ObservableObject {
         if let watchSessionID { plan.sessionID = watchSessionID }
 
         var owner: HealthWorkoutOwner = .phone
+        #if DEBUG
+        let simulation = simulatesWalk && watchSessionID == nil
+        #else
+        let simulation = false
+        #endif
         if watchSessionID != nil, watchOwnsWorkout {
             // Started on the wrist: the Watch's workout is already running,
             // so it owns the Health record without being asked.
             owner = .watch
-        } else if watch.isPairedWithApp {
-            startupNotice = "Starting on your Apple Watch…"
-            owner = await watch.startWorkout(for: plan) ? .watch : .phone
+        } else {
+            #if DEBUG
+            if simulation {
+                watch.startSimulation(for: plan)
+            } else if watch.isPairedWithApp {
+                startupNotice = "Starting on your Apple Watch…"
+                owner = await watch.startWorkout(for: plan) ? .watch : .phone
+            }
+            #else
+            if watch.isPairedWithApp {
+                startupNotice = "Starting on your Apple Watch…"
+                owner = await watch.startWorkout(for: plan) ? .watch : .phone
+            }
+            #endif
         }
         startupNotice = ""
         preparedPlan = nil
@@ -605,10 +631,18 @@ final class AppModel: ObservableObject {
         following = true
         showsRouteOverlay = true
         hasActiveWalk = true
+        #if DEBUG
+        isSimulatingWalk = simulation
+        #endif
         screen = .walk
         routeStore.save(route)
         routeTileCache.cache(route)
-        startRecording(route, id: plan.sessionID, owner: owner)
+        startRecording(
+            route,
+            id: plan.sessionID,
+            owner: owner,
+            simulated: simulation
+        )
         navigationLogger.resetForNewRoute()
         navigationLogger.log("navigation.started", details: [
             "sessionID": plan.sessionID,
@@ -649,6 +683,9 @@ final class AppModel: ObservableObject {
         courseUp = false
         showsRouteOverlay = false
         isPaused = false
+        #if DEBUG
+        isSimulatingWalk = false
+        #endif
         pausedAt = nil
         screen = .choices
         stopWalkWatch()
@@ -702,7 +739,12 @@ final class AppModel: ObservableObject {
     /// Opens a fresh record for this walk. Any previous outing's record is
     /// replaced — its summary has been seen, or the walker has moved on
     /// regardless.
-    private func startRecording(_ route: Route, id: String, owner: HealthWorkoutOwner) {
+    private func startRecording(
+        _ route: Route,
+        id: String,
+        owner: HealthWorkoutOwner,
+        simulated: Bool = false
+    ) {
         let record = LoopSessionRecord(
             id: id,
             activity: activity,
@@ -716,7 +758,8 @@ final class AppModel: ObservableObject {
             plannedDurationSeconds: route.durationSeconds,
             plannedGeometry: route.geometry.coordinates,
             startedAt: Date(),
-            healthOwner: owner
+            healthOwner: owner,
+            simulated: simulated
         )
         session = record
         sessionStore.save(record, immediately: true)
@@ -946,57 +989,142 @@ final class AppModel: ObservableObject {
         badFixes = 0
         stopWalkWatch()
         walkWatchTask = Task {
+            #if DEBUG
+            if isSimulatingWalk, let selected {
+                await playSimulatedWalk(on: selected)
+                return
+            }
+            #endif
             for await update in locationManager.positionUpdates() {
-                guard let selected else { continue }
-                // A paused outing isn't being walked: the fix is neither
-                // recorded nor allowed to move progress, so standing still
-                // with the phone in a pocket can't drift the loop along.
-                if isPaused { continue }
-                if update.accuracy > 100 {
-                    locationState = "Waiting for a more accurate location…"
-                    navigationLogger.log("location.rejected", details: [
-                        "accuracyM": rounded(update.accuracy),
-                        "latitude": rounded(update.point.lat, decimals: 5),
-                        "longitude": rounded(update.point.lng, decimals: 5)
-                    ])
-                    continue
-                }
-                locationState = ""
-                position = update.point
-                let match = nearestProgress(update.point, selected.geometry.coordinates, from: walked)
-                let safeProgress = progressWithoutStartFinishJump(
-                    previous: walked,
-                    candidate: match.distanceAlong,
-                    routeLength: selected.distanceMeters
-                )
-                walked = safeProgress
-                progress = safeProgress
-                let wasOffRoute = offRoute
-                badFixes = match.distanceToRoute > 55 ? badFixes + 1 : 0
-                offRoute = badFixes >= 3
-                navigationLogger.log("location.accepted", details: [
-                    "accuracyM": rounded(update.accuracy),
-                    "latitude": rounded(update.point.lat, decimals: 5),
-                    "longitude": rounded(update.point.lng, decimals: 5),
-                    "distanceToRouteM": rounded(match.distanceToRoute),
-                    "candidateProgressM": rounded(match.distanceAlong),
-                    "safeProgressM": rounded(safeProgress),
-                    "badFixes": String(badFixes),
-                    "nextTurnDistanceM": turn.map { rounded($0.distanceAway) } ?? "none"
-                ])
-                if wasOffRoute != offRoute {
-                    navigationLogger.log("navigation.offRouteChanged", details: [
-                        "offRoute": String(offRoute), "distanceToRouteM": rounded(match.distanceToRoute)
-                    ])
-                }
-                if record(update, on: selected) {
-                    announceArrivalThenEnd()
-                    return
-                }
-                announceIfNeeded()
+                if handlePositionUpdate(update) { return }
             }
         }
     }
+
+    /// Runs every real and synthetic fix through one navigation path. This is
+    /// the important property of the demo: it tests matching, turns, speech,
+    /// recording and Watch payloads rather than directly animating the UI.
+    @discardableResult
+    private func handlePositionUpdate(_ update: LocationManager.PositionUpdate) -> Bool {
+        guard let selected else { return false }
+        if isPaused { return false }
+        if update.accuracy > 100 {
+            locationState = "Waiting for a more accurate location…"
+            navigationLogger.log("location.rejected", details: [
+                "accuracyM": rounded(update.accuracy),
+                "latitude": rounded(update.point.lat, decimals: 5),
+                "longitude": rounded(update.point.lng, decimals: 5)
+            ])
+            return false
+        }
+        locationState = ""
+        position = update.point
+        let match = nearestProgress(update.point, selected.geometry.coordinates, from: walked)
+        let safeProgress = progressWithoutStartFinishJump(
+            previous: walked,
+            candidate: match.distanceAlong,
+            routeLength: selected.distanceMeters
+        )
+        walked = safeProgress
+        progress = safeProgress
+        let wasOffRoute = offRoute
+        badFixes = match.distanceToRoute > 55 ? badFixes + 1 : 0
+        offRoute = badFixes >= 3
+        navigationLogger.log("location.accepted", details: [
+            "accuracyM": rounded(update.accuracy),
+            "latitude": rounded(update.point.lat, decimals: 5),
+            "longitude": rounded(update.point.lng, decimals: 5),
+            "distanceToRouteM": rounded(match.distanceToRoute),
+            "candidateProgressM": rounded(match.distanceAlong),
+            "safeProgressM": rounded(safeProgress),
+            "badFixes": String(badFixes),
+            "nextTurnDistanceM": turn.map { rounded($0.distanceAway) } ?? "none"
+        ])
+        if wasOffRoute != offRoute {
+            navigationLogger.log("navigation.offRouteChanged", details: [
+                "offRoute": String(offRoute), "distanceToRouteM": rounded(match.distanceToRoute)
+            ])
+        }
+        if record(update, on: selected) {
+            announceArrivalThenEnd()
+            return true
+        }
+        announceIfNeeded()
+        return false
+    }
+
+    #if DEBUG
+    private func playSimulatedWalk(on route: Route) async {
+        let coordinates = route.geometry.coordinates
+        guard coordinates.count > 1 else { return }
+        let segmentLengths = zip(coordinates, coordinates.dropFirst()).map { haversine($0, $1) }
+        let geometryLength = segmentLengths.reduce(0, +)
+        guard geometryLength > 0 else { return }
+
+        // One fix per second at 3x planned pace. Interpolating by distance
+        // along every geometry segment makes the puck actually walk the
+        // paths between turns instead of treating manoeuvres as keyframes.
+        let playbackDuration = max(1, route.durationSeconds / 3)
+        let samples = max(1, Int(ceil(playbackDuration)))
+        let metresPerSecond = max(0.5, route.distanceMeters / playbackDuration)
+        var sample = 0
+        while sample <= samples, !Task.isCancelled {
+            if isPaused {
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                continue
+            }
+            let target = geometryLength * Double(sample) / Double(samples)
+            let (point, course) = simulatedPoint(
+                distance: target,
+                coordinates: coordinates,
+                segmentLengths: segmentLengths
+            )
+            let location = CLLocation(
+                coordinate: CLLocationCoordinate2D(latitude: point.lat, longitude: point.lng),
+                altitude: 0,
+                horizontalAccuracy: 5,
+                verticalAccuracy: -1,
+                course: course,
+                speed: metresPerSecond,
+                timestamp: Date()
+            )
+            let update = LocationManager.PositionUpdate(point: point, accuracy: 5, location: location)
+            if handlePositionUpdate(update) { return }
+            sample += 1
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+        // Imported or hand-built routes can have a small discrepancy between
+        // their declared distance and their geometry length. Never leave a
+        // completed demo sitting indefinitely on its final frame.
+        if hasActiveWalk, !Task.isCancelled { endWalk() }
+    }
+
+    private func simulatedPoint(
+        distance: Double,
+        coordinates: [Point],
+        segmentLengths: [Double]
+    ) -> (Point, Double) {
+        var remaining = distance
+        for index in segmentLengths.indices {
+            let length = segmentLengths[index]
+            if remaining <= length || index == segmentLengths.count - 1 {
+                let fraction = length > 0 ? min(1, remaining / length) : 0
+                let start = coordinates[index]
+                let end = coordinates[index + 1]
+                let point = Point(
+                    start.lng + (end.lng - start.lng) * fraction,
+                    start.lat + (end.lat - start.lat) * fraction
+                )
+                let longitude = (end.lng - start.lng) * cos((start.lat + end.lat) * .pi / 360)
+                let latitude = end.lat - start.lat
+                let course = (atan2(longitude, latitude) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
+                return (point, course)
+            }
+            remaining -= length
+        }
+        return (coordinates.last!, 0)
+    }
+    #endif
 
     private func stopWalkWatch() {
         walkWatchTask?.cancel()
