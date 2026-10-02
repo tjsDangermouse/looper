@@ -15,6 +15,9 @@ final class WatchRouteRecorder: NSObject {
     private let manager = CLLocationManager()
     private var pending: [CLLocation] = []
     private var onBatch: (([CLLocation]) -> Void)?
+    /// Every usable fix as it arrives, for following the route. Separate from
+    /// the batches above, which are only for HealthKit.
+    var onFix: ((CLLocation) -> Void)?
     private var authorizationContinuation: CheckedContinuation<CLAuthorizationStatus, Never>?
     /// Fixes are handed over in batches rather than one at a time; HealthKit
     /// would rather have a handful than a steady drip.
@@ -39,7 +42,7 @@ final class WatchRouteRecorder: NSObject {
         }
     }
 
-    func start(onBatch: @escaping ([CLLocation]) -> Void) {
+    func start(onBatch: (([CLLocation]) -> Void)? = nil) {
         self.onBatch = onBatch
         // `allowsBackgroundLocationUpdates` was tried here and reliably
         // crashed on a real Watch (`CLClientIsBackgroundable` false) even
@@ -81,7 +84,12 @@ extension WatchRouteRecorder: CLLocationManagerDelegate {
         // The same standard the phone holds its own track to: a fix
         // CoreLocation couldn't place, or placed to within a hundred metres,
         // is not a point on anybody's route.
-        pending += locations.filter { $0.horizontalAccuracy > 0 && $0.horizontalAccuracy <= 100 }
+        let usable = locations.filter { $0.horizontalAccuracy > 0 && $0.horizontalAccuracy <= 100 }
+        usable.forEach { onFix?($0) }
+        // With no workout there is no route to build, and fixes are only for
+        // following; nothing is held on to.
+        guard onBatch != nil else { return }
+        pending += usable
         guard pending.count >= Self.batchSize else { return }
         let batch = pending
         pending = []

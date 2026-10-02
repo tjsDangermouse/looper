@@ -94,11 +94,13 @@ targets:
         CFBundleDisplayName: Looper
         WKApplication: true
         WKCompanionAppBundleIdentifier: com.woollams.Looper
-        WKRunsIndependentlyOfCompanionApp: false
+        WKRunsIndependentlyOfCompanionApp: true
         # Lets the workout session keep running, and keep collecting heart
         # rate, with the screen down and the wrist swinging.
         WKBackgroundModes:
           - workout-processing
+          # Spoken directions play while the wrist is down.
+          - audio
           # Needed before CoreLocation will let the app claim background
           # location updates, which is what keeps the route recording with
           # the wrist down mid-run.

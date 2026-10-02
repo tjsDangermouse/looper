@@ -1,9 +1,10 @@
 import LooperKit
 import SwiftUI
 
-/// The loop the phone last prepared, and one button. Everything on this
-/// screen is something the walker chose on the phone — the Watch offers no
-/// second way to plan a route.
+/// The loop that is ready to walk, one button, and the phone's saved routes to
+/// choose from instead. Every route here was planned on the phone — the Watch
+/// offers no way to plan one — and each is complete, so none of it needs the
+/// phone to be nearby once it has arrived.
 struct StartLoopView: View {
     @ObservedObject var model: WatchModel
 
@@ -44,12 +45,16 @@ struct StartLoopView: View {
                     .padding(.top, 1)
                     .accessibilityLabel("Start \(plan.activity == .running ? "run" : "walk"), \(plan.routeName), \(plan.targetDescription)")
 
+                    MapReadiness(model: model, plan: plan)
+
                     // Said before the walk rather than after it goes wrong:
-                    // this release navigates from the phone, and the Watch
-                    // never pretends otherwise.
-                    Text("Turn-by-turn guidance comes from your iPhone.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    // spoken directions need something to play through.
+                    if model.voiceOn {
+                        Label("Spoken directions play through headphones.", systemImage: "headphones")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
                     Text(WatchAppVersion.displayString)
                         .font(.caption2)
@@ -76,8 +81,87 @@ struct StartLoopView: View {
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                SavedRoutesList(model: model)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+/// Whether the maps for the chosen route are on the Watch yet. Said plainly,
+/// because the walk is where a missing map would otherwise show up.
+private struct MapReadiness: View {
+    @ObservedObject var model: WatchModel
+    @ObservedObject private var maps: WatchNavigationMapCache
+    let plan: LoopPlanPayload
+
+    init(model: WatchModel, plan: LoopPlanPayload) {
+        self.model = model
+        self.plan = plan
+        _maps = ObservedObject(wrappedValue: model.navigationMaps)
+    }
+
+    var body: some View {
+        if maps.isReady(plan) {
+            Label("Maps saved on this Watch", systemImage: "checkmark.circle")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        } else if maps.isPreparing {
+            Label("Saving maps…", systemImage: "arrow.down.circle")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        } else {
+            Label("Route line only — maps need a connection", systemImage: "map")
+                .font(.caption2)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// The phone's saved routes. Choosing one makes it the route to walk.
+struct SavedRoutesList: View {
+    @ObservedObject var model: WatchModel
+    @ObservedObject private var maps: WatchNavigationMapCache
+
+    init(model: WatchModel) {
+        self.model = model
+        _maps = ObservedObject(wrappedValue: model.navigationMaps)
+    }
+
+    var body: some View {
+        if !model.savedRoutes.isEmpty {
+            Text("Saved routes")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.top, 8)
+
+            ForEach(model.savedRoutes, id: \.routeID) { route in
+                Button { model.choose(route) } label: {
+                    HStack(spacing: 6) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(route.routeName)
+                                .font(.footnote.weight(.semibold))
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.8)
+                            Text(formatDistance(route.plannedDistanceMeters, unit: route.displayUnit))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        if model.plan?.routeID == route.routeID {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(Color.looperAccent)
+                        } else if maps.isReady(route) {
+                            Image(systemName: "map.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .accessibilityLabel("\(route.routeName), \(formatDistance(route.plannedDistanceMeters, unit: route.displayUnit))\(maps.isReady(route) ? ", maps saved" : "")")
+            }
         }
     }
 }

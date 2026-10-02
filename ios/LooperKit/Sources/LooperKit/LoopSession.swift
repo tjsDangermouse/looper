@@ -4,7 +4,7 @@ import Foundation
 /// copy of the track: `CLLocation` isn't `Codable`, and the summary and the
 /// Health save both need the outing to survive a force-quit or a restore
 /// from the background, not just live in memory.
-public struct TrackPoint: Codable, Equatable {
+public struct TrackPoint: Codable, Equatable, Sendable {
     public var lng: Double
     public var lat: Double
     public var altitude: Double?

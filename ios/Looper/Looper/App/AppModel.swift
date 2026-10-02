@@ -119,7 +119,7 @@ final class AppModel: ObservableObject {
     private var announcementHistory = GuidanceAnnouncementHistory()
     private var endingAfterArrival = false
     private var walked = 0.0
-    private var badFixes = 0
+    private var offRouteTracker = OffRouteTracker()
     private var findingStageTask: Task<Void, Never>?
     private var walkWatchTask: Task<Void, Never>?
     private var headingWatchTask: Task<Void, Never>?
@@ -215,6 +215,10 @@ final class AppModel: ObservableObject {
         ]
         routes = previewRoutes
         selected = previewRoutes.first
+        if ProcessInfo.processInfo.environment["LOOPER_PREVIEW_FAVORITES"] == "1" {
+            favoriteRoutes = [previewRoutes[0], previewRoutes[2]]
+            syncSavedRoutesToWatch()
+        }
         switch target {
         case "choices": screen = .choices
         case "walk":
@@ -345,6 +349,7 @@ final class AppModel: ObservableObject {
             favoriteRoutes.insert(route, at: 0)
         }
         favoritesStore.save(favoriteRoutes)
+        syncSavedRoutesToWatch()
     }
 
     func openFavorite(_ route: Route) {
@@ -588,7 +593,7 @@ final class AppModel: ObservableObject {
         defer { startingWalk = false }
         let route = reassessDirections(proposedRoute)
         selected = route
-        var plan = preparedLoopPlan(for: route)
+        var plan = preparedLoopPlan(for: route, reassessed: true)
         if let watchSessionID { plan.sessionID = watchSessionID }
 
         var owner: HealthWorkoutOwner = .phone
@@ -986,7 +991,7 @@ final class AppModel: ObservableObject {
     }
 
     private func startWalkWatch() {
-        badFixes = 0
+        offRouteTracker.reset()
         stopWalkWatch()
         walkWatchTask = Task {
             #if DEBUG
@@ -1028,8 +1033,7 @@ final class AppModel: ObservableObject {
         walked = safeProgress
         progress = safeProgress
         let wasOffRoute = offRoute
-        badFixes = match.distanceToRoute > 55 ? badFixes + 1 : 0
-        offRoute = badFixes >= 3
+        offRoute = offRouteTracker.record(distanceToRoute: match.distanceToRoute)
         navigationLogger.log("location.accepted", details: [
             "accuracyM": rounded(update.accuracy),
             "latitude": rounded(update.point.lat, decimals: 5),
@@ -1037,7 +1041,7 @@ final class AppModel: ObservableObject {
             "distanceToRouteM": rounded(match.distanceToRoute),
             "candidateProgressM": rounded(match.distanceAlong),
             "safeProgressM": rounded(safeProgress),
-            "badFixes": String(badFixes),
+            "badFixes": String(offRouteTracker.badFixes),
             "nextTurnDistanceM": turn.map { rounded($0.distanceAway) } ?? "none"
         ])
         if wasOffRoute != offRoute {
@@ -1257,28 +1261,39 @@ final class AppModel: ObservableObject {
             details["watchTimestamp"] = ISO8601DateFormatter().string(from: diagnostic.timestamp)
             NavigationLogger.shared.log("watch.\(diagnostic.event)", details: details)
         }
+        watch.onWalkRecord = { [weak self] record in self?.adoptWatchWalk(record) }
+        watch.onLinkReady = { [weak self] in self?.syncSavedRoutesToWatch() }
         watch.activate()
+        syncSavedRoutesToWatch()
     }
 
     /// The plan for a loop, reusing the one already preloaded to the Watch
     /// when it is for the same route — so the id on the wrist and the id in
     /// the session record are the same outing.
-    private func preparedLoopPlan(for route: Route) -> LoopPlanPayload {
+    ///
+    /// It is the whole guidance pack, built here from the same reassessed
+    /// route the phone speaks from. The Watch follows it; it never plans.
+    private func preparedLoopPlan(for route: Route, reassessed: Bool = false) -> LoopPlanPayload {
         if let preparedPlan, preparedPlan.routeID == route.id { return preparedPlan }
-        return LoopPlanPayload(
-            sessionID: UUID().uuidString,
-            routeID: route.id,
-            routeName: route.name,
+        return makeLoopPlan(
+            route: route,
             activity: activity,
             mode: mode,
             targetAmount: Double(amount) ?? 0,
             targetUnit: unit,
             displayUnit: unit,
-            plannedDistanceMeters: route.distanceMeters,
-            plannedDurationSeconds: route.durationSeconds,
-            plannedGeometry: route.geometry.coordinates,
-            plannedManeuvers: plannedManeuvers(route)
+            narration: NarrationSettings(voiceIdentifier: selectedVoiceIdentifier),
+            alreadyReassessed: reassessed
         )
+    }
+
+    /// Every saved route as a guidance pack for the Watch, so any of them can
+    /// be walked with the phone left behind.
+    func syncSavedRoutesToWatch() {
+        let narration = NarrationSettings(voiceIdentifier: selectedVoiceIdentifier)
+        watch.syncSavedRoutes(favoriteRoutes.map {
+            makeSavedRoutePlan(route: $0, activity: activity, displayUnit: unit, narration: narration)
+        })
     }
 
     /// Sends the chosen loop to the Watch ahead of time, so Start on the
@@ -1305,10 +1320,19 @@ final class AppModel: ObservableObject {
     private func handleWatchCommand(_ command: WatchCommandPayload) {
         switch command.kind {
         case .start:
-            // Start from the wrist. The route is whichever loop is chosen on
-            // the phone — the Watch was shown that same plan, and it has no
-            // route of its own to offer.
-            guard let route = selected ?? routes.first else { return }
+            // A start sent while the phone was out of reach is queued and can
+            // arrive hours later, back at home. By then the walk is long over
+            // and starting one would be a phantom, so only a fresh start counts.
+            guard abs(command.issuedAt.timeIntervalSinceNow) < 30 else {
+                navigationLogger.log("watch.staleStartIgnored", details: [
+                    "ageSeconds": rounded(-command.issuedAt.timeIntervalSinceNow)
+                ])
+                return
+            }
+            // Start from the wrist. The Watch names the route it is walking —
+            // it may be a saved route the phone isn't showing. With no name,
+            // it is the loop chosen on the phone.
+            guard let route = routeForWatchStart(command.routeID) else { return }
             guard let sessionID = command.sessionID else { return }
             beginWalkFromWatch(
                 route,
@@ -1326,8 +1350,31 @@ final class AppModel: ObservableObject {
                 preparedPlan = plan
                 watch.prepare(plan)
             }
+            syncSavedRoutesToWatch()
             pushWatchState(force: true)
         }
+    }
+
+    private func routeForWatchStart(_ routeID: String?) -> Route? {
+        guard let routeID else { return selected ?? routes.first }
+        return ([selected].compactMap { $0 } + routes + favoriteRoutes).first { $0.id == routeID }
+    }
+
+    /// A walk the Watch guided on its own comes home with it. If the phone
+    /// walked the same outing it already has the record; otherwise this one
+    /// becomes the last outing, with its summary, as if the phone had been there.
+    private func adoptWatchWalk(_ record: WatchWalkRecordPayload) {
+        navigationLogger.log("watch.walkRecordReceived", details: [
+            "sessionID": record.sessionID, "points": String(record.track.count),
+            "alreadyHaveIt": String(session?.id == record.sessionID)
+        ])
+        guard session?.id != record.sessionID, !hasActiveWalk else { return }
+        // The phone only keeps the last outing; a newer one stays.
+        if let current = session, current.startedAt > record.startedAt { return }
+        let adopted = record.sessionRecord()
+        session = adopted
+        sessionStore.save(adopted, immediately: true)
+        presentSummary(for: adopted)
     }
 
     private func handleWatchWorkoutStatus(_ status: WatchWorkoutStatusPayload) {

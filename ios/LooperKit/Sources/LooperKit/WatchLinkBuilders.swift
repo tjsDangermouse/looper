@@ -60,6 +60,68 @@ public func plannedManeuvers(_ route: Route) -> [ManeuverPayload] {
     }
 }
 
+/// The complete guidance pack for a route: what the Watch follows when it is
+/// the only device on the walk. Built here, on the phone's side, from the same
+/// reassessed route the phone speaks from, so a turn the phone would never
+/// announce is never on the wrist either.
+///
+/// Pass `alreadyReassessed` when the route has already been through
+/// `reassessDirections` — the walk start does that itself, and a second pass
+/// is not guaranteed to leave a route exactly as it found it.
+public func makeLoopPlan(
+    route: Route,
+    sessionID: String = UUID().uuidString,
+    activity: Activity,
+    mode: LoopMode,
+    targetAmount: Double,
+    targetUnit: Unit,
+    displayUnit: Unit,
+    narration: NarrationSettings? = nil,
+    alreadyReassessed: Bool = false,
+    preparedAt: Date = Date()
+) -> LoopPlanPayload {
+    let route = alreadyReassessed ? route : reassessDirections(route)
+    let maneuvers = plannedManeuvers(route)
+    return LoopPlanPayload(
+        sessionID: sessionID,
+        routeID: route.id,
+        routeName: route.name,
+        activity: activity,
+        mode: mode,
+        targetAmount: targetAmount,
+        targetUnit: targetUnit,
+        displayUnit: displayUnit,
+        plannedDistanceMeters: route.distanceMeters,
+        plannedDurationSeconds: route.durationSeconds,
+        plannedGeometry: route.geometry.coordinates,
+        plannedManeuvers: maneuvers,
+        guidance: .forActivity(activity),
+        script: makeGuidanceScript(maneuvers: maneuvers, unit: displayUnit),
+        narration: narration,
+        preparedAt: preparedAt
+    )
+}
+
+/// A saved route as a plan the Watch can offer: a distance target equal to the
+/// route itself, since the route is what was chosen.
+public func makeSavedRoutePlan(
+    route: Route,
+    activity: Activity,
+    displayUnit: Unit,
+    narration: NarrationSettings? = nil
+) -> LoopPlanPayload {
+    let metersPerUnit = displayUnit == .mi ? 1609.344 : 1000
+    return makeLoopPlan(
+        route: route,
+        activity: activity,
+        mode: .distance,
+        targetAmount: (route.distanceMeters / metersPerUnit * 10).rounded() / 10,
+        targetUnit: displayUnit,
+        displayUnit: displayUnit,
+        narration: narration
+    )
+}
+
 /// What the Watch should show before an outing starts.
 public func makeLoopPlanPayload(_ record: LoopSessionRecord, preparedAt: Date = Date()) -> LoopPlanPayload {
     LoopPlanPayload(

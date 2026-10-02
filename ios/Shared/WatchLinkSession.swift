@@ -23,6 +23,11 @@ final class WatchLinkSession: NSObject {
         /// was queued before it, so a Watch that reconnects after ten minutes
         /// gets today's state rather than ten minutes of history.
         case latest
+        /// A big payload, queued and delivered whenever the counterpart next
+        /// runs. Only the most recent of each `kind` is kept in flight, so a
+        /// Watch that was away for a week doesn't take delivery of seven
+        /// out-of-date saved-route lists.
+        case queued(kind: String)
     }
 
     /// What the link can do right now, in the terms the UI has to explain.
@@ -89,6 +94,13 @@ final class WatchLinkSession: NSObject {
             if session.isReachable {
                 session.sendMessage(payload, replyHandler: nil) { _ in }
             }
+        case .queued(let kind):
+            for transfer in session.outstandingUserInfoTransfers where transfer.userInfo["kind"] as? String == kind {
+                transfer.cancel()
+            }
+            var info = payload
+            info["kind"] = kind
+            session.transferUserInfo(info)
         }
     }
 

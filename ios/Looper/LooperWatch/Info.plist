@@ -33,11 +33,12 @@
 	<key>WKBackgroundModes</key>
 	<array>
 		<string>workout-processing</string>
+		<string>audio</string>
 		<string>location</string>
 	</array>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.woollams.Looper</string>
 	<key>WKRunsIndependentlyOfCompanionApp</key>
-	<false/>
+	<true/>
 </dict>
 </plist>

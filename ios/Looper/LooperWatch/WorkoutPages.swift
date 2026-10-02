@@ -14,8 +14,9 @@ struct WorkoutPages: View {
     init(model: WatchModel) {
         self.model = model
         #if DEBUG
-        let previewingGuidance = ProcessInfo.processInfo.environment["LOOPER_WATCH_PREVIEW"] == "guidance"
-        _page = State(initialValue: previewingGuidance ? .guidance : .metrics)
+        let environment = ProcessInfo.processInfo.environment
+        let previewingGuidance = environment["LOOPER_WATCH_PREVIEW"] == "guidance" || environment["LOOPER_WATCH_PAGE"] == "guidance"
+        _page = State(initialValue: previewingGuidance ? .guidance : environment["LOOPER_WATCH_PAGE"] == "controls" ? .controls : .metrics)
         #else
         _page = State(initialValue: .metrics)
         #endif
@@ -34,8 +35,8 @@ struct WorkoutPages: View {
     }
 }
 
-/// Pause, resume, end. Nothing else — every other decision belongs on the
-/// phone.
+/// Pause, resume, voice, end. Route choices belong to the phone and the
+/// saved-routes list on the start screen.
 private struct ControlsPage: View {
     @ObservedObject var model: WatchModel
 
@@ -57,6 +58,11 @@ private struct ControlsPage: View {
                 .buttonStyle(.borderedProminent)
                 .tint(Color.looperRaised)
             }
+
+            Toggle(isOn: $model.voiceOn) {
+                Label("Voice", systemImage: model.voiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill")
+            }
+            .tint(Color.looperAccent)
 
             Button(role: .destructive, action: model.end) {
                 Label("End", systemImage: "stop.fill")
@@ -105,22 +111,10 @@ private struct MetricsPage: View {
                 Metric(value: heartText, label: "BPM", tint: model.workout.heartRate == nil ? nil : .looperHeart)
             }
 
-            if model.guidanceOnly, model.isPhoneLive {
+            if model.guidanceOnly {
                 Label("Guidance only · Health recording off", systemImage: "heart.slash")
                     .font(.caption2)
                     .foregroundStyle(.orange)
-            } else if !model.isPhoneLive {
-                Label(
-                    model.guidanceOnly ? "iPhone disconnected · Metrics unavailable" : "iPhone not connected",
-                    systemImage: "iphone.slash"
-                )
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-                    .accessibilityLabel(
-                        model.guidanceOnly
-                            ? "iPhone disconnected. Guidance and live metrics are unavailable."
-                            : "iPhone not connected. Distance and time are measured on your Watch."
-                    )
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -142,13 +136,11 @@ private struct MetricsPage: View {
 
     private var unit: LooperKit.Unit { model.plan?.displayUnit ?? .km }
 
-    /// The phone's recorded distance while it is being heard from; the
-    /// Watch's own once it isn't. Which of the two is on screen is never left
-    /// ambiguous — the "iPhone not connected" line below says so.
+    /// The distance the Watch has followed the route for, or what its own
+    /// sensors have measured if that is further. Always the Watch's own
+    /// figure, so the screen reads the same with or without a phone.
     private var distanceMeters: Double {
-        if model.isPhoneLive, let state = model.state { return state.distanceMeters }
-        if model.guidanceOnly, let state = model.state { return state.distanceMeters }
-        return model.workout.localDistanceMeters
+        max(model.state?.distanceMeters ?? 0, model.workout.localDistanceMeters)
     }
 
     private var distanceText: String { formatDistance(distanceMeters, unit: unit) }
@@ -175,7 +167,6 @@ private struct MetricsPage: View {
     }
 
     private var livePace: Double? {
-        if model.isPhoneLive, let pace = model.state?.paceSecondsPerKm { return pace }
         guard distanceMeters >= 100, elapsed >= 60 else { return nil }
         return elapsed / (distanceMeters / 1000)
     }

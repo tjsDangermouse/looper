@@ -12,7 +12,7 @@ public enum WatchLink {
     /// version it doesn't know throws rather than decoding half a message —
     /// the two devices can be updated separately, and an old Watch app
     /// guessing at a new phone's payload is worse than a stale screen.
-    public static let version = 6
+    public static let version = 7
 }
 
 /// Where the outing has got to, as both devices understand it. This is the
@@ -42,9 +42,11 @@ public enum HealthWorkoutOwner: String, Codable, Equatable, Sendable {
 
 /// The loop the Watch should be showing before and during an outing. Sent once
 /// when a loop is prepared or started, and again whenever the Watch asks for
-/// it — never on a timer. The planned geometry is display-only: the Watch
-/// draws it under the phone's guidance, but never derives progress or turns
-/// from it.
+/// it — never on a timer.
+///
+/// It is the whole guidance pack for one route. The phone's engine has already
+/// decided every turn, its wording, the spoken script and the thresholds; the
+/// Watch follows the pack with its own GPS and does no planning of its own.
 public struct LoopPlanPayload: Codable, Equatable, Sendable {
     /// The session record's id. Every later state update and command quotes
     /// it, so a message left over from the previous outing is ignored rather
@@ -69,6 +71,12 @@ public struct LoopPlanPayload: Codable, Equatable, Sendable {
     /// has a connection, rather than discovering each map after setting off.
     /// Optional so a plan saved by an older Watch build can still be read.
     public var plannedManeuvers: [ManeuverPayload]?
+    /// Off-route, arrival and haptic thresholds, written by the phone. Absent
+    /// in a plan from an older build, in which case the Watch uses defaults.
+    public var guidance: GuidanceConfig?
+    /// What to say, and where, for the whole route.
+    public var script: GuidanceScript?
+    public var narration: NarrationSettings?
     /// When the phone prepared this loop. The Watch shows the most recent
     /// plan, and an older one arriving late must not replace a newer one.
     public var preparedAt: Date
@@ -86,6 +94,9 @@ public struct LoopPlanPayload: Codable, Equatable, Sendable {
         plannedDurationSeconds: Double,
         plannedGeometry: [Point]? = nil,
         plannedManeuvers: [ManeuverPayload]? = nil,
+        guidance: GuidanceConfig? = nil,
+        script: GuidanceScript? = nil,
+        narration: NarrationSettings? = nil,
         preparedAt: Date = Date()
     ) {
         self.sessionID = sessionID
@@ -100,6 +111,9 @@ public struct LoopPlanPayload: Codable, Equatable, Sendable {
         self.plannedDurationSeconds = plannedDurationSeconds
         self.plannedGeometry = plannedGeometry
         self.plannedManeuvers = plannedManeuvers
+        self.guidance = guidance
+        self.script = script
+        self.narration = narration
         self.preparedAt = preparedAt
     }
 
@@ -115,8 +129,8 @@ public struct LoopPlanPayload: Codable, Equatable, Sendable {
 }
 
 /// One manoeuvre, as the iPhone's navigation engine has already decided it.
-/// The Watch renders this and nothing else — it never looks at geometry, and
-/// it never works out a turn for itself.
+/// The Watch shows this as written — it never works out, rewords or drops a
+/// turn for itself.
 public struct ManeuverPayload: Codable, Equatable, Sendable {
     /// The step's index in the route. Identity for haptics: the same turn
     /// arriving again at a shorter distance is the same turn, and must not
@@ -272,12 +286,17 @@ public struct WatchCommandPayload: Codable, Equatable, Sendable {
     /// opened a HealthKit workout. `false` leaves recording with the phone
     /// while the Watch remains available for guidance.
     public var recordsWorkout: Bool?
+    /// For a `start` from the wrist: which route it is starting, so the phone
+    /// opens the same one — the Watch may have chosen a saved route the phone
+    /// isn't showing.
+    public var routeID: String?
     public var issuedAt: Date
 
     public init(
         kind: WatchCommandKind,
         sessionID: String? = nil,
         recordsWorkout: Bool? = nil,
+        routeID: String? = nil,
         id: String = UUID().uuidString,
         issuedAt: Date = Date()
     ) {
@@ -285,6 +304,7 @@ public struct WatchCommandPayload: Codable, Equatable, Sendable {
         self.kind = kind
         self.sessionID = sessionID
         self.recordsWorkout = recordsWorkout
+        self.routeID = routeID
         self.issuedAt = issuedAt
     }
 }
@@ -333,6 +353,112 @@ public struct WatchDiagnosticPayload: Codable, Equatable, Sendable {
     }
 }
 
+/// The phone's saved routes, each as a complete guidance pack, so any of them
+/// can be started from the wrist with the phone left at home. Always the whole
+/// list: a route removed on the phone disappears from the Watch.
+public struct SavedRoutesPayload: Codable, Equatable, Sendable {
+    public var routes: [LoopPlanPayload]
+    public var sentAt: Date
+
+    public init(routes: [LoopPlanPayload], sentAt: Date = Date()) {
+        self.routes = routes
+        self.sentAt = sentAt
+    }
+}
+
+/// A walk the Watch guided and recorded by itself, handed to the phone when
+/// the two next meet so the Loop Summary and history are not missing it.
+public struct WatchWalkRecordPayload: Codable, Equatable, Sendable {
+    public var sessionID: String
+    public var routeID: String
+    public var routeName: String
+    public var activity: Activity
+    public var mode: LoopMode
+    public var targetAmount: Double
+    public var targetUnit: Unit
+    public var displayUnit: Unit
+    public var plannedDistanceMeters: Double
+    public var plannedDurationSeconds: Double
+    public var plannedGeometry: [Point]
+    public var startedAt: Date
+    public var endedAt: Date
+    public var progressMeters: Double
+    public var arrivedAt: Date?
+    public var endedOffRoute: Bool
+    public var pausedSeconds: Double?
+    public var track: [TrackPoint]
+    /// The HealthKit workout the Watch saved for it, if it did.
+    public var workoutID: String?
+
+    public init(
+        sessionID: String,
+        routeID: String,
+        routeName: String,
+        activity: Activity,
+        mode: LoopMode,
+        targetAmount: Double,
+        targetUnit: Unit,
+        displayUnit: Unit,
+        plannedDistanceMeters: Double,
+        plannedDurationSeconds: Double,
+        plannedGeometry: [Point],
+        startedAt: Date,
+        endedAt: Date,
+        progressMeters: Double,
+        arrivedAt: Date? = nil,
+        endedOffRoute: Bool = false,
+        pausedSeconds: Double? = nil,
+        track: [TrackPoint],
+        workoutID: String? = nil
+    ) {
+        self.sessionID = sessionID
+        self.routeID = routeID
+        self.routeName = routeName
+        self.activity = activity
+        self.mode = mode
+        self.targetAmount = targetAmount
+        self.targetUnit = targetUnit
+        self.displayUnit = displayUnit
+        self.plannedDistanceMeters = plannedDistanceMeters
+        self.plannedDurationSeconds = plannedDurationSeconds
+        self.plannedGeometry = plannedGeometry
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.progressMeters = progressMeters
+        self.arrivedAt = arrivedAt
+        self.endedOffRoute = endedOffRoute
+        self.pausedSeconds = pausedSeconds
+        self.track = track
+        self.workoutID = workoutID
+    }
+
+    /// The phone's own session record for this outing.
+    public func sessionRecord() -> LoopSessionRecord {
+        LoopSessionRecord(
+            id: sessionID,
+            activity: activity,
+            mode: mode,
+            targetAmount: targetAmount,
+            targetUnit: targetUnit,
+            displayUnit: displayUnit,
+            routeID: routeID,
+            routeName: routeName,
+            plannedDistanceMeters: plannedDistanceMeters,
+            plannedDurationSeconds: plannedDurationSeconds,
+            plannedGeometry: plannedGeometry,
+            startedAt: startedAt,
+            endedAt: endedAt,
+            progressMeters: progressMeters,
+            arrivedAt: arrivedAt,
+            endedOffRoute: endedOffRoute,
+            track: track,
+            health: .savedOnWatch(workoutID: workoutID),
+            healthOwner: .watch,
+            pausedSeconds: pausedSeconds
+        )
+    }
+}
+
 /// One message on the wire.
 public enum WatchMessage: Codable, Equatable, Sendable {
     case plan(LoopPlanPayload)
@@ -341,6 +467,8 @@ public enum WatchMessage: Codable, Equatable, Sendable {
     case command(WatchCommandPayload)
     case workoutStatus(WatchWorkoutStatusPayload)
     case diagnostic(WatchDiagnosticPayload)
+    case savedRoutes(SavedRoutesPayload)
+    case walkRecord(WatchWalkRecordPayload)
     /// The phone has left the loop-choosing screen with nothing started —
     /// the Watch should stop offering the loop it was last shown. Carries a
     /// timestamp for the same reason `LoopPlanPayload.preparedAt` does: one

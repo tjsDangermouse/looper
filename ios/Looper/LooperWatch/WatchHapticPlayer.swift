@@ -24,6 +24,12 @@ final class WatchHapticPlayer {
         planner = TurnHapticPlanner(activity: activity)
     }
 
+    /// The phone writes the distances into the route's pack, so the wrist
+    /// taps exactly where the phone said they should.
+    func reset(config: TurnHapticConfig) {
+        planner = TurnHapticPlanner(config: config)
+    }
+
     func respond(to state: WorkoutStatePayload) {
         for cue in planner.cues(for: state) {
             switch cue {

@@ -74,6 +74,11 @@ final class WatchCompanion: NSObject, ObservableObject {
     var onWorkoutStatus: ((WatchWorkoutStatusPayload) -> Void)?
     /// Watch-side navigation and map breadcrumbs for the phone's export.
     var onDiagnostic: ((WatchDiagnosticPayload) -> Void)?
+    /// A walk the Watch guided and recorded on its own, arriving after the fact.
+    var onWalkRecord: ((WatchWalkRecordPayload) -> Void)?
+    /// The link has just become able to carry things to the Watch — saved
+    /// routes asked for before then were dropped, so they are sent now.
+    var onLinkReady: (() -> Void)?
 
     private let store = HKHealthStore()
     private let link = WatchLinkSession()
@@ -131,6 +136,14 @@ final class WatchCompanion: NSObject, ObservableObject {
         currentSessionID = plan.sessionID
         guard link.reach.canPreload else { return }
         link.send(.plan(plan), delivery: .latest)
+    }
+
+    /// Hands the Watch every saved route as a complete guidance pack, so any
+    /// of them can be walked with the phone left at home. Always the whole
+    /// list, so a route removed here goes from the wrist too.
+    func syncSavedRoutes(_ plans: [LoopPlanPayload]) {
+        guard link.reach.canPreload else { return }
+        link.send(.savedRoutes(SavedRoutesPayload(routes: plans)), delivery: .queued(kind: "saved-routes"))
     }
 
     #if DEBUG
@@ -306,7 +319,9 @@ final class WatchCompanion: NSObject, ObservableObject {
             onWorkoutStatus?(status)
         case .diagnostic(let diagnostic):
             onDiagnostic?(diagnostic)
-        case .plan, .state, .result, .clearPlan:
+        case .walkRecord(let record):
+            onWalkRecord?(record)
+        case .plan, .state, .result, .clearPlan, .savedRoutes:
             // The phone is the source of all four; anything coming back is
             // an echo and is ignored.
             break
@@ -314,7 +329,9 @@ final class WatchCompanion: NSObject, ObservableObject {
     }
 
     private func reachChanged(_ reach: WatchLinkSession.Reach) {
+        let becameReady = reach.canPreload && !isPairedWithApp
         isPairedWithApp = reach.canPreload
+        if becameReady { onLinkReady?() }
         switch connection {
         case .unavailable, .ready:
             connection = reach.canPreload ? .ready : .unavailable

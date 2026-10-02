@@ -22,7 +22,7 @@ struct RootView: View {
             case .ready:
                 switch model.screen {
                 case .waiting:
-                    WaitingView()
+                    WaitingView(model: model)
                 case .prepared:
                     StartLoopView(model: model)
                 case .working:
@@ -71,27 +71,40 @@ private struct PermissionBlockedView: View {
 }
 
 /// Nothing has been prepared. Said in one plain sentence rather than with an
-/// empty dashboard.
+/// empty dashboard — with the saved routes underneath, if there are any.
 private struct WaitingView: View {
+    @ObservedObject var model: WatchModel
+
     var body: some View {
-        VStack(spacing: 10) {
-            Image("LooperIcon")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 46, height: 46)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            Text("Pick a loop on your iPhone")
-                .font(.headline)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.85)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .center)
-            Text(WatchAppVersion.displayString)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+        ScrollView {
+            VStack(spacing: 10) {
+                Image("LooperIcon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 46, height: 46)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                Text(model.savedRoutes.isEmpty ? "Pick a loop on your iPhone" : "Choose a route")
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                if model.savedRoutes.isEmpty {
+                    Text("Routes you save on your iPhone appear here, ready to walk without it.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    SavedRoutesList(model: model)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Text(WatchAppVersion.displayString)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 8)
         }
-        .padding(.horizontal, 8)
-        .accessibilityElement(children: .combine)
     }
 }

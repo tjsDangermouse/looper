@@ -21,7 +21,7 @@ public enum TurnHapticCue: String, Equatable, Sendable {
 /// comes out, after clamping — a pace reading that has gone silly (a phone in
 /// a pocket on a bus, a first fix after a tunnel) can't produce a warning
 /// half a mile out or one that lands after the junction.
-public struct TurnHapticConfig: Equatable, Sendable {
+public struct TurnHapticConfig: Codable, Equatable, Sendable {
     /// Seconds before the turn for the first, gentler tap.
     public var prepareLeadSeconds: Double
     /// Seconds before the turn for the firmer one.

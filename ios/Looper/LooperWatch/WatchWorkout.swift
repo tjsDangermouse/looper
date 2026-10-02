@@ -48,12 +48,17 @@ final class WatchWorkout: NSObject, ObservableObject {
     var onStatus: ((WatchWorkoutStatusPayload) -> Void)?
     /// Data arriving on the mirrored session's own channel.
     var onRemoteMessage: ((WatchMessage) -> Void)?
+    /// Each usable GPS fix, for following the route.
+    var onFix: ((CLLocation) -> Void)?
 
     private let store = HKHealthStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
     private var routeBuilder: HKWorkoutRouteBuilder?
     private let locations = WatchRouteRecorder()
+    /// Following the route with no workout — Health recording refused. Only
+    /// while the app is in front, since only a workout keeps it running.
+    private var followsWithoutWorkout = false
     /// `beginCollection` can return before `HKWorkoutSession` has actually
     /// finished its own async transition to `.running` — and background
     /// location, unlike the workout itself, is only granted to a session the
@@ -68,6 +73,25 @@ final class WatchWorkout: NSObject, ObservableObject {
     private var isFinishing = false
 
     var isRunning: Bool { session != nil && (phase == .active || phase == .paused) }
+
+    override init() {
+        super.init()
+        locations.onFix = { [weak self] location in
+            Task { @MainActor in self?.onFix?(location) }
+        }
+    }
+
+    /// Follows the route on the Watch's GPS without a workout.
+    func startFollowingWithoutWorkout() {
+        followsWithoutWorkout = true
+        locations.start()
+    }
+
+    func stopFollowingWithoutWorkout() {
+        guard followsWithoutWorkout else { return }
+        followsWithoutWorkout = false
+        locations.stop()
+    }
 
     /// The launch gate waits for Core Location to settle before it asks for
     /// Health access. Returning the status lets the gate keep the main app
