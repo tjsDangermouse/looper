@@ -72,6 +72,8 @@ final class WatchCompanion: NSObject, ObservableObject {
     var onCommand: ((WatchCommandPayload) -> Void)?
     /// The Watch reporting whether its HealthKit workout took, and what it saved.
     var onWorkoutStatus: ((WatchWorkoutStatusPayload) -> Void)?
+    /// Watch-side navigation and map breadcrumbs for the phone's export.
+    var onDiagnostic: ((WatchDiagnosticPayload) -> Void)?
 
     private let store = HKHealthStore()
     private let link = WatchLinkSession()
@@ -302,6 +304,8 @@ final class WatchCompanion: NSObject, ObservableObject {
                 finishStart(false)
             }
             onWorkoutStatus?(status)
+        case .diagnostic(let diagnostic):
+            onDiagnostic?(diagnostic)
         case .plan, .state, .result, .clearPlan:
             // The phone is the source of all four; anything coming back is
             // an echo and is ignored.

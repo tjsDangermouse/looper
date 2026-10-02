@@ -97,6 +97,14 @@ final class WatchLinkCodecTests: XCTestCase {
         XCTAssertEqual(decoded, .workoutStatus(sent))
     }
 
+    func testWatchDiagnosticSurvivesTheRoundTrip() throws {
+        let sent = WatchDiagnosticPayload(
+            event: "mapSnapshotFailed", details: ["step": "3"], timestamp: epoch
+        )
+        let decoded = try WatchLinkCodec.decode(try WatchLinkCodec.encode(.diagnostic(sent)))
+        XCTAssertEqual(decoded, .diagnostic(sent))
+    }
+
     func testTheDictionaryFormUsedByWatchConnectivityRoundTrips() throws {
         let dictionary = try WatchLinkCodec.dictionary(for: .plan(plan()))
         XCTAssertEqual(try WatchLinkCodec.message(from: dictionary), .plan(plan()))

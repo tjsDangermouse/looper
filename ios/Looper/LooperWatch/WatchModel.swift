@@ -70,9 +70,20 @@ final class WatchModel: ObservableObject {
         workout.onStatus = { [weak self] status in self?.send(.workoutStatus(status)) }
         workout.onRemoteMessage = { [weak self] message in self?.receive(message) }
         link.onMessage = { [weak self] message in self?.receive(message) }
-        link.onReachChange = { [weak self] _ in self?.objectWillChange.send() }
+        link.onReachChange = { [weak self] reach in
+            guard let self else { return }
+            objectWillChange.send()
+            send(.diagnostic(WatchDiagnosticPayload(event: "connectionChanged", details: [
+                "activated": String(reach.activated),
+                "counterpartInstalled": String(reach.counterpartInstalled),
+                "reachable": String(reach.reachable)
+            ])))
+        }
         link.onVersionMismatch = { [weak self] version in
             self?.notice = "Your iPhone is running a different version of Looper (v\(version))."
+        }
+        navigationMaps.onDiagnostic = { [weak self] event, details in
+            self?.send(.diagnostic(WatchDiagnosticPayload(event: event, details: details)))
         }
         if let plan { navigationMaps.prepare(plan) }
         #if DEBUG
@@ -335,7 +346,26 @@ final class WatchModel: ObservableObject {
             if plan?.sessionID != incoming.sessionID {
                 requestPlan()
             }
+            if let current = state,
+               current.sessionID == incoming.sessionID,
+               incoming.updatedAt <= current.updatedAt {
+                send(.diagnostic(WatchDiagnosticPayload(event: "stateRejected", details: [
+                    "reason": "stale",
+                    "incomingStep": incoming.next.map { String($0.stepIndex) } ?? "none",
+                    "currentStep": current.next.map { String($0.stepIndex) } ?? "none",
+                    "ageSeconds": String(format: "%.2f", current.updatedAt.timeIntervalSince(incoming.updatedAt))
+                ])))
+                return
+            }
+            let previousStep = state?.next?.stepIndex
             state = incoming
+            if previousStep != incoming.next?.stepIndex {
+                send(.diagnostic(WatchDiagnosticPayload(event: "stepDisplayed", details: [
+                    "previousStep": previousStep.map(String.init) ?? "none",
+                    "step": incoming.next.map { String($0.stepIndex) } ?? "none",
+                    "distanceM": incoming.next.map { String(format: "%.1f", $0.distanceMeters) } ?? "none"
+                ])))
+            }
             // A phone walking an outing this Watch has no workout for means
             // guidance only — but not while a workout is still starting, and
             // not once one is running.
@@ -369,7 +399,7 @@ final class WatchModel: ObservableObject {
             case .start, .requestPlan:
                 break
             }
-        case .workoutStatus:
+        case .workoutStatus, .diagnostic:
             break
         }
     }

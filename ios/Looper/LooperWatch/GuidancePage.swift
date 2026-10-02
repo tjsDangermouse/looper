@@ -18,6 +18,7 @@ final class WatchNavigationMapCache: ObservableObject {
     @Published private(set) var liveScene: WatchNavigationScene?
     @Published private(set) var liveStepIndex: Int?
     @Published private(set) var isPreparing = false
+    var onDiagnostic: ((String, [String: String]) -> Void)?
 
     private var sessionID: String?
     private var task: Task<Void, Never>?
@@ -44,13 +45,11 @@ final class WatchNavigationMapCache: ObservableObject {
         }
 
         if sessionID == plan.sessionID, isPreparing { return }
-        // Simulator tile rendering is particularly easy to overwhelm. The
-        // first junction is useful before live fixes arrive; subsequent live
-        // snapshots are requested as the walker approaches them.
-        let missing = maneuvers.prefix(1).filter { scenes[$0.stepIndex] == nil }
+        let missing = maneuvers.filter { scenes[$0.stepIndex] == nil }
         guard !missing.isEmpty else { return }
 
         isPreparing = true
+        onDiagnostic?("mapPreloadStarted", ["maps": String(missing.count)])
         task = Task { [weak self] in
             // Route order is intentional: the first map needed is downloaded
             // first, while later turns continue filling in behind it.
@@ -66,9 +65,14 @@ final class WatchNavigationMapCache: ObservableObject {
                 } catch {
                     // The vector route remains available without map data. A
                     // failed later snapshot does not discard completed ones.
+                    self?.onDiagnostic?("mapSnapshotFailed", [
+                        "kind": "preload", "step": String(maneuver.stepIndex),
+                        "error": error.localizedDescription
+                    ])
                 }
             }
             guard self?.sessionID == plan.sessionID else { return }
+            self?.onDiagnostic?("mapPreloadFinished", ["maps": String(self?.scenes.count ?? 0)])
             self?.isPreparing = false
             self?.task = nil
         }
@@ -101,6 +105,9 @@ final class WatchNavigationMapCache: ObservableObject {
         liveAnchor = position
         requestedLiveStepIndex = next.stepIndex
         let route = Self.routeWindow(from: position, through: turn, in: geometry)
+        onDiagnostic?("mapSnapshotRequested", [
+            "kind": "live", "step": String(next.stepIndex)
+        ])
         liveTask = Task { [weak self] in
             do {
                 let snapshot = try await Self.download(
@@ -112,10 +119,18 @@ final class WatchNavigationMapCache: ObservableObject {
                 guard !Task.isCancelled else { return }
                 self?.liveScene = WatchNavigationScene(snapshot: snapshot, route: route, turn: turn)
                 self?.liveStepIndex = next.stepIndex
+                self?.scenes[next.stepIndex] = self?.liveScene
                 self?.liveTask = nil
+                self?.onDiagnostic?("mapSnapshotReady", [
+                    "kind": "live", "step": String(next.stepIndex)
+                ])
             } catch {
                 guard !Task.isCancelled else { return }
                 self?.liveTask = nil
+                self?.onDiagnostic?("mapSnapshotFailed", [
+                    "kind": "live", "step": String(next.stepIndex),
+                    "error": error.localizedDescription
+                ])
                 #if DEBUG
                 print("[Looper Watch map] Snapshot failed: \(error.localizedDescription)")
                 #endif
@@ -124,7 +139,11 @@ final class WatchNavigationMapCache: ObservableObject {
     }
 
     private static func download(turn: Point, route: [Point]) async throws -> MKMapSnapshotter.Snapshot {
-        let approach = pointBeforeTurn(130, turn: turn, route: route)
+        // The turn marker has to sit comfortably below the Watch's curved
+        // top edge. Centring as far back as 130 m put the junction at the
+        // very top of the snapshot (and often clipped it), especially on the
+        // smaller cases.
+        let approach = pointBeforeTurn(70, turn: turn, route: route)
         return try await snapshot(
             center: approach,
             distance: 600,
@@ -139,7 +158,10 @@ final class WatchNavigationMapCache: ObservableObject {
         distanceToTurn: Double
     ) async throws -> MKMapSnapshotter.Snapshot {
         let directDistance = haversine(position, turn)
-        let lead = directDistance > 0 ? min(120, directDistance * 0.35) / directDistance : 0
+        // Keep the next junction in the upper-middle of the rectangular map
+        // image, not against the rounded top edge of the physical display.
+        // A fraction also behaves consistently as the walker approaches.
+        let lead = directDistance > 0 ? 0.6 : 0
         let center = Point(
             position.lng + (turn.lng - position.lng) * lead,
             position.lat + (turn.lat - position.lat) * lead

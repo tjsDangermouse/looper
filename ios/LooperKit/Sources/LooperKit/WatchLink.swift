@@ -12,7 +12,7 @@ public enum WatchLink {
     /// version it doesn't know throws rather than decoding half a message —
     /// the two devices can be updated separately, and an old Watch app
     /// guessing at a new phone's payload is worse than a stale screen.
-    public static let version = 5
+    public static let version = 6
 }
 
 /// Where the outing has got to, as both devices understand it. This is the
@@ -317,6 +317,22 @@ public struct WatchWorkoutStatusPayload: Codable, Equatable, Sendable {
     }
 }
 
+/// A small Watch-side breadcrumb copied into the iPhone's navigation export.
+/// It deliberately carries strings only, matching the phone logger, so map
+/// and delivery failures remain useful without exposing framework error types
+/// on the wire.
+public struct WatchDiagnosticPayload: Codable, Equatable, Sendable {
+    public var event: String
+    public var details: [String: String]
+    public var timestamp: Date
+
+    public init(event: String, details: [String: String] = [:], timestamp: Date = Date()) {
+        self.event = event
+        self.details = details
+        self.timestamp = timestamp
+    }
+}
+
 /// One message on the wire.
 public enum WatchMessage: Codable, Equatable, Sendable {
     case plan(LoopPlanPayload)
@@ -324,6 +340,7 @@ public enum WatchMessage: Codable, Equatable, Sendable {
     case result(WorkoutResultPayload)
     case command(WatchCommandPayload)
     case workoutStatus(WatchWorkoutStatusPayload)
+    case diagnostic(WatchDiagnosticPayload)
     /// The phone has left the loop-choosing screen with nothing started —
     /// the Watch should stop offering the loop it was last shown. Carries a
     /// timestamp for the same reason `LoopPlanPayload.preparedAt` does: one

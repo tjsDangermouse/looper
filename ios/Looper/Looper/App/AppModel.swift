@@ -1252,6 +1252,11 @@ final class AppModel: ObservableObject {
     private func connectWatch() {
         watch.onCommand = { [weak self] command in self?.handleWatchCommand(command) }
         watch.onWorkoutStatus = { [weak self] status in self?.handleWatchWorkoutStatus(status) }
+        watch.onDiagnostic = { diagnostic in
+            var details = diagnostic.details
+            details["watchTimestamp"] = ISO8601DateFormatter().string(from: diagnostic.timestamp)
+            NavigationLogger.shared.log("watch.\(diagnostic.event)", details: details)
+        }
         watch.activate()
     }
 
