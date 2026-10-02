@@ -11,6 +11,17 @@ it('keeps a real turn even when adjacent ways have the same street name',()=>{
  expect(steps.map(step=>step.instruction)).toEqual(['Head along Main Street','Turn right onto Main Street'])
 })
 
+it('absorbs a tiny named junction connector before the actual turn',()=>{
+ const steps=tidySteps([
+  {instruction:'Continue',distanceMeters:165,durationSeconds:119,maneuver:'continue',roadClass:'footway',startIndex:237,endIndex:248},
+  {instruction:'Continue onto Meadow Crescent',distanceMeters:3,durationSeconds:2,maneuver:'continue',road:'Meadow Crescent',roadClass:'residential',startIndex:248,endIndex:249},
+  {instruction:'Turn right onto Ashbourne Avenue',distanceMeters:47,durationSeconds:34,maneuver:'turn-right',road:'Ashbourne Avenue',roadClass:'residential',startIndex:249,endIndex:252},
+ ])
+ expect(steps.map(step=>step.instruction)).toEqual(['Continue','Turn right onto Ashbourne Avenue'])
+ expect(steps[0].distanceMeters).toBe(168)
+ expect(steps[0].endIndex).toBe(249)
+})
+
 describe('road and path instructions',()=>{
  it('keeps a straight pavement-road-pavement sequence silent',()=>{
   const route:Route={...sample,geometry:{type:'LineString',coordinates:[[0,0],[0,.001],[.00001,.00114],[.00001,.002]]},steps:[

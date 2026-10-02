@@ -96,8 +96,12 @@ export function tidySteps(steps:Step[]):Step[] {
     const last=out[out.length-1]
     const next=steps[index+1]
     const thisTurn=turnKind(step), followingTurn=turnKind(next)
-    const minorAlignment=thisTurn==='slight-left'||thisTurn==='slight-right'
     const definiteTurn=['left','right','sharp-left','sharp-right','u-turn'].includes(followingTurn)
+    if(last&&next&&step.distanceMeters<MICRO_STEP_METRES&&thisTurn==='straight'&&!!step.road&&definiteTurn&&next.road!==step.road){
+      last.distanceMeters+=step.distanceMeters; last.durationSeconds+=step.durationSeconds; last.endIndex=step.endIndex
+      continue
+    }
+    const minorAlignment=thisTurn==='slight-left'||thisTurn==='slight-right'
     if(last&&next&&step.distanceMeters<KERB_ALIGNMENT_METRES&&minorAlignment&&definiteTurn){
       last.distanceMeters+=step.distanceMeters; last.durationSeconds+=step.durationSeconds; last.endIndex=step.endIndex
       continue

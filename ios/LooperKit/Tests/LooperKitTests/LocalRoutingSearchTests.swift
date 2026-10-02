@@ -773,6 +773,105 @@ final class LocalRoutingSearchTests: XCTestCase {
         XCTAssertEqual(directions(in: graph(withBranch: true)), ["Set off", "Turn right", "You’re back where you started"])
     }
 
+    func testStraightRoadChangeIsAnnouncedAtAJunctionWithoutWalkableBranches() {
+        let approach = Point(-4.5063727, 54.1547079)
+        let junction = Point(-4.5063364, 54.1546494)
+        let departure = Point(-4.5062991, 54.1545959)
+        let nodes = [approach, junction, departure,
+                     Point(-4.5065, 54.1546494), Point(-4.5062, 54.1546494)]
+            .enumerated().map { OSMNode(id: Int64($0.offset + 1), lat: $0.element.lat, lon: $0.element.lng) }
+        let ways = [
+            OSMWay(id: 11, nodes: [1, 2], tags: ["highway": "secondary", "name": "Saddle Road"]),
+            OSMWay(id: 12, nodes: [2, 3], tags: ["highway": "residential", "name": "Spring Valley Terrace"]),
+            // Other roads meet the junction, but are not walking alternatives.
+            OSMWay(id: 13, nodes: [4, 2], tags: ["highway": "trunk", "name": "Spring Valley Road"]),
+            OSMWay(id: 14, nodes: [2, 5], tags: ["highway": "trunk", "name": "New Castletown Road"]),
+        ]
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: OSMData(nodes: nodes, ways: ways))
+        let first = graph.edgeWayID.firstIndex(of: 11)!
+        let second = graph.edgeWayID.firstIndex(of: 12)!
+        let legs = [
+            WalkLeg(coordinates: [approach, junction], metres: haversine(approach, junction),
+                    name: "Saddle Road", roadClass: .secondary, physical: Int32(first)),
+            WalkLeg(coordinates: [junction, departure], metres: haversine(junction, departure),
+                    name: "Spring Valley Terrace", roadClass: .residential, physical: Int32(second)),
+        ]
+        XCTAssertEqual(LocalRoadContext.hasAlternative(at: (legs[0], legs[1]), graph: graph), false)
+        let rawSteps = LocalInstructions.steps(for: legs, graph: graph, index: LocalEdgeIndex(graph: graph))
+        let route = Route(
+            id: "straight-road-change", name: "Straight street transition", distanceMeters: 15,
+            durationSeconds: 11, targetDifferencePercent: 0,
+            geometry: LineGeometry(coordinates: [approach, junction, departure]),
+            steps: tidySteps(rawSteps)
+        )
+        let checked = reassessDirections(route)
+        XCTAssertEqual(checked.steps.map(\.instruction), [
+            "Set off along Saddle Road", "Continue onto Spring Valley Terrace", "You’re back where you started",
+        ])
+        XCTAssertEqual(checked.steps.map(\.startIndex), [0, 1, 2])
+        XCTAssertEqual(checked.steps[0].road, "Saddle Road")
+        XCTAssertEqual(checked.steps[1].road, "Spring Valley Terrace")
+    }
+
+    func testDirectionReassessmentKeepsANamedRoadChangeWhenCorrectingAFalseTurn() {
+        let points = [
+            Point(-4.5063727, 54.1547079),
+            Point(-4.5063364, 54.1546494),
+            Point(-4.5062991, 54.1545959),
+        ]
+        let route = Route(
+            id: "named-straight-change", name: "Named straight change", distanceMeters: 15,
+            durationSeconds: 11, targetDifferencePercent: 0,
+            geometry: LineGeometry(coordinates: points), steps: [
+                Step(instruction: "Set off along Saddle Road", distanceMeters: 8, durationSeconds: 6,
+                     startIndex: 0, endIndex: 1, maneuver: .name("continue"), road: "Saddle Road"),
+                Step(instruction: "Turn right onto Spring Valley Terrace", distanceMeters: 7, durationSeconds: 5,
+                     startIndex: 1, endIndex: 2, maneuver: .name("turn-right"), road: "Spring Valley Terrace"),
+                Step(instruction: "You’re back where you started", distanceMeters: 0, durationSeconds: 0,
+                     startIndex: 2, endIndex: 2, maneuver: .name("finish")),
+            ]
+        )
+        let checked = reassessDirections(route)
+        XCTAssertEqual(checked.steps.map(\.instruction), [
+            "Set off along Saddle Road", "Continue onto Spring Valley Terrace", "You’re back where you started",
+        ])
+        XCTAssertEqual(checked.steps[1].startIndex, 1)
+    }
+
+    func testUnnamedStraightCrossingDoesNotCreateAnInstructionBetweenNamedRoads() {
+        let a = Point(-4.51240, 54.14810)
+        let b = Point(-4.51230, 54.14810)
+        let c = Point(-4.51220, 54.14810)
+        let d = Point(-4.51220, 54.14795)
+        let legs = [
+            WalkLeg(coordinates: [a, b], metres: haversine(a, b), name: "Heather Crescent", roadClass: .footway),
+            WalkLeg(coordinates: [b, c], metres: haversine(b, c), name: nil,
+                    roadClass: .footway, isCrossing: true),
+            WalkLeg(coordinates: [c, d], metres: haversine(c, d), name: "Hazel Crescent", roadClass: .residential),
+        ]
+        let steps = LocalInstructions.steps(for: legs)
+        XCTAssertEqual(steps.map(\.instruction), [
+            "Set off along Heather Crescent", "Turn right onto Hazel Crescent", "You’re back where you started",
+        ])
+        XCTAssertFalse(steps.contains { $0.instruction == "Continue" })
+    }
+
+    func testTinyNamedJunctionConnectorIsAbsorbedBeforeTheActualTurn() {
+        let steps = tidySteps([
+            Step(instruction: "Continue", distanceMeters: 165, durationSeconds: 119,
+                 startIndex: 237, endIndex: 248, maneuver: .name("continue"), roadClass: "footway"),
+            Step(instruction: "Continue onto Meadow Crescent", distanceMeters: 3, durationSeconds: 2,
+                 startIndex: 248, endIndex: 249, maneuver: .name("continue"),
+                 road: "Meadow Crescent", roadClass: "residential"),
+            Step(instruction: "Turn right onto Ashbourne Avenue", distanceMeters: 47, durationSeconds: 34,
+                 startIndex: 249, endIndex: 252, maneuver: .name("turn-right"),
+                 road: "Ashbourne Avenue", roadClass: "residential"),
+        ])
+        XCTAssertEqual(steps.map(\.instruction), ["Continue", "Turn right onto Ashbourne Avenue"])
+        XCTAssertEqual(steps[0].distanceMeters, 168)
+        XCTAssertEqual(steps[0].endIndex, 249)
+    }
+
     func testMappedCrossingToOppositeSideOfSameStreetIsAnExplicitAction() {
         let southA = Point(-4.5002, 54.14992)
         let southB = Point(-4.5000, 54.14992)

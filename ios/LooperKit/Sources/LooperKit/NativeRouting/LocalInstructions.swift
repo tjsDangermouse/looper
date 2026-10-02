@@ -116,14 +116,21 @@ public enum LocalInstructions {
             }
             let changedRoad = roadNames[index] != roadNames[index - 1]
             let changedWalkingSurface = leg.roadClass.isPedestrianWay != previous.roadClass.isPedestrianWay
+            if leg.isCrossing, maneuver == "continue" {
+                // The crossing way's missing name is not a road change. Keep
+                // straight crossing ground in the current instruction; the
+                // named road joined at the far side gets its own instruction.
+                pending.metres += leg.metres
+                coordinateIndex += Swift.max(0, leg.coordinates.count - 1)
+                continue
+            }
             if let graph, LocalRoadContext.hasAlternative(at: (previous, leg), graph: graph) == false,
-               !changedWalkingSurface, maneuver != "cross-opposite-pavement" {
-                // There is no decision to make where the network offers only
-                // the path already being walked. Keep the current road name
-                // for later context without speaking at this survey seam.
+               !changedRoad, !changedWalkingSurface, maneuver != "cross-opposite-pavement" {
+                // A degree-two bend needs no direction. A change of street
+                // still needs an announcement, even when this is the only
+                // walkable path through a larger road junction.
                 maneuver = "continue"
                 pending.metres += leg.metres
-                pending.road = roadNames[index] ?? pending.road
                 pending.roadClass = leg.roadClass
                 coordinateIndex += Swift.max(0, leg.coordinates.count - 1)
                 continue

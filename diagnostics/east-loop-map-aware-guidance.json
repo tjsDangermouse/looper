@@ -10,7 +10,7 @@
         "pipeline" : "LocalInstructions.steps(graph:index:) → tidySteps → reassessDirections"
       },
       "event" : "diagnostic.routeReplayed",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
@@ -22,7 +22,7 @@
         "text" : "Turn left onto Meadow Crescent"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
@@ -34,7 +34,7 @@
         "text" : "Turn right onto Ballaughton Manor Hill"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
@@ -46,7 +46,7 @@
         "text" : "Turn left onto Ballaughton Manor Hill"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
@@ -58,11 +58,23 @@
         "text" : "Turn right onto Saddle Road"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
         "key" : "5:replay",
+        "kind" : "turn",
+        "latitude" : "54.1546494",
+        "longitude" : "-4.5063364",
+        "source" : "planned-route-replay",
+        "text" : "Continue onto Spring Valley Terrace"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:52:44Z"
+    },
+    {
+      "details" : {
+        "key" : "6:replay",
         "kind" : "turn",
         "latitude" : "54.1537032",
         "longitude" : "-4.5056312",
@@ -70,11 +82,11 @@
         "text" : "Continue"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "6:replay",
+        "key" : "7:replay",
         "kind" : "turn",
         "latitude" : "54.1523072",
         "longitude" : "-4.5055693",
@@ -82,11 +94,11 @@
         "text" : "Turn left onto Groves Road"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "7:replay",
+        "key" : "8:replay",
         "kind" : "turn",
         "latitude" : "54.1519384",
         "longitude" : "-4.5043457",
@@ -94,11 +106,11 @@
         "text" : "Cross to the opposite pavement"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "8:replay",
+        "key" : "9:replay",
         "kind" : "turn",
         "latitude" : "54.1512546",
         "longitude" : "-4.5034001",
@@ -106,11 +118,11 @@
         "text" : "Turn right"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "9:replay",
+        "key" : "10:replay",
         "kind" : "turn",
         "latitude" : "54.1510125",
         "longitude" : "-4.5036941",
@@ -118,11 +130,11 @@
         "text" : "Turn left"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "10:replay",
+        "key" : "11:replay",
         "kind" : "turn",
         "latitude" : "54.1501713",
         "longitude" : "-4.5035202",
@@ -130,11 +142,11 @@
         "text" : "Bear right"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "11:replay",
+        "key" : "12:replay",
         "kind" : "turn",
         "latitude" : "54.1497248",
         "longitude" : "-4.5037719",
@@ -142,11 +154,11 @@
         "text" : "Bear right onto Pulrose Road"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "12:replay",
+        "key" : "13:replay",
         "kind" : "turn",
         "latitude" : "54.1493772",
         "longitude" : "-4.5057934",
@@ -154,11 +166,23 @@
         "text" : "Turn left onto Pulrose Road"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "13:replay",
+        "key" : "14:replay",
+        "kind" : "turn",
+        "latitude" : "54.1489093",
+        "longitude" : "-4.5073966",
+        "source" : "planned-route-replay",
+        "text" : "Continue"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:52:44Z"
+    },
+    {
+      "details" : {
+        "key" : "15:replay",
         "kind" : "turn",
         "latitude" : "54.1488352",
         "longitude" : "-4.5078054",
@@ -166,11 +190,11 @@
         "text" : "Bear left onto Heather Crescent"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "14:replay",
+        "key" : "16:replay",
         "kind" : "turn",
         "latitude" : "54.1481107",
         "longitude" : "-4.5123528",
@@ -178,11 +202,11 @@
         "text" : "Turn left onto Hazel Crescent"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "15:replay",
+        "key" : "17:replay",
         "kind" : "turn",
         "latitude" : "54.1479509",
         "longitude" : "-4.5125334",
@@ -190,11 +214,11 @@
         "text" : "Turn right onto 224"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "16:replay",
+        "key" : "18:replay",
         "kind" : "turn",
         "latitude" : "54.1475864",
         "longitude" : "-4.5167507",
@@ -202,11 +226,11 @@
         "text" : "Continue onto Hampton Farm Road"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "17:replay",
+        "key" : "19:replay",
         "kind" : "turn",
         "latitude" : "54.1476417",
         "longitude" : "-4.5184817",
@@ -214,11 +238,23 @@
         "text" : "Turn right onto Hampton Farm Road"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "18:replay",
+        "key" : "20:replay",
+        "kind" : "turn",
+        "latitude" : "54.1477285",
+        "longitude" : "-4.5185686",
+        "source" : "planned-route-replay",
+        "text" : "Continue"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:52:44Z"
+    },
+    {
+      "details" : {
+        "key" : "21:replay",
         "kind" : "turn",
         "latitude" : "54.1477879",
         "longitude" : "-4.5185279",
@@ -226,11 +262,11 @@
         "text" : "Turn left"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "19:replay",
+        "key" : "22:replay",
         "kind" : "turn",
         "latitude" : "54.1478709",
         "longitude" : "-4.5186815",
@@ -238,11 +274,11 @@
         "text" : "Turn right onto Anagh Coar Road"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "20:replay",
+        "key" : "23:replay",
         "kind" : "turn",
         "latitude" : "54.147958",
         "longitude" : "-4.5185458",
@@ -250,11 +286,11 @@
         "text" : "Turn left onto Cullyn Link"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "21:replay",
+        "key" : "24:replay",
         "kind" : "turn",
         "latitude" : "54.1491526",
         "longitude" : "-4.5193236",
@@ -262,11 +298,11 @@
         "text" : "Continue"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "22:replay",
+        "key" : "25:replay",
         "kind" : "turn",
         "latitude" : "54.1496849",
         "longitude" : "-4.519493",
@@ -274,11 +310,11 @@
         "text" : "Turn right onto The Avenue"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "23:replay",
+        "key" : "26:replay",
         "kind" : "turn",
         "latitude" : "54.1501663",
         "longitude" : "-4.5186476",
@@ -286,11 +322,11 @@
         "text" : "Continue"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "24:replay",
+        "key" : "27:replay",
         "kind" : "turn",
         "latitude" : "54.1508267",
         "longitude" : "-4.517648",
@@ -298,11 +334,11 @@
         "text" : "Continue onto Annacur Lane"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "25:replay",
+        "key" : "28:replay",
         "kind" : "turn",
         "latitude" : "54.1512488",
         "longitude" : "-4.5170952",
@@ -310,11 +346,11 @@
         "text" : "Turn left onto Farmhill Lane"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "26:replay",
+        "key" : "29:replay",
         "kind" : "turn",
         "latitude" : "54.1513102",
         "longitude" : "-4.5172511",
@@ -322,11 +358,11 @@
         "text" : "Turn right"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "27:replay",
+        "key" : "30:replay",
         "kind" : "turn",
         "latitude" : "54.1515394",
         "longitude" : "-4.5172822",
@@ -334,11 +370,11 @@
         "text" : "Turn left onto Farmhill Lane"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "28:replay",
+        "key" : "31:replay",
         "kind" : "turn",
         "latitude" : "54.1529252",
         "longitude" : "-4.5208975",
@@ -346,11 +382,11 @@
         "text" : "Sharp right onto Farmhill Park"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "29:replay",
+        "key" : "32:replay",
         "kind" : "turn",
         "latitude" : "54.1533565",
         "longitude" : "-4.5201368",
@@ -358,11 +394,11 @@
         "text" : "Turn left onto Farmhill Park"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "30:replay",
+        "key" : "33:replay",
         "kind" : "turn",
         "latitude" : "54.1539736",
         "longitude" : "-4.5205245",
@@ -370,11 +406,23 @@
         "text" : "Bear right onto Farmhill Park"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "31:replay",
+        "key" : "34:replay",
+        "kind" : "turn",
+        "latitude" : "54.1548847",
+        "longitude" : "-4.5195722",
+        "source" : "planned-route-replay",
+        "text" : "Continue"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:52:44Z"
+    },
+    {
+      "details" : {
+        "key" : "35:replay",
         "kind" : "turn",
         "latitude" : "54.1557075",
         "longitude" : "-4.5181722",
@@ -382,11 +430,11 @@
         "text" : "Turn right onto Ashbourne Avenue"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "32:replay",
+        "key" : "36:replay",
         "kind" : "turn",
         "latitude" : "54.1561006",
         "longitude" : "-4.517892",
@@ -394,11 +442,11 @@
         "text" : "Turn left onto Ashbourne Avenue"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "33:replay",
+        "key" : "37:replay",
         "kind" : "turn",
         "latitude" : "54.1569704",
         "longitude" : "-4.5181406",
@@ -406,11 +454,11 @@
         "text" : "Turn left"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     },
     {
       "details" : {
-        "key" : "34:replay",
+        "key" : "38:replay",
         "kind" : "turn",
         "latitude" : "54.1574696",
         "longitude" : "-4.5174167",
@@ -418,10 +466,10 @@
         "text" : "Turn left onto Ashberry Avenue"
       },
       "event" : "guidance.queued",
-      "timestamp" : "2026-10-02T14:21:53Z"
+      "timestamp" : "2026-10-02T14:52:44Z"
     }
   ],
-  "generatedAt" : "2026-10-02T14:21:53Z",
+  "generatedAt" : "2026-10-02T14:52:44Z",
   "replayProvenance" : {
     "gps" : "not used",
     "guidance" : "current on-device Swift guidance pipeline",
@@ -432,9 +480,9 @@
   "routeSnapshot" : {
     "activity" : "walking",
     "advertisedDistanceMeters" : 4380,
-    "appBuild" : "map-aware-guidance-replay",
+    "appBuild" : "map-aware-guidance-replay-road-changes",
     "appVersion" : "working-tree replay",
-    "capturedAt" : "2026-10-02T14:21:53Z",
+    "capturedAt" : "2026-10-02T14:52:44Z",
     "coordinates" : [
       {
         "latitude" : 54.157682801130854,
@@ -2890,23 +2938,35 @@
         "startCoordinateIndex" : 27
       },
       {
-        "cumulativeEndMeters" : 1153,
+        "cumulativeEndMeters" : 1037,
         "cumulativeStartMeters" : 801,
-        "distanceMeters" : 352,
-        "endCoordinateIndex" : 56,
+        "distanceMeters" : 236,
+        "endCoordinateIndex" : 51,
         "index" : 4,
         "instruction" : "Turn right onto Saddle Road",
         "maneuver" : "turn-right",
+        "road" : "Saddle Road",
+        "roadClass" : "secondary",
+        "startCoordinateIndex" : 43
+      },
+      {
+        "cumulativeEndMeters" : 1153,
+        "cumulativeStartMeters" : 1037,
+        "distanceMeters" : 116,
+        "endCoordinateIndex" : 56,
+        "index" : 5,
+        "instruction" : "Continue onto Spring Valley Terrace",
+        "maneuver" : "continue",
         "road" : "Spring Valley Terrace",
         "roadClass" : "residential",
-        "startCoordinateIndex" : 43
+        "startCoordinateIndex" : 51
       },
       {
         "cumulativeEndMeters" : 1312,
         "cumulativeStartMeters" : 1153,
         "distanceMeters" : 159,
         "endCoordinateIndex" : 62,
-        "index" : 5,
+        "index" : 6,
         "instruction" : "Continue",
         "maneuver" : "continue",
         "roadClass" : "footway",
@@ -2917,7 +2977,7 @@
         "cumulativeStartMeters" : 1312,
         "distanceMeters" : 93,
         "endCoordinateIndex" : 76,
-        "index" : 6,
+        "index" : 7,
         "instruction" : "Turn left onto Groves Road",
         "maneuver" : "turn-left",
         "road" : "Groves Road",
@@ -2929,7 +2989,7 @@
         "cumulativeStartMeters" : 1405,
         "distanceMeters" : 107,
         "endCoordinateIndex" : 84,
-        "index" : 7,
+        "index" : 8,
         "instruction" : "Cross to the opposite pavement",
         "maneuver" : "cross-opposite-pavement",
         "road" : "Groves Road",
@@ -2941,7 +3001,7 @@
         "cumulativeStartMeters" : 1512,
         "distanceMeters" : 34,
         "endCoordinateIndex" : 96,
-        "index" : 8,
+        "index" : 9,
         "instruction" : "Turn right",
         "maneuver" : "turn-right",
         "roadClass" : "path",
@@ -2952,7 +3012,7 @@
         "cumulativeStartMeters" : 1546,
         "distanceMeters" : 95,
         "endCoordinateIndex" : 106,
-        "index" : 9,
+        "index" : 10,
         "instruction" : "Turn left",
         "maneuver" : "turn-left",
         "roadClass" : "footway",
@@ -2963,7 +3023,7 @@
         "cumulativeStartMeters" : 1641,
         "distanceMeters" : 53,
         "endCoordinateIndex" : 110,
-        "index" : 10,
+        "index" : 11,
         "instruction" : "Bear right",
         "maneuver" : "keep-right",
         "roadClass" : "footway",
@@ -2974,7 +3034,7 @@
         "cumulativeStartMeters" : 1694,
         "distanceMeters" : 145,
         "endCoordinateIndex" : 123,
-        "index" : 11,
+        "index" : 12,
         "instruction" : "Bear right onto Pulrose Road",
         "maneuver" : "keep-right",
         "road" : "Pulrose Road",
@@ -2982,11 +3042,11 @@
         "startCoordinateIndex" : 110
       },
       {
-        "cumulativeEndMeters" : 1992,
+        "cumulativeEndMeters" : 1964,
         "cumulativeStartMeters" : 1839,
-        "distanceMeters" : 153,
-        "endCoordinateIndex" : 139,
-        "index" : 12,
+        "distanceMeters" : 125,
+        "endCoordinateIndex" : 135,
+        "index" : 13,
         "instruction" : "Turn left onto Pulrose Road",
         "maneuver" : "turn-left",
         "road" : "Pulrose Road",
@@ -2994,11 +3054,22 @@
         "startCoordinateIndex" : 123
       },
       {
-        "cumulativeEndMeters" : 2369,
-        "cumulativeStartMeters" : 1992,
+        "cumulativeEndMeters" : 1993,
+        "cumulativeStartMeters" : 1964,
+        "distanceMeters" : 29,
+        "endCoordinateIndex" : 139,
+        "index" : 14,
+        "instruction" : "Continue",
+        "maneuver" : "continue",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 135
+      },
+      {
+        "cumulativeEndMeters" : 2370,
+        "cumulativeStartMeters" : 1993,
         "distanceMeters" : 377,
         "endCoordinateIndex" : 151,
-        "index" : 13,
+        "index" : 15,
         "instruction" : "Bear left onto Heather Crescent",
         "maneuver" : "keep-left",
         "road" : "Heather Crescent",
@@ -3006,11 +3077,11 @@
         "startCoordinateIndex" : 139
       },
       {
-        "cumulativeEndMeters" : 2390,
-        "cumulativeStartMeters" : 2369,
+        "cumulativeEndMeters" : 2391,
+        "cumulativeStartMeters" : 2370,
         "distanceMeters" : 21,
         "endCoordinateIndex" : 152,
-        "index" : 14,
+        "index" : 16,
         "instruction" : "Turn left onto Hazel Crescent",
         "maneuver" : "turn-left",
         "road" : "Hazel Crescent",
@@ -3018,11 +3089,11 @@
         "startCoordinateIndex" : 151
       },
       {
-        "cumulativeEndMeters" : 2695,
-        "cumulativeStartMeters" : 2390,
+        "cumulativeEndMeters" : 2696,
+        "cumulativeStartMeters" : 2391,
         "distanceMeters" : 305,
         "endCoordinateIndex" : 173,
-        "index" : 15,
+        "index" : 17,
         "instruction" : "Turn right onto 224",
         "maneuver" : "turn-right",
         "road" : "224",
@@ -3030,11 +3101,11 @@
         "startCoordinateIndex" : 152
       },
       {
-        "cumulativeEndMeters" : 2808,
-        "cumulativeStartMeters" : 2695,
+        "cumulativeEndMeters" : 2809,
+        "cumulativeStartMeters" : 2696,
         "distanceMeters" : 113,
         "endCoordinateIndex" : 179,
-        "index" : 16,
+        "index" : 18,
         "instruction" : "Continue onto Hampton Farm Road",
         "maneuver" : "continue",
         "road" : "Hampton Farm Road",
@@ -3042,11 +3113,11 @@
         "startCoordinateIndex" : 173
       },
       {
-        "cumulativeEndMeters" : 2829,
-        "cumulativeStartMeters" : 2808,
-        "distanceMeters" : 21,
-        "endCoordinateIndex" : 185,
-        "index" : 17,
+        "cumulativeEndMeters" : 2822,
+        "cumulativeStartMeters" : 2809,
+        "distanceMeters" : 13,
+        "endCoordinateIndex" : 183,
+        "index" : 19,
         "instruction" : "Turn right onto Hampton Farm Road",
         "maneuver" : "turn-right",
         "road" : "Hampton Farm Road",
@@ -3054,11 +3125,22 @@
         "startCoordinateIndex" : 179
       },
       {
+        "cumulativeEndMeters" : 2829,
+        "cumulativeStartMeters" : 2822,
+        "distanceMeters" : 7,
+        "endCoordinateIndex" : 185,
+        "index" : 20,
+        "instruction" : "Continue",
+        "maneuver" : "continue",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 183
+      },
+      {
         "cumulativeEndMeters" : 2843,
         "cumulativeStartMeters" : 2829,
         "distanceMeters" : 14,
         "endCoordinateIndex" : 187,
-        "index" : 18,
+        "index" : 21,
         "instruction" : "Turn left",
         "maneuver" : "turn-left",
         "roadClass" : "footway",
@@ -3069,7 +3151,7 @@
         "cumulativeStartMeters" : 2843,
         "distanceMeters" : 13,
         "endCoordinateIndex" : 188,
-        "index" : 19,
+        "index" : 22,
         "instruction" : "Turn right onto Anagh Coar Road",
         "maneuver" : "turn-right",
         "road" : "Anagh Coar Road",
@@ -3081,7 +3163,7 @@
         "cumulativeStartMeters" : 2856,
         "distanceMeters" : 144,
         "endCoordinateIndex" : 193,
-        "index" : 20,
+        "index" : 23,
         "instruction" : "Turn left onto Cullyn Link",
         "maneuver" : "turn-left",
         "road" : "Cullyn Link",
@@ -3093,7 +3175,7 @@
         "cumulativeStartMeters" : 3000,
         "distanceMeters" : 60,
         "endCoordinateIndex" : 196,
-        "index" : 21,
+        "index" : 24,
         "instruction" : "Continue",
         "maneuver" : "continue",
         "roadClass" : "footway",
@@ -3104,7 +3186,7 @@
         "cumulativeStartMeters" : 3060,
         "distanceMeters" : 77,
         "endCoordinateIndex" : 200,
-        "index" : 22,
+        "index" : 25,
         "instruction" : "Turn right onto The Avenue",
         "maneuver" : "turn-right",
         "road" : "The Avenue",
@@ -3116,7 +3198,7 @@
         "cumulativeStartMeters" : 3137,
         "distanceMeters" : 101,
         "endCoordinateIndex" : 205,
-        "index" : 23,
+        "index" : 26,
         "instruction" : "Continue",
         "maneuver" : "continue",
         "roadClass" : "footway",
@@ -3127,7 +3209,7 @@
         "cumulativeStartMeters" : 3238,
         "distanceMeters" : 59,
         "endCoordinateIndex" : 212,
-        "index" : 24,
+        "index" : 27,
         "instruction" : "Continue onto Annacur Lane",
         "maneuver" : "continue",
         "road" : "Annacur Lane",
@@ -3139,7 +3221,7 @@
         "cumulativeStartMeters" : 3297,
         "distanceMeters" : 12,
         "endCoordinateIndex" : 215,
-        "index" : 25,
+        "index" : 28,
         "instruction" : "Turn left onto Farmhill Lane",
         "maneuver" : "turn-left",
         "road" : "Farmhill Lane",
@@ -3151,7 +3233,7 @@
         "cumulativeStartMeters" : 3309,
         "distanceMeters" : 31,
         "endCoordinateIndex" : 221,
-        "index" : 26,
+        "index" : 29,
         "instruction" : "Turn right",
         "maneuver" : "turn-right",
         "roadClass" : "footway",
@@ -3162,7 +3244,7 @@
         "cumulativeStartMeters" : 3340,
         "distanceMeters" : 282,
         "endCoordinateIndex" : 227,
-        "index" : 27,
+        "index" : 30,
         "instruction" : "Turn left onto Farmhill Lane",
         "maneuver" : "turn-left",
         "road" : "Farmhill Lane",
@@ -3174,7 +3256,7 @@
         "cumulativeStartMeters" : 3622,
         "distanceMeters" : 71,
         "endCoordinateIndex" : 230,
-        "index" : 28,
+        "index" : 31,
         "instruction" : "Sharp right onto Farmhill Park",
         "maneuver" : "sharp-right",
         "road" : "Farmhill Park",
@@ -3186,7 +3268,7 @@
         "cumulativeStartMeters" : 3693,
         "distanceMeters" : 73,
         "endCoordinateIndex" : 232,
-        "index" : 29,
+        "index" : 32,
         "instruction" : "Turn left onto Farmhill Park",
         "maneuver" : "turn-left",
         "road" : "Farmhill Park",
@@ -3194,11 +3276,11 @@
         "startCoordinateIndex" : 230
       },
       {
-        "cumulativeEndMeters" : 4062,
+        "cumulativeEndMeters" : 3893,
         "cumulativeStartMeters" : 3766,
-        "distanceMeters" : 296,
-        "endCoordinateIndex" : 249,
-        "index" : 30,
+        "distanceMeters" : 127,
+        "endCoordinateIndex" : 237,
+        "index" : 33,
         "instruction" : "Bear right onto Farmhill Park",
         "maneuver" : "keep-right",
         "road" : "Farmhill Park",
@@ -3206,11 +3288,22 @@
         "startCoordinateIndex" : 232
       },
       {
-        "cumulativeEndMeters" : 4109,
-        "cumulativeStartMeters" : 4062,
+        "cumulativeEndMeters" : 4061,
+        "cumulativeStartMeters" : 3893,
+        "distanceMeters" : 168,
+        "endCoordinateIndex" : 249,
+        "index" : 34,
+        "instruction" : "Continue",
+        "maneuver" : "continue",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 237
+      },
+      {
+        "cumulativeEndMeters" : 4108,
+        "cumulativeStartMeters" : 4061,
         "distanceMeters" : 47,
         "endCoordinateIndex" : 252,
-        "index" : 31,
+        "index" : 35,
         "instruction" : "Turn right onto Ashbourne Avenue",
         "maneuver" : "turn-right",
         "road" : "Ashbourne Avenue",
@@ -3218,11 +3311,11 @@
         "startCoordinateIndex" : 249
       },
       {
-        "cumulativeEndMeters" : 4244,
-        "cumulativeStartMeters" : 4109,
+        "cumulativeEndMeters" : 4243,
+        "cumulativeStartMeters" : 4108,
         "distanceMeters" : 135,
         "endCoordinateIndex" : 259,
-        "index" : 32,
+        "index" : 36,
         "instruction" : "Turn left onto Ashbourne Avenue",
         "maneuver" : "turn-left",
         "road" : "Ashbourne Avenue",
@@ -3230,22 +3323,22 @@
         "startCoordinateIndex" : 252
       },
       {
-        "cumulativeEndMeters" : 4345,
-        "cumulativeStartMeters" : 4244,
+        "cumulativeEndMeters" : 4344,
+        "cumulativeStartMeters" : 4243,
         "distanceMeters" : 101,
         "endCoordinateIndex" : 265,
-        "index" : 33,
+        "index" : 37,
         "instruction" : "Turn left",
         "maneuver" : "turn-left",
         "roadClass" : "service",
         "startCoordinateIndex" : 259
       },
       {
-        "cumulativeEndMeters" : 4381,
-        "cumulativeStartMeters" : 4345,
+        "cumulativeEndMeters" : 4380,
+        "cumulativeStartMeters" : 4344,
         "distanceMeters" : 36,
         "endCoordinateIndex" : 266,
-        "index" : 34,
+        "index" : 38,
         "instruction" : "Turn left onto Ashberry Avenue",
         "maneuver" : "turn-left",
         "road" : "Ashberry Avenue",
@@ -3253,11 +3346,11 @@
         "startCoordinateIndex" : 265
       },
       {
-        "cumulativeEndMeters" : 4381,
-        "cumulativeStartMeters" : 4381,
+        "cumulativeEndMeters" : 4380,
+        "cumulativeStartMeters" : 4380,
         "distanceMeters" : 0,
         "endCoordinateIndex" : 266,
-        "index" : 35,
+        "index" : 39,
         "instruction" : "You’re back where you started",
         "maneuver" : "finish",
         "startCoordinateIndex" : 266

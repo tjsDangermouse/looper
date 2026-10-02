@@ -121,6 +121,25 @@ public func tidySteps(_ steps: [Step]) -> [Step] {
     while index < steps.count {
         let step = steps[index]
         if var last = out.last {
+            if step.distanceMeters < microStepMetres, index + 1 < steps.count,
+               turnKind(step) == .straight, step.road != nil {
+                let next = steps[index + 1]
+                let nextIsDefiniteTurn: Bool
+                switch turnKind(next) {
+                case .left, .right, .sharpLeft, .sharpRight, .uTurn: nextIsDefiniteTurn = true
+                default: nextIsDefiniteTurn = false
+                }
+                if nextIsDefiniteTurn, next.road != step.road {
+                    // A few metres of named road inside a junction is context,
+                    // not a useful instruction before the actual turn.
+                    last.distanceMeters += step.distanceMeters
+                    last.durationSeconds += step.durationSeconds
+                    last.endIndex = step.endIndex
+                    out[out.count - 1] = last
+                    index += 1
+                    continue
+                }
+            }
             if step.distanceMeters < kerbAlignmentMetres, index + 1 < steps.count {
                 let thisTurn = turnKind(step), nextTurn = turnKind(steps[index + 1])
                 let isMinorAlignment = thisTurn == .slightLeft || thisTurn == .slightRight
@@ -190,6 +209,7 @@ public func reassessDirections(_ route: Route) -> Route {
     for (index, original) in route.steps.enumerated() {
         var step = original
         var wasFalseTurn = false
+        let changedRoad = !steps.isEmpty && step.road != steps.last?.road
         let followsCrossing = silentCrossingExits.contains(index)
         let continuesAfterCrossing = turnKind(step) == .straight
             || (turnKind(step) != .arrive
@@ -198,7 +218,7 @@ public func reassessDirections(_ route: Route) -> Route {
         if isOppositePavementCrossing(step) {
             step.instruction = "Cross to the opposite pavement"
         } else if silentCrossings.contains(index)
-            || (followsCrossing && continuesAfterCrossing) {
+            || (followsCrossing && continuesAfterCrossing && !changedRoad) {
             // Leaving the carriageway is the second half of the same crossing,
             // not another instruction. Keep its distance in the stretch that
             // was already being walked.
@@ -210,13 +230,19 @@ public func reassessDirections(_ route: Route) -> Route {
             } else {
                 wasFalseTurn = true
             }
+        } else if followsCrossing && continuesAfterCrossing && changedRoad {
+            // The crossing itself is silent, but joining a different road at
+            // its far side still gives the walker useful orientation.
+            step.maneuver = .name("continue")
+            step.instruction = step.road.map { "Continue onto \($0)" } ?? "Continue"
         } else if turnKind(step) != .straight, turnKind(step) != .arrive,
            let pivot = step.startIndex,
            let angle = sustainedDirectionAngle(coordinates, pivot: pivot),
            abs(angle) < 20 {
             step.maneuver = .name("continue")
             step.instruction = step.road.map { "Continue onto \($0)" } ?? "Continue"
-            wasFalseTurn = true
+            // Correct the false turn, but do not erase a real street change.
+            wasFalseTurn = !changedRoad
         }
         if wasFalseTurn, var previous = steps.last {
             previous.distanceMeters += step.distanceMeters
