@@ -1139,6 +1139,13 @@ final class AppModel: ObservableObject {
     // and the instruction at the corner. Also warn once when the walk strays
     // off the loop. Falls silent on mute or on leaving the walk screen.
     private func announceIfNeeded() {
+        // The Watch narrates a walk it is guiding, so the walk sounds the same
+        // whether or not the phone is with the walker. The phone says nothing
+        // while the Watch has a workout running, rather than repeat it.
+        if watch.connection.isRunningOnWatch {
+            navigationLogger.log("guidance.suppressed", details: ["reason": "watchSpeaks"])
+            return
+        }
         guard screen == .walk, !muted, !isPaused else {
             navigationLogger.log("guidance.suppressed", details: [
                 "screen": String(describing: screen), "muted": String(muted), "paused": String(isPaused)
@@ -1180,6 +1187,16 @@ final class AppModel: ObservableObject {
     /// manual/watch End remains immediately available and idempotent meanwhile.
     private func announceArrivalThenEnd() {
         guard !endingAfterArrival else { return }
+        // The Watch says it and ends the walk, which ends this one. If it
+        // never does, the phone closes the walk itself after a while.
+        if watch.connection.isRunningOnWatch {
+            endingAfterArrival = true
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                await MainActor.run { if self?.endingAfterArrival == true { self?.endWalk() } }
+            }
+            return
+        }
         guard screen == .walk, !muted, !isPaused else {
             endWalk()
             return

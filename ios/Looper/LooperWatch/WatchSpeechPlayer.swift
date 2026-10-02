@@ -19,8 +19,21 @@ final class WatchSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate {
         synthesizer.delegate = self
     }
 
+    private var voice: AVSpeechSynthesisVoice?
+    private var resolvedVoiceIdentifier: String??
+
     func configure(_ narration: NarrationSettings?) {
         voiceIdentifier = narration?.voiceIdentifier
+    }
+
+    /// Looked up once, not per sentence: the lookup is a round trip to the
+    /// system's speech service.
+    private func resolveVoice() -> AVSpeechSynthesisVoice? {
+        if let resolvedVoiceIdentifier, resolvedVoiceIdentifier == voiceIdentifier { return voice }
+        resolvedVoiceIdentifier = .some(voiceIdentifier)
+        voice = voiceIdentifier.flatMap { AVSpeechSynthesisVoice(identifier: $0) }
+            ?? AVSpeechSynthesisVoice(language: "en-GB")
+        return voice
     }
 
     /// Claims the audio session for speech that ducks other audio, as the
@@ -35,9 +48,15 @@ final class WatchSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     func speak(_ text: String, completion: (() -> Void)? = nil) {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["LOOPER_WATCH_NO_SPEECH"] == "1" {
+            onDiagnostic?("speech.skipped", ["text": text])
+            completion?()
+            return
+        }
+        #endif
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = voiceIdentifier.flatMap { AVSpeechSynthesisVoice(identifier: $0) }
-            ?? AVSpeechSynthesisVoice(language: "en-GB")
+        utterance.voice = resolveVoice()
         if let completion { completions[ObjectIdentifier(utterance)] = completion }
         onDiagnostic?("speech.queued", ["text": text])
         synthesizer.speak(utterance)

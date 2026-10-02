@@ -344,3 +344,47 @@ public func makeTrackedState(
         updatedAt: now
     )
 }
+
+/// A place along the route to save a map for, so the Watch can show a map that
+/// follows the walker with no connection. Each is the picture the live map
+/// would have asked for from that spot: the position, the turn ahead and how
+/// far away it is.
+public struct MapAnchor: Equatable, Sendable {
+    public var key: String
+    public var position: Point
+    public var maneuver: ManeuverPayload
+    public var distanceToTurn: Double
+}
+
+/// Anchors every `spacingMeters` along the route, each paired with the next
+/// manoeuvre beyond it. The same list is computed when the maps are saved and
+/// when one is looked up, so the two always agree.
+public func mapAnchors(
+    geometry: [Point],
+    maneuvers: [ManeuverPayload],
+    spacingMeters: Double = 100
+) -> [MapAnchor] {
+    guard geometry.count > 1, spacingMeters > 0 else { return [] }
+    let ordered = maneuvers.filter { $0.coordinate != nil }.sorted { $0.distanceMeters < $1.distanceMeters }
+    var anchors: [MapAnchor] = []
+    var nextAt = 0.0
+    var travelled = 0.0
+    for (a, b) in zip(geometry, geometry.dropFirst()) {
+        let length = haversine(a, b)
+        while length > 0, nextAt <= travelled + length {
+            let t = (nextAt - travelled) / length
+            let position = Point(a.lng + (b.lng - a.lng) * t, a.lat + (b.lat - a.lat) * t)
+            if let maneuver = ordered.first(where: { $0.distanceMeters > nextAt }) {
+                anchors.append(MapAnchor(
+                    key: "a\(Int(nextAt.rounded()))",
+                    position: position,
+                    maneuver: maneuver,
+                    distanceToTurn: maneuver.distanceMeters - nextAt
+                ))
+            }
+            nextAt += spacingMeters
+        }
+        travelled += length
+    }
+    return anchors
+}

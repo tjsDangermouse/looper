@@ -4,10 +4,10 @@ import SwiftUI
 import WatchKit
 
 /// A glanceable navigation map: no scrolling, no zooming, and no whole-loop
-/// overview. It is drawn from the saved turn map and the Watch's own GPS fix,
-/// so it looks the same with or without a phone or a connection. When the
-/// walker is too far from the turn to be on its picture, the route is drawn as
-/// a line instead.
+/// overview. Its camera follows the Watch's own GPS fix — a live map while
+/// there is a connection, the maps saved along the route when there isn't —
+/// so it looks the same with or without a phone. The route line alone is the
+/// last resort.
 struct GuidancePage: View {
     @ObservedObject var model: WatchModel
     @ObservedObject private var navigationMaps: WatchNavigationMapCache
@@ -35,6 +35,8 @@ struct GuidancePage: View {
                 .padding(.bottom, 22)
         }
         .ignoresSafeArea()
+        .onAppear(perform: prepareLiveMap)
+        .onChange(of: model.state?.updatedAt) { _, _ in prepareLiveMap() }
     }
 
     private var next: ManeuverPayload? {
@@ -51,9 +53,15 @@ struct GuidancePage: View {
     }
 
     private var currentScene: WatchNavigationScene? {
-        guard let next, let scene = navigationMaps.scenes[next.stepIndex] else { return nil }
-        if let position = model.state?.position, !scene.contains(position) { return nil }
-        return scene
+        guard let next else { return nil }
+        return navigationMaps.scene(position: model.state?.position, next: next)
+    }
+
+    private func prepareLiveMap() {
+        guard let position = model.state?.position,
+              let next,
+              let geometry = model.plan?.plannedGeometry else { return }
+        navigationMaps.prepareLive(position: position, next: next, geometry: geometry)
     }
 
     @ViewBuilder

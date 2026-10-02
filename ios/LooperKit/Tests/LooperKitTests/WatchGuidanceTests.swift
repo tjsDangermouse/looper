@@ -348,3 +348,32 @@ final class GuidanceScriptTests: XCTestCase {
         XCTAssertTrue(keys.contains("2:now"))
     }
 }
+
+final class MapAnchorTests: XCTestCase {
+    func testAnchorsRunAlongTheRouteEachPointingAtTheTurnAhead() throws {
+        let pack = plan(for: reassessDirections(loopRoute()))
+        let anchors = mapAnchors(
+            geometry: try XCTUnwrap(pack.plannedGeometry),
+            maneuvers: try XCTUnwrap(pack.plannedManeuvers)
+        )
+        XCTAssertGreaterThan(anchors.count, 10)
+        XCTAssertEqual(Set(anchors.map(\.key)).count, anchors.count, "keys are unique")
+        for anchor in anchors {
+            XCTAssertGreaterThan(anchor.distanceToTurn, 0)
+            XCTAssertNotNil(anchor.maneuver.coordinate)
+        }
+        // Turns are visited in order as the anchors advance.
+        let steps = anchors.map(\.maneuver.stepIndex)
+        XCTAssertEqual(steps, steps.sorted())
+    }
+
+    func testAnchorsStopWhereTheTurnsRunOut() throws {
+        let pack = plan(for: loopRoute())
+        let anchors = mapAnchors(
+            geometry: try XCTUnwrap(pack.plannedGeometry),
+            maneuvers: try XCTUnwrap(pack.plannedManeuvers)
+        )
+        let last = try XCTUnwrap(pack.plannedManeuvers?.map(\.distanceMeters).max())
+        XCTAssertTrue(anchors.allSatisfy { $0.maneuver.distanceMeters <= last })
+    }
+}

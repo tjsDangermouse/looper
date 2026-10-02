@@ -71,8 +71,7 @@ final class WatchModel: ObservableObject {
     private var guidancePaused = false
     private var arrivalHandled = false
     /// The last time the phone's own navigation was heard from. Not shown
-    /// anywhere: it only decides who speaks, so the phone and the Watch don't
-    /// both read out every turn when they are together.
+    /// anywhere: it only matters when the phone owns the walk's recording.
     private var lastPhoneStateAt: Date?
     private var savedWorkoutID: String?
     private var lastSnapshotAt = Date.distantPast
@@ -266,9 +265,13 @@ final class WatchModel: ObservableObject {
         workout.isRunning ? workout.phase == .paused : guidancePaused
     }
 
-    /// The phone is walking too and will do the talking.
-    private var phoneIsNarrating: Bool {
-        lastPhoneStateAt.map { Date().timeIntervalSince($0) < Self.phoneSpeaksWithin } ?? false
+    /// The Watch does the talking whenever it is guiding, so the walk sounds
+    /// the same with or without a phone. The one exception is a walk the phone
+    /// owns because Health recording is off here: the phone is speaking then.
+    private var watchSpeaks: Bool {
+        guard voiceOn else { return false }
+        if guidanceOnly, let last = lastPhoneStateAt { return Date().timeIntervalSince(last) >= Self.phoneSpeaksWithin }
+        return true
     }
 
     func activate() {
@@ -535,29 +538,20 @@ final class WatchModel: ObservableObject {
         cueSpeaker = speaker
         // The cue is always consumed, so a phone that drops out mid-walk
         // doesn't leave the Watch with a backlog to read out.
-        guard let text, voiceOn, !phoneIsNarrating else { return }
+        guard let text, watchSpeaks else { return }
         speech.speak(text)
     }
 
-    /// Back at the start. The phone finishes its own walk and tells the Watch
-    /// to end when it is carried; the Watch speaks and ends itself when it is
-    /// not, and as a fallback if the phone never does.
+    /// Back at the start: the Watch says so and ends the walk, which tells the
+    /// phone to close its own.
     private func handleArrival() {
         guard !arrivalHandled else { return }
         arrivalHandled = true
         walk.arrivedAt = Date()
-        if phoneIsNarrating {
-            Task { [weak self] in
-                try? await Task.sleep(nanoseconds: 20_000_000_000)
-                guard let self, self.result == nil, self.workout.isRunning || self.guidanceOnly else { return }
-                self.end()
-            }
-            return
-        }
         var speaker = cueSpeaker
         let text = speaker?.arrival()
         cueSpeaker = speaker
-        if voiceOn, let text {
+        if watchSpeaks, let text {
             speech.speak(text) { [weak self] in self?.end() }
         } else {
             end()

@@ -104,15 +104,15 @@ private struct MapReadiness: View {
 
     var body: some View {
         if maps.isReady(plan) {
-            Label("Maps saved on this Watch", systemImage: "checkmark.circle")
+            Label("Route maps saved on this Watch", systemImage: "checkmark.circle")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         } else if maps.isPreparing {
-            Label("Saving maps…", systemImage: "arrow.down.circle")
+            Label("Saving route maps — keep a connection until done", systemImage: "arrow.down.circle")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         } else {
-            Label("Route line only — maps need a connection", systemImage: "map")
+            Label("Maps not saved yet — without a connection you'll see the route line only", systemImage: "map")
                 .font(.caption2)
                 .foregroundStyle(.orange)
                 .fixedSize(horizontal: false, vertical: true)
@@ -153,14 +153,14 @@ struct SavedRoutesList: View {
                         if model.plan?.routeID == route.routeID {
                             Image(systemName: "checkmark")
                                 .foregroundStyle(Color.looperAccent)
-                        } else if maps.isReady(route) {
+                        } else if maps.hasTurnMaps(route) {
                             Image(systemName: "map.fill")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
                     }
                 }
-                .accessibilityLabel("\(route.routeName), \(formatDistance(route.plannedDistanceMeters, unit: route.displayUnit))\(maps.isReady(route) ? ", maps saved" : "")")
+                .accessibilityLabel("\(route.routeName), \(formatDistance(route.plannedDistanceMeters, unit: route.displayUnit))\(maps.hasTurnMaps(route) ? ", maps saved" : "")")
             }
         }
     }

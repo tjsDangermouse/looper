@@ -27,11 +27,16 @@ struct SnapshotProjection: Codable, Equatable {
 
     /// Fits the map from a live snapshot by sampling its own projection.
     init(snapshot: MKMapSnapshotter.Snapshot, origin: Point) {
+        self.init(origin: origin) { snapshot.point(for: $0.coordinate) }
+    }
+
+    /// Fits the map from any function that places a coordinate on the picture.
+    init(origin: Point, pointFor: (Point) -> CGPoint) {
         let east = Self.offset(origin, east: Self.sampleMeters, north: 0)
         let north = Self.offset(origin, east: 0, north: Self.sampleMeters)
-        let po = snapshot.point(for: origin.coordinate)
-        let pe = snapshot.point(for: east.coordinate)
-        let pn = snapshot.point(for: north.coordinate)
+        let po = pointFor(origin)
+        let pe = pointFor(east)
+        let pn = pointFor(north)
         self.init(
             origin: origin,
             a: (pe.x - po.x) / Self.sampleMeters, b: (pe.y - po.y) / Self.sampleMeters,
@@ -74,10 +79,11 @@ private struct StoredScene: Codable {
     var scale: Double
 }
 
-/// Turn maps on disk, per route. A snapshot is a few hundred kilobytes and is
-/// cheap to keep; fetching it needs the Watch's connection, which a walk
-/// shouldn't depend on. A route's maps outlive the walk, so walking a saved
-/// route again costs nothing.
+/// Maps on disk, per route. A snapshot is a few hundred kilobytes and is cheap
+/// to keep; fetching it needs the Watch's connection, which a walk shouldn't
+/// depend on. A route's maps outlive the walk, so walking a saved route again
+/// costs nothing. Each map is filed under a key: `t<step>` for the picture of a
+/// turn, `a<metres>` for one saved partway along the route.
 struct WatchMapStore {
     private let root: URL
 
@@ -94,29 +100,29 @@ struct WatchMapStore {
         return root.appendingPathComponent(digest, isDirectory: true)
     }
 
-    func save(_ scene: WatchNavigationScene, routeID: String, step: Int, scale: CGFloat) {
+    func save(_ scene: WatchNavigationScene, routeID: String, key: String) {
         let folder = directory(routeID)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        guard let image = scene.image.jpegData(compressionQuality: 0.82),
+        guard let image = scene.image.jpegData(compressionQuality: 0.72),
               let meta = try? JSONEncoder().encode(StoredScene(
-                  projection: scene.projection, route: scene.route, turn: scene.turn, scale: Double(scale)
+                  projection: scene.projection, route: scene.route, turn: scene.turn, scale: Double(scene.image.scale)
               )) else { return }
         // The picture last: a scene is only complete when its image exists.
-        try? meta.write(to: folder.appendingPathComponent("\(step).json"), options: .atomic)
-        try? image.write(to: folder.appendingPathComponent("\(step).jpg"), options: .atomic)
+        try? meta.write(to: folder.appendingPathComponent("\(key).json"), options: .atomic)
+        try? image.write(to: folder.appendingPathComponent("\(key).jpg"), options: .atomic)
     }
 
-    func load(routeID: String, step: Int) -> WatchNavigationScene? {
+    func load(routeID: String, key: String) -> WatchNavigationScene? {
         let folder = directory(routeID)
-        guard let data = try? Data(contentsOf: folder.appendingPathComponent("\(step).jpg")),
-              let metaData = try? Data(contentsOf: folder.appendingPathComponent("\(step).json")),
+        guard let data = try? Data(contentsOf: folder.appendingPathComponent("\(key).jpg")),
+              let metaData = try? Data(contentsOf: folder.appendingPathComponent("\(key).json")),
               let meta = try? JSONDecoder().decode(StoredScene.self, from: metaData),
               let image = UIImage(data: data, scale: CGFloat(meta.scale)) else { return nil }
         return WatchNavigationScene(image: image, projection: meta.projection, route: meta.route, turn: meta.turn)
     }
 
-    func has(routeID: String, step: Int) -> Bool {
-        FileManager.default.fileExists(atPath: directory(routeID).appendingPathComponent("\(step).jpg").path)
+    func has(routeID: String, key: String) -> Bool {
+        FileManager.default.fileExists(atPath: directory(routeID).appendingPathComponent("\(key).jpg").path)
     }
 
     /// Drops every route's maps except those still wanted.
@@ -129,79 +135,121 @@ struct WatchMapStore {
     }
 }
 
-/// The small map around every turn of the route being walked, kept on disk.
+/// The maps behind the guidance screen.
 ///
-/// Unlike an interactive map these stay usable with no connection at all, and
-/// because the picture shown depends only on the route and the next turn, the
-/// screen looks the same whether or not the Watch has a signal.
+/// While the Watch has a connection it asks for a fresh map as the walker
+/// moves, so the map follows them. Without one it falls back to maps saved
+/// beforehand: one for each turn and one every 100 m along the route, each the
+/// picture the live map would have asked for from that spot. They sit on disk,
+/// so a relaunch or a lost signal costs nothing, and the screen looks the same
+/// either way.
 @MainActor
 final class WatchNavigationMapCache: ObservableObject {
+    /// The picture of each turn, by step.
     @Published private(set) var scenes: [Int: WatchNavigationScene] = [:]
+    @Published private(set) var liveScene: WatchNavigationScene?
+    @Published private(set) var liveStepIndex: Int?
     @Published private(set) var isPreparing = false
-    /// Routes whose every turn map is on the Watch, for the saved-routes list.
-    @Published private(set) var readyRouteIDs: Set<String> = []
+    /// Routes with every turn's map on the Watch, for the saved-routes list.
+    @Published private(set) var turnMapsReadyRouteIDs: Set<String> = []
+    /// Routes with every turn's map and the full run along the route saved.
+    @Published private(set) var fullyReadyRouteIDs: Set<String> = []
     var onDiagnostic: ((String, [String: String]) -> Void)?
 
     private let store = WatchMapStore()
-    private var routeID: String?
+    private var plan: LoopPlanPayload?
+    private var anchors: [MapAnchor] = []
+    private var anchorScenes: [String: WatchNavigationScene] = [:]
     private var task: Task<Void, Never>?
     private var prefetchTask: Task<Void, Never>?
+    private var liveTask: Task<Void, Never>?
+    private var liveAnchor: Point?
+    private var requestedLiveStepIndex: Int?
+    private var lastLiveAttempt = Date.distantPast
     private static let retryDelays: [UInt64] = [2, 6, 15]
+    /// A failed live request is tried again no sooner than this.
+    private static let liveRetrySeconds: TimeInterval = 10
+
+    private var routeID: String? { plan?.routeID }
 
     func prepare(_ plan: LoopPlanPayload) {
         if routeID != plan.routeID {
             task?.cancel()
-            routeID = plan.routeID
+            liveTask?.cancel()
+            self.plan = plan
             scenes = [:]
+            anchorScenes = [:]
+            liveScene = nil
+            liveStepIndex = nil
+            liveAnchor = nil
+            requestedLiveStepIndex = nil
             isPreparing = false
         }
+        self.plan = plan
         let geometry = plan.plannedGeometry ?? []
         let maneuvers = plan.plannedManeuvers ?? []
         guard !geometry.isEmpty, !maneuvers.isEmpty else { return }
+        anchors = mapAnchors(geometry: geometry, maneuvers: maneuvers)
 
         for maneuver in maneuvers where scenes[maneuver.stepIndex] == nil {
-            if let scene = store.load(routeID: plan.routeID, step: maneuver.stepIndex) {
+            if let scene = store.load(routeID: plan.routeID, key: "t\(maneuver.stepIndex)") {
                 scenes[maneuver.stepIndex] = scene
             }
         }
-        let missing = maneuvers.filter { scenes[$0.stepIndex] == nil && $0.coordinate != nil }
         refreshReadiness(plan)
-        guard !missing.isEmpty, !isPreparing else { return }
+        let missingTurns = maneuvers.filter { scenes[$0.stepIndex] == nil && $0.coordinate != nil }
+        let missingAnchors = anchors.filter { !store.has(routeID: plan.routeID, key: $0.key) }
+        guard !missingTurns.isEmpty || !missingAnchors.isEmpty, !isPreparing else { return }
 
         isPreparing = true
-        onDiagnostic?("mapPreloadStarted", ["maps": String(missing.count), "stored": String(scenes.count)])
+        onDiagnostic?("mapPreloadStarted", [
+            "turnMaps": String(missingTurns.count), "routeMaps": String(missingAnchors.count)
+        ])
         let planID = plan.routeID
         task = Task { [weak self] in
             // Route order is intentional: the first map needed is downloaded
-            // first, while later turns continue filling in behind it.
-            for maneuver in missing {
+            // first, while later ones continue filling in behind it.
+            for maneuver in missingTurns {
                 guard !Task.isCancelled, let turn = maneuver.coordinate else { break }
-                guard let scene = await Self.fetch(turn: turn, geometry: geometry, onFailure: { attempt, error in
-                    self?.onDiagnostic?("mapSnapshotFailed", [
-                        "kind": "preload", "step": String(maneuver.stepIndex),
-                        "attempt": String(attempt), "error": error.localizedDescription
-                    ])
-                }) else { continue }
+                let route = Self.routeWindow(around: turn, in: geometry)
+                let approach = Self.pointBeforeTurn(70, turn: turn, route: route)
+                guard let scene = await Self.fetch(
+                    center: approach, distance: 600, heading: Self.bearing(from: approach, to: turn),
+                    route: route, turn: turn,
+                    onFailure: { attempt, error in self?.logFailure("turn", maneuver.stepIndex, attempt, error) }
+                ) else { continue }
                 guard !Task.isCancelled, self?.routeID == planID else { break }
-                self?.store.save(scene, routeID: planID, step: maneuver.stepIndex, scale: scene.image.scale)
+                self?.store.save(scene, routeID: planID, key: "t\(maneuver.stepIndex)")
                 self?.scenes[maneuver.stepIndex] = scene
             }
+            self?.refreshReadiness(plan)
+            for anchor in missingAnchors {
+                guard !Task.isCancelled, let turn = anchor.maneuver.coordinate else { break }
+                guard let scene = await Self.fetchLiveStyle(
+                    position: anchor.position, turn: turn, distanceToTurn: anchor.distanceToTurn,
+                    geometry: geometry,
+                    onFailure: { attempt, error in self?.logFailure("route", anchor.maneuver.stepIndex, attempt, error) }
+                ) else { continue }
+                guard !Task.isCancelled, self?.routeID == planID else { break }
+                self?.store.save(scene, routeID: planID, key: anchor.key)
+            }
             guard self?.routeID == planID else { return }
-            self?.onDiagnostic?("mapPreloadFinished", ["maps": String(self?.scenes.count ?? 0)])
+            self?.onDiagnostic?("mapPreloadFinished", ["turnMaps": String(self?.scenes.count ?? 0)])
             self?.isPreparing = false
             self?.task = nil
             self?.refreshReadiness(plan)
         }
     }
 
-    /// Fetches the maps for routes that aren't being walked, a route at a time
-    /// while the Watch is idle. Done while there is a connection, so a saved
-    /// route is ready before the phone is left behind.
+    /// Fetches the turn maps for routes that aren't being walked, a route at a
+    /// time while the Watch is idle, so a saved route is partly ready before
+    /// the phone is left behind. The full run along a route is saved when it
+    /// is chosen.
     func prefetch(_ plans: [LoopPlanPayload]) {
         prefetchTask?.cancel()
         store.prune(keeping: Set(plans.map(\.routeID)).union(routeID.map { [$0] } ?? []))
         for plan in plans { refreshReadiness(plan) }
-        let pending = plans.filter { !readyRouteIDs.contains($0.routeID) && $0.routeID != routeID }
+        let pending = plans.filter { !turnMapsReadyRouteIDs.contains($0.routeID) && $0.routeID != routeID }
         guard !pending.isEmpty else { return }
         prefetchTask = Task { [weak self] in
             for plan in pending {
@@ -209,14 +257,15 @@ final class WatchNavigationMapCache: ObservableObject {
                 for maneuver in plan.plannedManeuvers ?? [] {
                     guard !Task.isCancelled, let turn = maneuver.coordinate else { break }
                     while self?.isPreparing == true { try? await Task.sleep(nanoseconds: 2_000_000_000) }
-                    guard let self, !self.store.has(routeID: plan.routeID, step: maneuver.stepIndex) else { continue }
-                    guard let scene = await Self.fetch(turn: turn, geometry: geometry, onFailure: { attempt, error in
-                        self.onDiagnostic?("mapSnapshotFailed", [
-                            "kind": "prefetch", "step": String(maneuver.stepIndex),
-                            "attempt": String(attempt), "error": error.localizedDescription
-                        ])
-                    }) else { continue }
-                    self.store.save(scene, routeID: plan.routeID, step: maneuver.stepIndex, scale: scene.image.scale)
+                    guard let self, !self.store.has(routeID: plan.routeID, key: "t\(maneuver.stepIndex)") else { continue }
+                    let route = Self.routeWindow(around: turn, in: geometry)
+                    let approach = Self.pointBeforeTurn(70, turn: turn, route: route)
+                    guard let scene = await Self.fetch(
+                        center: approach, distance: 600, heading: Self.bearing(from: approach, to: turn),
+                        route: route, turn: turn,
+                        onFailure: { attempt, error in self.logFailure("prefetch", maneuver.stepIndex, attempt, error) }
+                    ) else { continue }
+                    self.store.save(scene, routeID: plan.routeID, key: "t\(maneuver.stepIndex)")
                 }
                 self?.refreshReadiness(plan)
             }
@@ -232,50 +281,250 @@ final class WatchNavigationMapCache: ObservableObject {
 
     func release() {
         task?.cancel()
+        liveTask?.cancel()
         task = nil
-        routeID = nil
+        liveTask = nil
+        plan = nil
+        anchors = []
         scenes = [:]
+        anchorScenes = [:]
+        liveScene = nil
+        liveStepIndex = nil
+        liveAnchor = nil
+        requestedLiveStepIndex = nil
         isPreparing = false
     }
 
-    private func refreshReadiness(_ plan: LoopPlanPayload) {
-        let steps = (plan.plannedManeuvers ?? []).filter { $0.coordinate != nil }.map(\.stepIndex)
-        let ready = !steps.isEmpty && steps.allSatisfy { store.has(routeID: plan.routeID, step: $0) }
-        if ready { readyRouteIDs.insert(plan.routeID) } else { readyRouteIDs.remove(plan.routeID) }
+    // MARK: Following the walker
+
+    /// watchOS maps are static snapshots. Refresh one after meaningful
+    /// movement so the basemap follows the full walk without continuously
+    /// downloading and rendering a new image for every one-second fix.
+    func prepareLive(position: Point, next: ManeuverPayload, geometry: [Point]) {
+        guard let turn = next.coordinate, geometry.count > 1 else { return }
+        if requestedLiveStepIndex == next.stepIndex,
+           let liveAnchor,
+           haversine(liveAnchor, position) < 60 { return }
+        guard Date().timeIntervalSince(lastLiveAttempt) >= Self.liveRetrySeconds || requestedLiveStepIndex != next.stepIndex
+                || liveAnchor.map({ haversine($0, position) >= 60 }) == true else { return }
+
+        liveTask?.cancel()
+        liveAnchor = position
+        requestedLiveStepIndex = next.stepIndex
+        lastLiveAttempt = Date()
+        onDiagnostic?("mapSnapshotRequested", ["kind": "live", "step": String(next.stepIndex)])
+        liveTask = Task { [weak self] in
+            do {
+                let scene = try await Self.liveScene(
+                    position: position, turn: turn, distanceToTurn: next.distanceMeters, geometry: geometry
+                )
+                guard !Task.isCancelled else { return }
+                self?.liveScene = scene
+                self?.liveStepIndex = next.stepIndex
+                self?.liveTask = nil
+                self?.onDiagnostic?("mapSnapshotReady", ["kind": "live", "step": String(next.stepIndex)])
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.liveTask = nil
+                // Forgotten, so the next fix tries again rather than waiting
+                // for the walker to move another 60 m with no map.
+                self?.liveAnchor = nil
+                self?.onDiagnostic?("mapSnapshotFailed", [
+                    "kind": "live", "step": String(next.stepIndex), "error": error.localizedDescription
+                ])
+            }
+        }
     }
 
-    func isReady(_ plan: LoopPlanPayload) -> Bool { readyRouteIDs.contains(plan.routeID) }
+    /// The map to draw for where the walker is: the live one if it is current,
+    /// else the saved one nearest them along the route, else the picture of the
+    /// turn. Nil — the plain route line — when none of them covers the walker.
+    func scene(position: Point?, next: ManeuverPayload) -> WatchNavigationScene? {
+        func covers(_ scene: WatchNavigationScene) -> Bool {
+            position.map { scene.contains($0) } ?? true
+        }
+        if liveStepIndex == next.stepIndex, let live = liveScene, covers(live) { return live }
+        if let position, let saved = savedScene(near: position, step: next.stepIndex), covers(saved) { return saved }
+        if let turnScene = scenes[next.stepIndex], covers(turnScene) { return turnScene }
+        return nil
+    }
+
+    private func savedScene(near position: Point, step: Int) -> WatchNavigationScene? {
+        guard let routeID else { return nil }
+        let candidates = anchors.filter { $0.maneuver.stepIndex == step }
+        guard let nearest = candidates.min(by: {
+            haversine($0.position, position) < haversine($1.position, position)
+        }), haversine(nearest.position, position) < 150 else { return nil }
+        if let cached = anchorScenes[nearest.key] { return cached }
+        guard let scene = store.load(routeID: routeID, key: nearest.key) else { return nil }
+        if anchorScenes.count >= 8 { anchorScenes.removeAll(keepingCapacity: true) }
+        anchorScenes[nearest.key] = scene
+        return scene
+    }
+
+    // MARK: Readiness
+
+    private func refreshReadiness(_ plan: LoopPlanPayload) {
+        let steps = (plan.plannedManeuvers ?? []).filter { $0.coordinate != nil }.map(\.stepIndex)
+        let turnsReady = !steps.isEmpty && steps.allSatisfy { store.has(routeID: plan.routeID, key: "t\($0)") }
+        let routeAnchors = mapAnchors(geometry: plan.plannedGeometry ?? [], maneuvers: plan.plannedManeuvers ?? [])
+        let routeReady = turnsReady && routeAnchors.allSatisfy { store.has(routeID: plan.routeID, key: $0.key) }
+        if turnsReady { turnMapsReadyRouteIDs.insert(plan.routeID) } else { turnMapsReadyRouteIDs.remove(plan.routeID) }
+        if routeReady { fullyReadyRouteIDs.insert(plan.routeID) } else { fullyReadyRouteIDs.remove(plan.routeID) }
+    }
+
+    /// Every map for this route is on the Watch, so it can be walked with no
+    /// connection and still look the same.
+    func isReady(_ plan: LoopPlanPayload) -> Bool { fullyReadyRouteIDs.contains(plan.routeID) }
+    func hasTurnMaps(_ plan: LoopPlanPayload) -> Bool { turnMapsReadyRouteIDs.contains(plan.routeID) }
+
+    private func logFailure(_ kind: String, _ step: Int, _ attempt: Int, _ error: Error) {
+        onDiagnostic?("mapSnapshotFailed", [
+            "kind": kind, "step": String(step), "attempt": String(attempt), "error": error.localizedDescription
+        ])
+    }
+
+    // MARK: Fetching
 
     /// One map, retried a few times: a Watch moving between its phone's
     /// connection and Wi-Fi fails a request now and then.
     private static func fetch(
+        center: Point,
+        distance: CLLocationDistance,
+        heading: CLLocationDirection,
+        route: [Point],
         turn: Point,
-        geometry: [Point],
         onFailure: @escaping (Int, Error) -> Void
     ) async -> WatchNavigationScene? {
-        let route = routeWindow(around: turn, in: geometry)
         for (attempt, delay) in ([0] + retryDelays).enumerated() {
             if delay > 0 { try? await Task.sleep(nanoseconds: delay * 1_000_000_000) }
             if Task.isCancelled { return nil }
             do {
-                // The turn marker has to sit comfortably below the Watch's
-                // curved top edge, so the camera is centred short of it.
-                let approach = pointBeforeTurn(70, turn: turn, route: route)
-                let snapshot = try await snapshot(
-                    center: approach, distance: 600, heading: bearing(from: approach, to: turn)
-                )
-                return WatchNavigationScene(
-                    image: snapshot.image,
-                    projection: SnapshotProjection(snapshot: snapshot, origin: approach),
-                    route: route,
-                    turn: turn
-                )
+                return try await makeScene(center: center, distance: distance, heading: heading, route: route, turn: turn)
             } catch {
                 onFailure(attempt + 1, error)
             }
         }
         return nil
     }
+
+    private static func fetchLiveStyle(
+        position: Point,
+        turn: Point,
+        distanceToTurn: Double,
+        geometry: [Point],
+        onFailure: @escaping (Int, Error) -> Void
+    ) async -> WatchNavigationScene? {
+        for (attempt, delay) in ([0] + retryDelays).enumerated() {
+            if delay > 0 { try? await Task.sleep(nanoseconds: delay * 1_000_000_000) }
+            if Task.isCancelled { return nil }
+            do {
+                return try await liveScene(position: position, turn: turn, distanceToTurn: distanceToTurn, geometry: geometry, preloading: true)
+            } catch {
+                onFailure(attempt + 1, error)
+            }
+        }
+        return nil
+    }
+
+    /// The picture for a walker at `position` heading for `turn`. The junction
+    /// sits in the upper-middle of the image, not against the rounded top edge
+    /// of the physical display, and a fraction behaves consistently as the
+    /// walker approaches.
+    private static func liveScene(
+        position: Point,
+        turn: Point,
+        distanceToTurn: Double,
+        geometry: [Point],
+        preloading: Bool = false
+    ) async throws -> WatchNavigationScene {
+        #if DEBUG
+        // Simulates a Watch with no connection once its maps are saved.
+        if ProcessInfo.processInfo.environment["LOOPER_WATCH_OFFLINE"] == "1", !preloading {
+            throw URLError(.notConnectedToInternet)
+        }
+        #endif
+        let route = routeWindow(from: position, through: turn, in: geometry)
+        let direct = haversine(position, turn)
+        let lead = direct > 0 ? 0.6 : 0
+        let center = Point(
+            position.lng + (turn.lng - position.lng) * lead,
+            position.lat + (turn.lat - position.lat) * lead
+        )
+        return try await makeScene(
+            center: center,
+            distance: min(1_000, max(180, distanceToTurn * 2.4)),
+            heading: bearing(from: position, to: turn),
+            route: route,
+            turn: turn
+        )
+    }
+
+    private static func makeScene(
+        center: Point,
+        distance: CLLocationDistance,
+        heading: CLLocationDirection,
+        route: [Point],
+        turn: Point
+    ) async throws -> WatchNavigationScene {
+        #if DEBUG
+        // Simulator-only stand-in for Apple's tiles, to exercise saving and
+        // choosing maps when the tile service isn't answering.
+        if ProcessInfo.processInfo.environment["LOOPER_WATCH_FAKE_MAPS"] == "1" {
+            return fakeScene(center: center, distance: distance, heading: heading, route: route, turn: turn)
+        }
+        #endif
+        let snapshot = try await snapshot(center: center, distance: distance, heading: heading)
+        return WatchNavigationScene(
+            image: snapshot.image,
+            projection: SnapshotProjection(snapshot: snapshot, origin: center),
+            route: route,
+            turn: turn
+        )
+    }
+
+    #if DEBUG
+    private static func fakeScene(
+        center: Point, distance: CLLocationDistance, heading: CLLocationDirection, route: [Point], turn: Point
+    ) -> WatchNavigationScene {
+        let size = WKInterfaceDevice.current().screenBounds.size
+        let scale = WKInterfaceDevice.current().screenScale
+        let pixelsPerMeter = Double(size.height) / (distance * 0.8)
+        let theta = heading * Double.pi / 180
+        func point(for p: Point) -> CGPoint {
+            let east = (p.lng - center.lng) * 111_320 * cos(center.lat * Double.pi / 180)
+            let north = (p.lat - center.lat) * 111_320
+            let right = east * cos(theta) - north * sin(theta)
+            let up = east * sin(theta) + north * cos(theta)
+            return CGPoint(x: Double(size.width) / 2 + right * pixelsPerMeter, y: Double(size.height) / 2 - up * pixelsPerMeter)
+        }
+        let width = Int(size.width * scale), height = Int(size.height * scale)
+        let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        // Draw in the same top-left coordinates as the points above.
+        context.translateBy(x: 0, y: CGFloat(height))
+        context.scaleBy(x: scale, y: -scale)
+        context.setFillColor(CGColor(red: 0.16, green: 0.22, blue: 0.3, alpha: 1))
+        context.fill(CGRect(origin: .zero, size: size))
+        context.setStrokeColor(CGColor(gray: 1, alpha: 0.12))
+        let metersPerLng = 111_320 * cos(center.lat * Double.pi / 180)
+        // A grid every 100 m so movement between maps is visible.
+        for i in -20...20 {
+            let a = point(for: Point(center.lng + Double(i) * 100 / metersPerLng, center.lat - 0.01))
+            let b = point(for: Point(center.lng + Double(i) * 100 / metersPerLng, center.lat + 0.01))
+            let c = point(for: Point(center.lng - 0.02, center.lat + Double(i) * 100 / 111_320))
+            let d = point(for: Point(center.lng + 0.02, center.lat + Double(i) * 100 / 111_320))
+            context.move(to: a); context.addLine(to: b)
+            context.move(to: c); context.addLine(to: d)
+        }
+        context.strokePath()
+        let image = UIImage(cgImage: context.makeImage()!, scale: scale, orientation: .up)
+        let projection = SnapshotProjection(origin: center, pointFor: point(for:))
+        return WatchNavigationScene(image: image, projection: projection, route: route, turn: turn)
+    }
+    #endif
 
     private static func snapshot(
         center: Point,
