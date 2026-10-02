@@ -354,7 +354,7 @@ extension LocalLoopRouter {
                 durationSeconds: seconds.rounded(),
                 targetDifferencePercent: requested > 0 ? ((actual / requested - 1) * 100).rounded() : 0,
                 geometry: LineGeometry(coordinates: entry.coordinates),
-                steps: tidySteps(LocalInstructions.steps(for: entry.legs, paceMinutesPerKm: request.paceMinutesPerKm)),
+                steps: tidySteps(LocalInstructions.steps(for: entry.legs, paceMinutesPerKm: request.paceMinutesPerKm, graph: graph, index: index)),
                 routingEngine: .onDevice,
                 planningDiagnostics: routePlanningDiagnostics(
                     legs: entry.legs, graph: graph, index: index,

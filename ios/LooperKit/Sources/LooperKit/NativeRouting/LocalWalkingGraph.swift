@@ -33,7 +33,8 @@ public struct LocalWalkingGraph: Sendable {
     public let edgeBackward: [Bool]
     /// This edge is an OSM pedestrian crossing (`footway=crossing` or a
     /// crossing-tagged way). It remains a footway for access and weighting,
-    /// but guidance must not merge it into the pavement on either side.
+    /// Guidance uses it to reason across the whole crossing before deciding
+    /// whether the route makes another meaningful change of direction.
     public let edgeIsCrossing: [Bool]
     /// `routing.snap_preventions`: this edge is a tunnel, a bridge or a ferry,
     /// so a walker's start or waypoint is snapped onto it only when nothing

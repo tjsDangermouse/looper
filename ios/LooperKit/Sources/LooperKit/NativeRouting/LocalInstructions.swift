@@ -36,11 +36,10 @@ public struct WalkLeg: Sendable, Equatable {
 
 /// Turning a sequence of edges into something a walker can follow.
 ///
-/// Deliberately modest. Field testing decides what guidance actually needs to
-/// say, and instructions elaborated before anybody has walked behind them tend
-/// to be elaborate in the wrong places. So this covers the manoeuvres the app
-/// already draws and speaks — continue, the three grades of left and right,
-/// turn around, arrive — and nothing more.
+/// Uses the chosen route and its surrounding graph while they are both in
+/// memory. The graph supplies road context and real route choices; the route
+/// supplies the movement the walker will make. Crossing speech requires an
+/// explicit change to the opposite pavement of the same mapped street.
 ///
 /// The step convention is the app's existing one, which the walk screen and
 /// the Watch both depend on: a step's instruction is the manoeuvre at its
@@ -63,9 +62,20 @@ public enum LocalInstructions {
     static let turnDegrees: Double = 120
     static let sharpDegrees: Double = 160
 
-    public static func steps(for legs: [WalkLeg], paceMinutesPerKm: Double = 12) -> [Step] {
+    public static func steps(
+        for legs: [WalkLeg], paceMinutesPerKm: Double = 12,
+        graph: LocalWalkingGraph? = nil, index: LocalEdgeIndex? = nil
+    ) -> [Step] {
         let mps = metresPerSecond(paceMinutesPerKm: paceMinutesPerKm)
         guard !legs.isEmpty else { return [] }
+        let legs = coalescingCrossingRuns(legs)
+        let roadContext: LocalRoadContext.Resolved
+        if let graph, let index {
+            roadContext = LocalRoadContext.resolve(legs: legs, graph: graph, index: index)
+        } else {
+            roadContext = .init(names: legs.map(\.name), oppositePavementCrossings: [])
+        }
+        let roadNames = roadContext.names
         var steps: [Step] = []
         var coordinateIndex = 0
 
@@ -79,9 +89,9 @@ public enum LocalInstructions {
         }
 
         var pending = Pending(
-            maneuver: legs[0].isCrossing ? "cross-road" : "continue",
-            instruction: legs[0].isCrossing ? crossingInstruction : setOff(along: legs[0].name),
-            road: legs[0].name,
+            maneuver: "continue",
+            instruction: setOff(along: roadNames[0]),
+            road: roadNames[0],
             roadClass: legs[0].roadClass,
             metres: legs[0].metres,
             startIndex: 0
@@ -90,12 +100,35 @@ public enum LocalInstructions {
 
         for index in 1..<legs.count {
             let previous = legs[index - 1], leg = legs[index]
-            let turn = turnAngle(arriving: previous.coordinates, leaving: leg.coordinates)
-            let maneuver = leg.isCrossing ? "cross-road" : maneuverName(for: turn)
-            let changedRoad = leg.name != previous.name
+            let turn = leg.isCrossing
+                ? broadTurnAngle(arriving: previous.coordinates, leaving: leg.coordinates)
+                : turnAngle(arriving: previous.coordinates, leaving: leg.coordinates)
+            // A mapped crossing describes the ground, not an action the walker
+            // must take. Directional guidance still comes from the geometry.
+            var maneuver = roadContext.oppositePavementCrossings.contains(index)
+                ? "cross-opposite-pavement" : maneuverName(for: turn)
+            if previous.isCrossing, let before = legs.indices.prefix(index).reversed().first(where: { !legs[$0].isCrossing }),
+               roadNames[before] != nil, roadNames[before] == roadNames[index],
+               maneuver != "cross-opposite-pavement" {
+                // The same street corridor continues beyond the crossing.
+                // Its kerb geometry is not a fresh decision at a junction.
+                maneuver = "continue"
+            }
+            let changedRoad = roadNames[index] != roadNames[index - 1]
             let changedWalkingSurface = leg.roadClass.isPedestrianWay != previous.roadClass.isPedestrianWay
-            let changedCrossing = leg.isCrossing != previous.isCrossing
-            if maneuver == "continue" && !changedRoad && !changedWalkingSurface && !changedCrossing {
+            if let graph, LocalRoadContext.hasAlternative(at: (previous, leg), graph: graph) == false,
+               !changedWalkingSurface, maneuver != "cross-opposite-pavement" {
+                // There is no decision to make where the network offers only
+                // the path already being walked. Keep the current road name
+                // for later context without speaking at this survey seam.
+                maneuver = "continue"
+                pending.metres += leg.metres
+                pending.road = roadNames[index] ?? pending.road
+                pending.roadClass = leg.roadClass
+                coordinateIndex += Swift.max(0, leg.coordinates.count - 1)
+                continue
+            }
+            if maneuver == "continue" && !changedRoad && !changedWalkingSurface {
                 // The road bending round is not an instruction.
                 pending.metres += leg.metres
                 coordinateIndex += Swift.max(0, leg.coordinates.count - 1)
@@ -113,10 +146,10 @@ public enum LocalInstructions {
             ))
             pending = Pending(
                 maneuver: maneuver,
-                instruction: leg.isCrossing
-                    ? crossingInstruction
-                    : phrase(maneuver: maneuver, road: leg.name, roadClass: leg.roadClass),
-                road: leg.name,
+                instruction: maneuver == "cross-opposite-pavement"
+                    ? "Cross to the opposite pavement"
+                    : phrase(maneuver: maneuver, road: roadNames[index], roadClass: leg.roadClass),
+                road: roadNames[index],
                 roadClass: leg.roadClass,
                 metres: leg.metres,
                 startIndex: coordinateIndex
@@ -159,6 +192,35 @@ public enum LocalInstructions {
         return delta
     }
 
+    /// Crossing ways are often split at kerb and refuge nodes. Judge the run
+    /// as one piece of ground so those surveyed vertices cannot invent turns.
+    private static func coalescingCrossingRuns(_ legs: [WalkLeg]) -> [WalkLeg] {
+        var result: [WalkLeg] = []
+        for leg in legs {
+            if leg.isCrossing, var previous = result.last, previous.isCrossing,
+               previous.name == leg.name, previous.roadClass == leg.roadClass {
+                previous.coordinates.append(contentsOf: leg.coordinates.dropFirst())
+                previous.metres += leg.metres
+                result[result.count - 1] = previous
+            } else {
+                result.append(leg)
+            }
+        }
+        return result
+    }
+
+    private static func broadTurnAngle(arriving: [Point], leaving: [Point]) -> Double {
+        guard let a = arriving.first, let b = arriving.last,
+              let c = leaving.first, let d = leaving.last,
+              arriving.count >= 2, leaving.count >= 2 else { return 0 }
+        let incoming = LocalGeo.bearing(lat1: a.lat, lon1: a.lng, lat2: b.lat, lon2: b.lng)
+        let outgoing = LocalGeo.bearing(lat1: c.lat, lon1: c.lng, lat2: d.lat, lon2: d.lng)
+        var delta = outgoing - incoming
+        while delta > 180 { delta -= 360 }
+        while delta < -180 { delta += 360 }
+        return delta
+    }
+
     static func maneuverName(for angle: Double) -> String {
         let magnitude = abs(angle)
         let left = angle < 0
@@ -173,8 +235,6 @@ public enum LocalInstructions {
         guard let road else { return "Set off" }
         return "Set off along \(road)"
     }
-
-    private static let crossingInstruction = "Cross the road and continue straight"
 
     static func phrase(maneuver: String, road: String?, roadClass: PedestrianAccessPolicy.RoadClass) -> String {
         let verb: String

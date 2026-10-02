@@ -1,0 +1,3267 @@
+{
+  "entries" : [
+    {
+      "details" : {
+        "gpsIncluded" : "false",
+        "locationSource" : "original planned route geometry",
+        "mapSource" : "OpenStreetMap API extract, fetched for replay",
+        "matchedRouteEdges" : "105\/105",
+        "originalCoordinateCount" : "267",
+        "pipeline" : "LocalInstructions.steps(graph:index:) → tidySteps → reassessDirections"
+      },
+      "event" : "diagnostic.routeReplayed",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "1:replay",
+        "kind" : "turn",
+        "latitude" : "54.1567829",
+        "longitude" : "-4.5157785",
+        "source" : "planned-route-replay",
+        "text" : "Turn left onto Meadow Crescent"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "2:replay",
+        "kind" : "turn",
+        "latitude" : "54.1576332",
+        "longitude" : "-4.5152159",
+        "source" : "planned-route-replay",
+        "text" : "Turn right onto Ballaughton Manor Hill"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "3:replay",
+        "kind" : "turn",
+        "latitude" : "54.1564393",
+        "longitude" : "-4.5103228",
+        "source" : "planned-route-replay",
+        "text" : "Turn left onto Ballaughton Manor Hill"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "4:replay",
+        "kind" : "turn",
+        "latitude" : "54.1565963",
+        "longitude" : "-4.5077248",
+        "source" : "planned-route-replay",
+        "text" : "Turn right onto Saddle Road"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "5:replay",
+        "kind" : "turn",
+        "latitude" : "54.1537032",
+        "longitude" : "-4.5056312",
+        "source" : "planned-route-replay",
+        "text" : "Continue"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "6:replay",
+        "kind" : "turn",
+        "latitude" : "54.1523072",
+        "longitude" : "-4.5055693",
+        "source" : "planned-route-replay",
+        "text" : "Turn left onto Groves Road"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "7:replay",
+        "kind" : "turn",
+        "latitude" : "54.1519384",
+        "longitude" : "-4.5043457",
+        "source" : "planned-route-replay",
+        "text" : "Cross to the opposite pavement"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "8:replay",
+        "kind" : "turn",
+        "latitude" : "54.1512546",
+        "longitude" : "-4.5034001",
+        "source" : "planned-route-replay",
+        "text" : "Turn right"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "9:replay",
+        "kind" : "turn",
+        "latitude" : "54.1510125",
+        "longitude" : "-4.5036941",
+        "source" : "planned-route-replay",
+        "text" : "Turn left"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "10:replay",
+        "kind" : "turn",
+        "latitude" : "54.1501713",
+        "longitude" : "-4.5035202",
+        "source" : "planned-route-replay",
+        "text" : "Bear right"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "11:replay",
+        "kind" : "turn",
+        "latitude" : "54.1497248",
+        "longitude" : "-4.5037719",
+        "source" : "planned-route-replay",
+        "text" : "Bear right onto Pulrose Road"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "12:replay",
+        "kind" : "turn",
+        "latitude" : "54.1493772",
+        "longitude" : "-4.5057934",
+        "source" : "planned-route-replay",
+        "text" : "Turn left onto Pulrose Road"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "13:replay",
+        "kind" : "turn",
+        "latitude" : "54.1488352",
+        "longitude" : "-4.5078054",
+        "source" : "planned-route-replay",
+        "text" : "Bear left onto Heather Crescent"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "14:replay",
+        "kind" : "turn",
+        "latitude" : "54.1481107",
+        "longitude" : "-4.5123528",
+        "source" : "planned-route-replay",
+        "text" : "Turn left onto Hazel Crescent"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "15:replay",
+        "kind" : "turn",
+        "latitude" : "54.1479509",
+        "longitude" : "-4.5125334",
+        "source" : "planned-route-replay",
+        "text" : "Turn right onto 224"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "16:replay",
+        "kind" : "turn",
+        "latitude" : "54.1475864",
+        "longitude" : "-4.5167507",
+        "source" : "planned-route-replay",
+        "text" : "Continue onto Hampton Farm Road"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "17:replay",
+        "kind" : "turn",
+        "latitude" : "54.1476417",
+        "longitude" : "-4.5184817",
+        "source" : "planned-route-replay",
+        "text" : "Turn right onto Hampton Farm Road"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "18:replay",
+        "kind" : "turn",
+        "latitude" : "54.1477879",
+        "longitude" : "-4.5185279",
+        "source" : "planned-route-replay",
+        "text" : "Turn left"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "19:replay",
+        "kind" : "turn",
+        "latitude" : "54.1478709",
+        "longitude" : "-4.5186815",
+        "source" : "planned-route-replay",
+        "text" : "Turn right onto Anagh Coar Road"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "20:replay",
+        "kind" : "turn",
+        "latitude" : "54.147958",
+        "longitude" : "-4.5185458",
+        "source" : "planned-route-replay",
+        "text" : "Turn left onto Cullyn Link"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "21:replay",
+        "kind" : "turn",
+        "latitude" : "54.1491526",
+        "longitude" : "-4.5193236",
+        "source" : "planned-route-replay",
+        "text" : "Continue"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "22:replay",
+        "kind" : "turn",
+        "latitude" : "54.1496849",
+        "longitude" : "-4.519493",
+        "source" : "planned-route-replay",
+        "text" : "Turn right onto The Avenue"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "23:replay",
+        "kind" : "turn",
+        "latitude" : "54.1501663",
+        "longitude" : "-4.5186476",
+        "source" : "planned-route-replay",
+        "text" : "Continue"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "24:replay",
+        "kind" : "turn",
+        "latitude" : "54.1508267",
+        "longitude" : "-4.517648",
+        "source" : "planned-route-replay",
+        "text" : "Continue onto Annacur Lane"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "25:replay",
+        "kind" : "turn",
+        "latitude" : "54.1512488",
+        "longitude" : "-4.5170952",
+        "source" : "planned-route-replay",
+        "text" : "Turn left onto Farmhill Lane"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "26:replay",
+        "kind" : "turn",
+        "latitude" : "54.1513102",
+        "longitude" : "-4.5172511",
+        "source" : "planned-route-replay",
+        "text" : "Turn right"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "27:replay",
+        "kind" : "turn",
+        "latitude" : "54.1515394",
+        "longitude" : "-4.5172822",
+        "source" : "planned-route-replay",
+        "text" : "Turn left onto Farmhill Lane"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "28:replay",
+        "kind" : "turn",
+        "latitude" : "54.1529252",
+        "longitude" : "-4.5208975",
+        "source" : "planned-route-replay",
+        "text" : "Sharp right onto Farmhill Park"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "29:replay",
+        "kind" : "turn",
+        "latitude" : "54.1533565",
+        "longitude" : "-4.5201368",
+        "source" : "planned-route-replay",
+        "text" : "Turn left onto Farmhill Park"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "30:replay",
+        "kind" : "turn",
+        "latitude" : "54.1539736",
+        "longitude" : "-4.5205245",
+        "source" : "planned-route-replay",
+        "text" : "Bear right onto Farmhill Park"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "31:replay",
+        "kind" : "turn",
+        "latitude" : "54.1557075",
+        "longitude" : "-4.5181722",
+        "source" : "planned-route-replay",
+        "text" : "Turn right onto Ashbourne Avenue"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "32:replay",
+        "kind" : "turn",
+        "latitude" : "54.1561006",
+        "longitude" : "-4.517892",
+        "source" : "planned-route-replay",
+        "text" : "Turn left onto Ashbourne Avenue"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "33:replay",
+        "kind" : "turn",
+        "latitude" : "54.1569704",
+        "longitude" : "-4.5181406",
+        "source" : "planned-route-replay",
+        "text" : "Turn left"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    },
+    {
+      "details" : {
+        "key" : "34:replay",
+        "kind" : "turn",
+        "latitude" : "54.1574696",
+        "longitude" : "-4.5174167",
+        "source" : "planned-route-replay",
+        "text" : "Turn left onto Ashberry Avenue"
+      },
+      "event" : "guidance.queued",
+      "timestamp" : "2026-10-02T14:21:53Z"
+    }
+  ],
+  "generatedAt" : "2026-10-02T14:21:53Z",
+  "replayProvenance" : {
+    "gps" : "not used",
+    "guidance" : "current on-device Swift guidance pipeline",
+    "mapData" : "OpenStreetMap API full-area extract fetched on 2026-10-02",
+    "routeGeometry" : "original app diagnostic, unchanged",
+    "routePlanning" : "not rerun; original chosen route retained for location-for-location comparison"
+  },
+  "routeSnapshot" : {
+    "activity" : "walking",
+    "advertisedDistanceMeters" : 4380,
+    "appBuild" : "map-aware-guidance-replay",
+    "appVersion" : "working-tree replay",
+    "capturedAt" : "2026-10-02T14:21:53Z",
+    "coordinates" : [
+      {
+        "latitude" : 54.157682801130854,
+        "longitude" : -4.5178331957039504
+      },
+      {
+        "latitude" : 54.157469599999999,
+        "longitude" : -4.5174167000000001
+      },
+      {
+        "latitude" : 54.157355799999998,
+        "longitude" : -4.5171926999999998
+      },
+      {
+        "latitude" : 54.157292099999999,
+        "longitude" : -4.5168708000000004
+      },
+      {
+        "latitude" : 54.157199499999997,
+        "longitude" : -4.5166548999999998
+      },
+      {
+        "latitude" : 54.157089499999998,
+        "longitude" : -4.5164685000000002
+      },
+      {
+        "latitude" : 54.156978899999999,
+        "longitude" : -4.5162753999999996
+      },
+      {
+        "latitude" : 54.156857100000003,
+        "longitude" : -4.5160447000000001
+      },
+      {
+        "latitude" : 54.156792500000002,
+        "longitude" : -4.5158456999999999
+      },
+      {
+        "latitude" : 54.156782900000003,
+        "longitude" : -4.5157784999999997
+      },
+      {
+        "latitude" : 54.156943499999997,
+        "longitude" : -4.5156841999999999
+      },
+      {
+        "latitude" : 54.157095099999999,
+        "longitude" : -4.5155703999999997
+      },
+      {
+        "latitude" : 54.157358500000001,
+        "longitude" : -4.5153670999999997
+      },
+      {
+        "latitude" : 54.157453099999998,
+        "longitude" : -4.5153159
+      },
+      {
+        "latitude" : 54.157633199999999,
+        "longitude" : -4.5152159000000003
+      },
+      {
+        "latitude" : 54.157616500000003,
+        "longitude" : -4.5151544000000001
+      },
+      {
+        "latitude" : 54.157359800000002,
+        "longitude" : -4.5137061999999997
+      },
+      {
+        "latitude" : 54.157315400000002,
+        "longitude" : -4.5135449999999997
+      },
+      {
+        "latitude" : 54.157200500000002,
+        "longitude" : -4.5132105999999999
+      },
+      {
+        "latitude" : 54.156972699999997,
+        "longitude" : -4.5125418000000002
+      },
+      {
+        "latitude" : 54.156934800000002,
+        "longitude" : -4.5124148000000002
+      },
+      {
+        "latitude" : 54.156906499999998,
+        "longitude" : -4.5122779
+      },
+      {
+        "latitude" : 54.1567808,
+        "longitude" : -4.5116269999999998
+      },
+      {
+        "latitude" : 54.156590399999999,
+        "longitude" : -4.5106447000000003
+      },
+      {
+        "latitude" : 54.156559799999997,
+        "longitude" : -4.5105199000000002
+      },
+      {
+        "latitude" : 54.156516400000001,
+        "longitude" : -4.5104192000000003
+      },
+      {
+        "latitude" : 54.156465900000001,
+        "longitude" : -4.5103562000000004
+      },
+      {
+        "latitude" : 54.156439300000002,
+        "longitude" : -4.5103228
+      },
+      {
+        "latitude" : 54.156464800000002,
+        "longitude" : -4.5101998999999999
+      },
+      {
+        "latitude" : 54.1564683,
+        "longitude" : -4.5100379000000004
+      },
+      {
+        "latitude" : 54.156431499999997,
+        "longitude" : -4.5098292999999998
+      },
+      {
+        "latitude" : 54.156382499999999,
+        "longitude" : -4.5096648999999998
+      },
+      {
+        "latitude" : 54.156333400000001,
+        "longitude" : -4.5095137000000003
+      },
+      {
+        "latitude" : 54.1562883,
+        "longitude" : -4.5093648999999996
+      },
+      {
+        "latitude" : 54.156268400000002,
+        "longitude" : -4.5092800999999998
+      },
+      {
+        "latitude" : 54.156258800000003,
+        "longitude" : -4.5091837999999997
+      },
+      {
+        "latitude" : 54.156262400000003,
+        "longitude" : -4.5090874999999997
+      },
+      {
+        "latitude" : 54.156278299999997,
+        "longitude" : -4.5089644
+      },
+      {
+        "latitude" : 54.156316699999998,
+        "longitude" : -4.5088397000000002
+      },
+      {
+        "latitude" : 54.156427399999998,
+        "longitude" : -4.5084761999999996
+      },
+      {
+        "latitude" : 54.156492999999998,
+        "longitude" : -4.5082132000000001
+      },
+      {
+        "latitude" : 54.156539000000002,
+        "longitude" : -4.5080071000000004
+      },
+      {
+        "latitude" : 54.156586099999998,
+        "longitude" : -4.5077750999999999
+      },
+      {
+        "latitude" : 54.156596299999997,
+        "longitude" : -4.5077248000000001
+      },
+      {
+        "latitude" : 54.156220400000002,
+        "longitude" : -4.5073812000000002
+      },
+      {
+        "latitude" : 54.156105199999999,
+        "longitude" : -4.5072749999999999
+      },
+      {
+        "latitude" : 54.1557016,
+        "longitude" : -4.5068634000000003
+      },
+      {
+        "latitude" : 54.155469099999998,
+        "longitude" : -4.5067075000000001
+      },
+      {
+        "latitude" : 54.155073600000001,
+        "longitude" : -4.5065711000000004
+      },
+      {
+        "latitude" : 54.154885,
+        "longitude" : -4.5064824000000003
+      },
+      {
+        "latitude" : 54.154707899999998,
+        "longitude" : -4.5063727
+      },
+      {
+        "latitude" : 54.154649399999997,
+        "longitude" : -4.5063364000000004
+      },
+      {
+        "latitude" : 54.154595899999997,
+        "longitude" : -4.5062990999999997
+      },
+      {
+        "latitude" : 54.154467400000001,
+        "longitude" : -4.5062093000000001
+      },
+      {
+        "latitude" : 54.154313700000003,
+        "longitude" : -4.5061768000000004
+      },
+      {
+        "latitude" : 54.153857700000003,
+        "longitude" : -4.5057254999999996
+      },
+      {
+        "latitude" : 54.153703200000002,
+        "longitude" : -4.5056311999999998
+      },
+      {
+        "latitude" : 54.153320800000003,
+        "longitude" : -4.5053977999999999
+      },
+      {
+        "latitude" : 54.152967199999999,
+        "longitude" : -4.5055139000000004
+      },
+      {
+        "latitude" : 54.152791000000001,
+        "longitude" : -4.5055151999999996
+      },
+      {
+        "latitude" : 54.152655836656919,
+        "longitude" : -4.5055280903928185
+      },
+      {
+        "latitude" : 54.152318100000002,
+        "longitude" : -4.5055603
+      },
+      {
+        "latitude" : 54.152307200000003,
+        "longitude" : -4.5055693000000003
+      },
+      {
+        "latitude" : 54.152288499999997,
+        "longitude" : -4.5055031999999997
+      },
+      {
+        "latitude" : 54.152290299999997,
+        "longitude" : -4.5054654000000003
+      },
+      {
+        "latitude" : 54.152270999999999,
+        "longitude" : -4.5053982000000001
+      },
+      {
+        "latitude" : 54.152255599999997,
+        "longitude" : -4.5053384999999997
+      },
+      {
+        "latitude" : 54.152235300000001,
+        "longitude" : -4.5053270000000003
+      },
+      {
+        "latitude" : 54.152217899999997,
+        "longitude" : -4.5053089000000002
+      },
+      {
+        "latitude" : 54.152185099999997,
+        "longitude" : -4.5052000999999997
+      },
+      {
+        "latitude" : 54.152190900000001,
+        "longitude" : -4.5051112
+      },
+      {
+        "latitude" : 54.152161999999997,
+        "longitude" : -4.5049925000000002
+      },
+      {
+        "latitude" : 54.1521142,
+        "longitude" : -4.5048139000000003
+      },
+      {
+        "latitude" : 54.152085800000002,
+        "longitude" : -4.5047075000000003
+      },
+      {
+        "latitude" : 54.152073199999997,
+        "longitude" : -4.5046794999999999
+      },
+      {
+        "latitude" : 54.1520346,
+        "longitude" : -4.5046448999999997
+      },
+      {
+        "latitude" : 54.151938399999999,
+        "longitude" : -4.5043457
+      },
+      {
+        "latitude" : 54.151898199999998,
+        "longitude" : -4.5043914999999997
+      },
+      {
+        "latitude" : 54.151858099999998,
+        "longitude" : -4.5044373000000002
+      },
+      {
+        "latitude" : 54.151803399999999,
+        "longitude" : -4.5043220000000002
+      },
+      {
+        "latitude" : 54.151696999999999,
+        "longitude" : -4.5040848000000002
+      },
+      {
+        "latitude" : 54.151620700000002,
+        "longitude" : -4.5039283000000001
+      },
+      {
+        "latitude" : 54.151412299999997,
+        "longitude" : -4.5035857000000004
+      },
+      {
+        "latitude" : 54.151313000000002,
+        "longitude" : -4.5034555000000003
+      },
+      {
+        "latitude" : 54.151254600000001,
+        "longitude" : -4.5034001000000004
+      },
+      {
+        "latitude" : 54.151218,
+        "longitude" : -4.5034415000000001
+      },
+      {
+        "latitude" : 54.151206500000001,
+        "longitude" : -4.5034548000000001
+      },
+      {
+        "latitude" : 54.151191799999999,
+        "longitude" : -4.5034790999999998
+      },
+      {
+        "latitude" : 54.1511754,
+        "longitude" : -4.5035059000000004
+      },
+      {
+        "latitude" : 54.151153499999999,
+        "longitude" : -4.5035432000000002
+      },
+      {
+        "latitude" : 54.151137800000001,
+        "longitude" : -4.5035705999999998
+      },
+      {
+        "latitude" : 54.1511231,
+        "longitude" : -4.5035895000000004
+      },
+      {
+        "latitude" : 54.151102999999999,
+        "longitude" : -4.5036021000000002
+      },
+      {
+        "latitude" : 54.151061900000002,
+        "longitude" : -4.5036252000000001
+      },
+      {
+        "latitude" : 54.151044200000001,
+        "longitude" : -4.5036414000000002
+      },
+      {
+        "latitude" : 54.151027399999997,
+        "longitude" : -4.5036654
+      },
+      {
+        "latitude" : 54.1510125,
+        "longitude" : -4.5036940999999997
+      },
+      {
+        "latitude" : 54.150979900000003,
+        "longitude" : -4.5036798999999998
+      },
+      {
+        "latitude" : 54.150885199999998,
+        "longitude" : -4.5036440000000004
+      },
+      {
+        "latitude" : 54.150759899999997,
+        "longitude" : -4.5036081000000001
+      },
+      {
+        "latitude" : 54.150632799999997,
+        "longitude" : -4.5035673000000003
+      },
+      {
+        "latitude" : 54.150577599999998,
+        "longitude" : -4.5035464000000003
+      },
+      {
+        "latitude" : 54.150520700000001,
+        "longitude" : -4.5035685000000001
+      },
+      {
+        "latitude" : 54.150477600000002,
+        "longitude" : -4.5035536
+      },
+      {
+        "latitude" : 54.150400599999998,
+        "longitude" : -4.5035739000000001
+      },
+      {
+        "latitude" : 54.150276499999997,
+        "longitude" : -4.5035632000000003
+      },
+      {
+        "latitude" : 54.150171299999997,
+        "longitude" : -4.5035201999999996
+      },
+      {
+        "latitude" : 54.149947300000001,
+        "longitude" : -4.5036591000000001
+      },
+      {
+        "latitude" : 54.149834499999997,
+        "longitude" : -4.5036987999999996
+      },
+      {
+        "latitude" : 54.149740299999998,
+        "longitude" : -4.5037507000000003
+      },
+      {
+        "latitude" : 54.149724800000001,
+        "longitude" : -4.5037719000000003
+      },
+      {
+        "latitude" : 54.149706799999997,
+        "longitude" : -4.5038497
+      },
+      {
+        "latitude" : 54.149607500000002,
+        "longitude" : -4.5044179
+      },
+      {
+        "latitude" : 54.149570199999999,
+        "longitude" : -4.5045092000000002
+      },
+      {
+        "latitude" : 54.149565600000003,
+        "longitude" : -4.5045203999999996
+      },
+      {
+        "latitude" : 54.149551500000001,
+        "longitude" : -4.5045904999999999
+      },
+      {
+        "latitude" : 54.149541200000002,
+        "longitude" : -4.5046369000000004
+      },
+      {
+        "latitude" : 54.149527399999997,
+        "longitude" : -4.5047138999999996
+      },
+      {
+        "latitude" : 54.149470800000003,
+        "longitude" : -4.5050223999999996
+      },
+      {
+        "latitude" : 54.149457900000002,
+        "longitude" : -4.5050881
+      },
+      {
+        "latitude" : 54.149420499999998,
+        "longitude" : -4.5050716
+      },
+      {
+        "latitude" : 54.149336300000002,
+        "longitude" : -4.5055255000000001
+      },
+      {
+        "latitude" : 54.149336300000002,
+        "longitude" : -4.5056769000000001
+      },
+      {
+        "latitude" : 54.149377200000004,
+        "longitude" : -4.5057933999999999
+      },
+      {
+        "latitude" : 54.149280699999998,
+        "longitude" : -4.5059696999999996
+      },
+      {
+        "latitude" : 54.149235500000003,
+        "longitude" : -4.5061105000000001
+      },
+      {
+        "latitude" : 54.1491896,
+        "longitude" : -4.5063428999999999
+      },
+      {
+        "latitude" : 54.149083699999998,
+        "longitude" : -4.5069219
+      },
+      {
+        "latitude" : 54.149051,
+        "longitude" : -4.5068910000000004
+      },
+      {
+        "latitude" : 54.149045999999998,
+        "longitude" : -4.5069309999999998
+      },
+      {
+        "latitude" : 54.148998599999999,
+        "longitude" : -4.5072028
+      },
+      {
+        "latitude" : 54.148973099999999,
+        "longitude" : -4.5072131999999998
+      },
+      {
+        "latitude" : 54.148952399999999,
+        "longitude" : -4.5072463999999997
+      },
+      {
+        "latitude" : 54.148934199999999,
+        "longitude" : -4.5072796000000004
+      },
+      {
+        "latitude" : 54.148920799999999,
+        "longitude" : -4.5073211000000004
+      },
+      {
+        "latitude" : 54.1489093,
+        "longitude" : -4.5073965999999999
+      },
+      {
+        "latitude" : 54.1489136,
+        "longitude" : -4.5074468000000003
+      },
+      {
+        "latitude" : 54.148918000000002,
+        "longitude" : -4.5074860000000001
+      },
+      {
+        "latitude" : 54.1488595,
+        "longitude" : -4.5077562000000002
+      },
+      {
+        "latitude" : 54.148835200000001,
+        "longitude" : -4.5078053999999996
+      },
+      {
+        "latitude" : 54.148781,
+        "longitude" : -4.5078186999999996
+      },
+      {
+        "latitude" : 54.148713000000001,
+        "longitude" : -4.5078969000000004
+      },
+      {
+        "latitude" : 54.148682399999998,
+        "longitude" : -4.5079390000000004
+      },
+      {
+        "latitude" : 54.148648100000003,
+        "longitude" : -4.5079897000000004
+      },
+      {
+        "latitude" : 54.148604900000002,
+        "longitude" : -4.5080558999999996
+      },
+      {
+        "latitude" : 54.1485536,
+        "longitude" : -4.5080831999999997
+      },
+      {
+        "latitude" : 54.148340400000002,
+        "longitude" : -4.5083609999999998
+      },
+      {
+        "latitude" : 54.147736100000003,
+        "longitude" : -4.5091013000000002
+      },
+      {
+        "latitude" : 54.147698200000001,
+        "longitude" : -4.5098197000000004
+      },
+      {
+        "latitude" : 54.147635200000003,
+        "longitude" : -4.5110117000000001
+      },
+      {
+        "latitude" : 54.148094100000002,
+        "longitude" : -4.5123065999999996
+      },
+      {
+        "latitude" : 54.148110699999997,
+        "longitude" : -4.5123528000000004
+      },
+      {
+        "latitude" : 54.147950899999998,
+        "longitude" : -4.5125333999999997
+      },
+      {
+        "latitude" : 54.147947000000002,
+        "longitude" : -4.5128095999999998
+      },
+      {
+        "latitude" : 54.147888600000002,
+        "longitude" : -4.5129693
+      },
+      {
+        "latitude" : 54.147881499999997,
+        "longitude" : -4.5131183000000004
+      },
+      {
+        "latitude" : 54.147910000000003,
+        "longitude" : -4.5133738000000001
+      },
+      {
+        "latitude" : 54.147883299999997,
+        "longitude" : -4.5136323999999997
+      },
+      {
+        "latitude" : 54.147883299999997,
+        "longitude" : -4.5138027000000003
+      },
+      {
+        "latitude" : 54.147965200000002,
+        "longitude" : -4.5141251999999996
+      },
+      {
+        "latitude" : 54.148063200000003,
+        "longitude" : -4.5143988999999998
+      },
+      {
+        "latitude" : 54.148091299999997,
+        "longitude" : -4.5145198000000004
+      },
+      {
+        "latitude" : 54.148114900000003,
+        "longitude" : -4.514621
+      },
+      {
+        "latitude" : 54.148129099999998,
+        "longitude" : -4.5148187000000002
+      },
+      {
+        "latitude" : 54.148122499999999,
+        "longitude" : -4.5150025999999999
+      },
+      {
+        "latitude" : 54.148120200000001,
+        "longitude" : -4.5150682
+      },
+      {
+        "latitude" : 54.148095300000001,
+        "longitude" : -4.5152659000000002
+      },
+      {
+        "latitude" : 54.147961700000003,
+        "longitude" : -4.5156552000000003
+      },
+      {
+        "latitude" : 54.147865500000002,
+        "longitude" : -4.5158164999999997
+      },
+      {
+        "latitude" : 54.147788800000001,
+        "longitude" : -4.5159837999999999
+      },
+      {
+        "latitude" : 54.147696199999999,
+        "longitude" : -4.5162848999999996
+      },
+      {
+        "latitude" : 54.147607100000002,
+        "longitude" : -4.5164521999999998
+      },
+      {
+        "latitude" : 54.147548299999997,
+        "longitude" : -4.5165496000000003
+      },
+      {
+        "latitude" : 54.147586400000002,
+        "longitude" : -4.5167507000000002
+      },
+      {
+        "latitude" : 54.147596100000001,
+        "longitude" : -4.5170462000000002
+      },
+      {
+        "latitude" : 54.147612000000002,
+        "longitude" : -4.5175299999999998
+      },
+      {
+        "latitude" : 54.1476185,
+        "longitude" : -4.5180502000000002
+      },
+      {
+        "latitude" : 54.147626500000001,
+        "longitude" : -4.5183783999999996
+      },
+      {
+        "latitude" : 54.147627900000003,
+        "longitude" : -4.5184419
+      },
+      {
+        "latitude" : 54.147641700000001,
+        "longitude" : -4.5184816999999997
+      },
+      {
+        "latitude" : 54.147668799999998,
+        "longitude" : -4.5184626000000003
+      },
+      {
+        "latitude" : 54.147691600000002,
+        "longitude" : -4.5185237999999996
+      },
+      {
+        "latitude" : 54.147708999999999,
+        "longitude" : -4.5185572000000001
+      },
+      {
+        "latitude" : 54.147728499999999,
+        "longitude" : -4.5185686
+      },
+      {
+        "latitude" : 54.147762200000003,
+        "longitude" : -4.5185611999999997
+      },
+      {
+        "latitude" : 54.147787899999997,
+        "longitude" : -4.5185278999999996
+      },
+      {
+        "latitude" : 54.147829399999999,
+        "longitude" : -4.5186013999999997
+      },
+      {
+        "latitude" : 54.147870900000001,
+        "longitude" : -4.5186814999999996
+      },
+      {
+        "latitude" : 54.147958000000003,
+        "longitude" : -4.5185458000000001
+      },
+      {
+        "latitude" : 54.148102600000001,
+        "longitude" : -4.5186286999999998
+      },
+      {
+        "latitude" : 54.148244900000002,
+        "longitude" : -4.5187457999999996
+      },
+      {
+        "latitude" : 54.148321500000002,
+        "longitude" : -4.5188813000000003
+      },
+      {
+        "latitude" : 54.1484132,
+        "longitude" : -4.5189573000000003
+      },
+      {
+        "latitude" : 54.149152600000001,
+        "longitude" : -4.5193235999999999
+      },
+      {
+        "latitude" : 54.149183999999998,
+        "longitude" : -4.5193235999999999
+      },
+      {
+        "latitude" : 54.149262499999999,
+        "longitude" : -4.5193342999999997
+      },
+      {
+        "latitude" : 54.149684899999997,
+        "longitude" : -4.5194929999999998
+      },
+      {
+        "latitude" : 54.149774899999997,
+        "longitude" : -4.5193504999999998
+      },
+      {
+        "latitude" : 54.149976700000003,
+        "longitude" : -4.5190621000000002
+      },
+      {
+        "latitude" : 54.150106600000001,
+        "longitude" : -4.5188264
+      },
+      {
+        "latitude" : 54.150166300000002,
+        "longitude" : -4.5186476000000004
+      },
+      {
+        "latitude" : 54.150213700000002,
+        "longitude" : -4.5185614999999997
+      },
+      {
+        "latitude" : 54.150327799999999,
+        "longitude" : -4.5184002000000003
+      },
+      {
+        "latitude" : 54.150567199999998,
+        "longitude" : -4.5180639999999999
+      },
+      {
+        "latitude" : 54.150555300000001,
+        "longitude" : -4.5180407999999996
+      },
+      {
+        "latitude" : 54.150826700000003,
+        "longitude" : -4.5176480000000003
+      },
+      {
+        "latitude" : 54.150919799999997,
+        "longitude" : -4.5175171000000001
+      },
+      {
+        "latitude" : 54.1510046,
+        "longitude" : -4.5173958000000001
+      },
+      {
+        "latitude" : 54.151063700000002,
+        "longitude" : -4.5173157000000002
+      },
+      {
+        "latitude" : 54.151105399999999,
+        "longitude" : -4.5172600999999997
+      },
+      {
+        "latitude" : 54.151127500000001,
+        "longitude" : -4.5172360999999999
+      },
+      {
+        "latitude" : 54.1511548,
+        "longitude" : -4.5172078999999998
+      },
+      {
+        "latitude" : 54.151248799999998,
+        "longitude" : -4.5170952
+      },
+      {
+        "latitude" : 54.151265000000002,
+        "longitude" : -4.5171346000000003
+      },
+      {
+        "latitude" : 54.151285299999998,
+        "longitude" : -4.5171885999999999
+      },
+      {
+        "latitude" : 54.151310199999998,
+        "longitude" : -4.5172511000000002
+      },
+      {
+        "latitude" : 54.151364999999998,
+        "longitude" : -4.5171897000000003
+      },
+      {
+        "latitude" : 54.151388799999999,
+        "longitude" : -4.5171795000000001
+      },
+      {
+        "latitude" : 54.151417500000001,
+        "longitude" : -4.5171836000000001
+      },
+      {
+        "latitude" : 54.151455599999998,
+        "longitude" : -4.5172201999999997
+      },
+      {
+        "latitude" : 54.151510399999999,
+        "longitude" : -4.5173139000000004
+      },
+      {
+        "latitude" : 54.151539399999997,
+        "longitude" : -4.5172822000000004
+      },
+      {
+        "latitude" : 54.151683900000002,
+        "longitude" : -4.5176286000000001
+      },
+      {
+        "latitude" : 54.152090100000002,
+        "longitude" : -4.5188053999999998
+      },
+      {
+        "latitude" : 54.152137600000003,
+        "longitude" : -4.5189379000000001
+      },
+      {
+        "latitude" : 54.152453603795138,
+        "longitude" : -4.5197241718983125
+      },
+      {
+        "latitude" : 54.1528943,
+        "longitude" : -4.5208206999999998
+      },
+      {
+        "latitude" : 54.152925199999999,
+        "longitude" : -4.5208975000000002
+      },
+      {
+        "latitude" : 54.152987400000001,
+        "longitude" : -4.5206467000000004
+      },
+      {
+        "latitude" : 54.153070300000003,
+        "longitude" : -4.5204548999999998
+      },
+      {
+        "latitude" : 54.153356500000001,
+        "longitude" : -4.5201368000000004
+      },
+      {
+        "latitude" : 54.153843199999997,
+        "longitude" : -4.5204307999999997
+      },
+      {
+        "latitude" : 54.1539736,
+        "longitude" : -4.5205244999999996
+      },
+      {
+        "latitude" : 54.154192700000003,
+        "longitude" : -4.5205403999999998
+      },
+      {
+        "latitude" : 54.154339100000001,
+        "longitude" : -4.5205025000000001
+      },
+      {
+        "latitude" : 54.154439199999999,
+        "longitude" : -4.5204154000000001
+      },
+      {
+        "latitude" : 54.154694599999999,
+        "longitude" : -4.5199422
+      },
+      {
+        "latitude" : 54.154884699999997,
+        "longitude" : -4.5195721999999998
+      },
+      {
+        "latitude" : 54.154938899999998,
+        "longitude" : -4.5194716000000001
+      },
+      {
+        "latitude" : 54.154973900000002,
+        "longitude" : -4.5194067999999996
+      },
+      {
+        "latitude" : 54.155045299999998,
+        "longitude" : -4.5192101999999998
+      },
+      {
+        "latitude" : 54.154919700000001,
+        "longitude" : -4.51891
+      },
+      {
+        "latitude" : 54.154926099999997,
+        "longitude" : -4.5187749999999998
+      },
+      {
+        "latitude" : 54.155101899999998,
+        "longitude" : -4.5184968999999997
+      },
+      {
+        "latitude" : 54.155300599999997,
+        "longitude" : -4.5181918999999997
+      },
+      {
+        "latitude" : 54.1553884,
+        "longitude" : -4.5180892000000004
+      },
+      {
+        "latitude" : 54.155508400000002,
+        "longitude" : -4.5181209999999998
+      },
+      {
+        "latitude" : 54.155567599999998,
+        "longitude" : -4.5181221999999996
+      },
+      {
+        "latitude" : 54.155699200000001,
+        "longitude" : -4.5181287000000001
+      },
+      {
+        "latitude" : 54.155707499999998,
+        "longitude" : -4.5181722000000004
+      },
+      {
+        "latitude" : 54.155743899999997,
+        "longitude" : -4.5181481000000003
+      },
+      {
+        "latitude" : 54.155935499999998,
+        "longitude" : -4.5180284999999998
+      },
+      {
+        "latitude" : 54.156100600000002,
+        "longitude" : -4.5178919999999998
+      },
+      {
+        "latitude" : 54.156533000000003,
+        "longitude" : -4.5186589000000001
+      },
+      {
+        "latitude" : 54.156584899999999,
+        "longitude" : -4.5186852000000002
+      },
+      {
+        "latitude" : 54.156635399999999,
+        "longitude" : -4.5186875999999998
+      },
+      {
+        "latitude" : 54.156685899999999,
+        "longitude" : -4.5186636
+      },
+      {
+        "latitude" : 54.156943800000001,
+        "longitude" : -4.5182818999999999
+      },
+      {
+        "latitude" : 54.156968200000001,
+        "longitude" : -4.5182209000000002
+      },
+      {
+        "latitude" : 54.156970399999999,
+        "longitude" : -4.5181405999999997
+      },
+      {
+        "latitude" : 54.157184000000001,
+        "longitude" : -4.5181456999999998
+      },
+      {
+        "latitude" : 54.157291399999998,
+        "longitude" : -4.5181481999999997
+      },
+      {
+        "latitude" : 54.157376200000002,
+        "longitude" : -4.5179999999999998
+      },
+      {
+        "latitude" : 54.157338199999998,
+        "longitude" : -4.5178988999999996
+      },
+      {
+        "latitude" : 54.157263100000002,
+        "longitude" : -4.5177585999999996
+      },
+      {
+        "latitude" : 54.157469599999999,
+        "longitude" : -4.5174167000000001
+      },
+      {
+        "latitude" : 54.157682801130854,
+        "longitude" : -4.5178331957039504
+      }
+    ],
+    "diagnosticSchemaVersion" : 2,
+    "geometryDistanceMeters" : 4380.1046564081007,
+    "navigationUnit" : "km",
+    "planningDiagnostics" : {
+      "algorithm" : "original-route\/map-aware-guidance-replay",
+      "decisionWitnesses" : [
+
+      ],
+      "edgeSpans" : [
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 36.019852334979142,
+          "endCoordinateIndex" : 1,
+          "fromOSMNodeID" : 283486191,
+          "guidanceRoad" : "Ashberry Avenue",
+          "osmWayID" : 25987257,
+          "road" : "Ashberry Avenue",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 0,
+          "toOSMNodeID" : 4217491425
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 133.22179901193812,
+          "endCoordinateIndex" : 9,
+          "fromOSMNodeID" : 4217491425,
+          "guidanceRoad" : "Ashberry Avenue",
+          "osmWayID" : 25987257,
+          "road" : "Ashberry Avenue",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 1,
+          "toOSMNodeID" : 283489895
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 37.297843101139406,
+          "endCoordinateIndex" : 11,
+          "fromOSMNodeID" : 283489895,
+          "guidanceRoad" : "Meadow Crescent",
+          "osmWayID" : 164407819,
+          "road" : "Meadow Crescent",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 9,
+          "toOSMNodeID" : 283515566
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 32.141199415947838,
+          "endCoordinateIndex" : 12,
+          "fromOSMNodeID" : 283515566,
+          "guidanceRoad" : "Meadow Crescent",
+          "osmWayID" : 164407819,
+          "road" : "Meadow Crescent",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 11,
+          "toOSMNodeID" : 283522131
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 32.092805592547585,
+          "endCoordinateIndex" : 14,
+          "fromOSMNodeID" : 283522131,
+          "guidanceRoad" : "Meadow Crescent",
+          "osmWayID" : 164407819,
+          "road" : "Meadow Crescent",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 12,
+          "toOSMNodeID" : 283511701
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 139.77791792257239,
+          "endCoordinateIndex" : 18,
+          "fromOSMNodeID" : 283511701,
+          "guidanceRoad" : "Ballaughton Manor Hill",
+          "osmWayID" : 369383394,
+          "road" : "Ballaughton Manor Hill",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 14,
+          "toOSMNodeID" : 283493846
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 208.68865021360875,
+          "endCoordinateIndex" : 27,
+          "fromOSMNodeID" : 283493846,
+          "guidanceRoad" : "Ballaughton Manor Hill",
+          "osmWayID" : 369383394,
+          "road" : "Ballaughton Manor Hill",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 18,
+          "toOSMNodeID" : 283497688
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 73.358222947531132,
+          "endCoordinateIndex" : 34,
+          "fromOSMNodeID" : 283497688,
+          "guidanceRoad" : "Ballaughton Manor Hill",
+          "osmWayID" : 1515701111,
+          "road" : "Ballaughton Manor Hill",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 27,
+          "toOSMNodeID" : 283520544
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 56.703889355079824,
+          "endCoordinateIndex" : 39,
+          "fromOSMNodeID" : 283520544,
+          "guidanceRoad" : "Ballaughton Manor Hill",
+          "osmWayID" : 1515701111,
+          "road" : "Ballaughton Manor Hill",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 34,
+          "toOSMNodeID" : 283499583
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 32.975038069059977,
+          "endCoordinateIndex" : 41,
+          "fromOSMNodeID" : 283499583,
+          "guidanceRoad" : "Ballaughton Manor Hill",
+          "osmWayID" : 1515701111,
+          "road" : "Ballaughton Manor Hill",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 39,
+          "toOSMNodeID" : 1760428411
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 19.454283006896961,
+          "endCoordinateIndex" : 43,
+          "fromOSMNodeID" : 1760428411,
+          "guidanceRoad" : "Ballaughton Manor Hill",
+          "osmWayID" : 164408441,
+          "road" : "Ballaughton Manor Hill",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 41,
+          "toOSMNodeID" : 283482733
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 47.409235931300515,
+          "endCoordinateIndex" : 44,
+          "fromOSMNodeID" : 283482733,
+          "guidanceRoad" : "Saddle Road",
+          "osmWayID" : 25987103,
+          "road" : "Saddle Road",
+          "roadClass" : "secondary",
+          "startCoordinateIndex" : 43,
+          "toOSMNodeID" : 283506853
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 161.22105672689958,
+          "endCoordinateIndex" : 49,
+          "fromOSMNodeID" : 283506853,
+          "guidanceRoad" : "Saddle Road",
+          "osmWayID" : 25987103,
+          "road" : "Saddle Road",
+          "roadClass" : "secondary",
+          "startCoordinateIndex" : 44,
+          "toOSMNodeID" : 283490492
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 27.869211478457764,
+          "endCoordinateIndex" : 51,
+          "fromOSMNodeID" : 283490492,
+          "guidanceRoad" : "Saddle Road",
+          "osmWayID" : 25987103,
+          "road" : "Saddle Road",
+          "roadClass" : "secondary",
+          "startCoordinateIndex" : 49,
+          "toOSMNodeID" : 283518348
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 6.4256529788762728,
+          "endCoordinateIndex" : 52,
+          "fromOSMNodeID" : 283518348,
+          "guidanceRoad" : "Spring Valley Terrace",
+          "osmWayID" : 165560621,
+          "road" : "Spring Valley Terrace",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 51,
+          "toOSMNodeID" : 10837270452
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 109.50948842041007,
+          "endCoordinateIndex" : 56,
+          "fromOSMNodeID" : 10837270452,
+          "guidanceRoad" : "Spring Valley Terrace",
+          "osmWayID" : 165560621,
+          "road" : "Spring Valley Terrace",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 52,
+          "toOSMNodeID" : 1789212799
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 119.8401309012917,
+          "endCoordinateIndex" : 60,
+          "fromOSMNodeID" : 1789212799,
+          "osmWayID" : 163139366,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 56,
+          "toOSMNodeID" : 1749022045
+        },
+        {
+          "avoidancePenalty" : 20,
+          "baseWeight" : 1,
+          "distanceMeters" : 37.613151554873973,
+          "endCoordinateIndex" : 61,
+          "fromOSMNodeID" : 1749022045,
+          "osmWayID" : 163139366,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 60,
+          "toOSMNodeID" : 1789212799
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 1.3462882123646063,
+          "endCoordinateIndex" : 62,
+          "fromOSMNodeID" : 1749022045,
+          "osmWayID" : 1165103722,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 61,
+          "toOSMNodeID" : 10837248960
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 7.2499677399473361,
+          "endCoordinateIndex" : 64,
+          "fromOSMNodeID" : 10837248960,
+          "guidanceRoad" : "Groves Road",
+          "osmWayID" : 1165103726,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 62,
+          "toOSMNodeID" : 10837248961
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 4.8739348104811295,
+          "endCoordinateIndex" : 65,
+          "fromOSMNodeID" : 10837248961,
+          "guidanceRoad" : "Groves Road",
+          "isCrossing" : true,
+          "osmWayID" : 1165103727,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 64,
+          "toOSMNodeID" : 10837248962
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 4.2480634188817374,
+          "endCoordinateIndex" : 66,
+          "fromOSMNodeID" : 10837248962,
+          "guidanceRoad" : "Groves Road",
+          "isCrossing" : true,
+          "osmWayID" : 1165103727,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 65,
+          "toOSMNodeID" : 10837248963
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 39.595835116367184,
+          "endCoordinateIndex" : 72,
+          "fromOSMNodeID" : 10837248963,
+          "guidanceRoad" : "Groves Road",
+          "osmWayID" : 1165103728,
+          "road" : "Groves Road",
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 66,
+          "toOSMNodeID" : 10837270495
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 36.988697791213426,
+          "endCoordinateIndex" : 76,
+          "fromOSMNodeID" : 10837270495,
+          "guidanceRoad" : "Groves Road",
+          "osmWayID" : 1165103728,
+          "road" : "Groves Road",
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 72,
+          "toOSMNodeID" : 10837248973
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 5.3736933797907485,
+          "endCoordinateIndex" : 77,
+          "fromOSMNodeID" : 10837248973,
+          "guidanceRoad" : "Groves Road",
+          "isCrossing" : true,
+          "osmWayID" : 1165103734,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 76,
+          "toOSMNodeID" : 6143194495
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 5.3644489086864633,
+          "endCoordinateIndex" : 78,
+          "fromOSMNodeID" : 6143194495,
+          "guidanceRoad" : "Groves Road",
+          "isCrossing" : true,
+          "osmWayID" : 1165103734,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 77,
+          "toOSMNodeID" : 10837248945
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 9.6628522944816453,
+          "endCoordinateIndex" : 79,
+          "fromOSMNodeID" : 10837248945,
+          "guidanceRoad" : "Groves Road",
+          "osmWayID" : 1163432561,
+          "road" : "Groves Road",
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 78,
+          "toOSMNodeID" : 10837270490
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 86.235135449851853,
+          "endCoordinateIndex" : 84,
+          "fromOSMNodeID" : 10837270490,
+          "guidanceRoad" : "Groves Road",
+          "osmWayID" : 1163432561,
+          "road" : "Groves Road",
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 79,
+          "toOSMNodeID" : 14011420219
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 33.565910352808373,
+          "endCoordinateIndex" : 96,
+          "fromOSMNodeID" : 14011420219,
+          "osmWayID" : 1538502445,
+          "roadClass" : "path",
+          "startCoordinateIndex" : 84,
+          "toOSMNodeID" : 14011420207
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 55.811313852660263,
+          "endCoordinateIndex" : 102,
+          "fromOSMNodeID" : 14011420207,
+          "osmWayID" : 655702921,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 96,
+          "toOSMNodeID" : 6143194337
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 39.398347556458198,
+          "endCoordinateIndex" : 106,
+          "fromOSMNodeID" : 6143194337,
+          "osmWayID" : 655702921,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 102,
+          "toOSMNodeID" : 6143194581
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 26.499358873580022,
+          "endCoordinateIndex" : 107,
+          "fromOSMNodeID" : 6143194581,
+          "osmWayID" : 655702937,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 106,
+          "toOSMNodeID" : 283503116
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 26.021188513949557,
+          "endCoordinateIndex" : 110,
+          "fromOSMNodeID" : 283503116,
+          "osmWayID" : 655702937,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 107,
+          "toOSMNodeID" : 10820093865
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 57.03039053524536,
+          "endCoordinateIndex" : 115,
+          "fromOSMNodeID" : 10820093865,
+          "guidanceRoad" : "Pulrose Road",
+          "osmWayID" : 655702937,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 110,
+          "toOSMNodeID" : 10837081607
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 3.2315126655184221,
+          "endCoordinateIndex" : 116,
+          "fromOSMNodeID" : 10837081607,
+          "guidanceRoad" : "Pulrose Road",
+          "isCrossing" : true,
+          "osmWayID" : 1165081360,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 115,
+          "toOSMNodeID" : 10837081608
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 5.2440655168120909,
+          "endCoordinateIndex" : 117,
+          "fromOSMNodeID" : 10837081608,
+          "guidanceRoad" : "Pulrose Road",
+          "isCrossing" : true,
+          "osmWayID" : 1165081360,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 116,
+          "toOSMNodeID" : 10837081609
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 21.05342839251027,
+          "endCoordinateIndex" : 118,
+          "fromOSMNodeID" : 10837081609,
+          "guidanceRoad" : "Pulrose Road",
+          "osmWayID" : 1165081361,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 117,
+          "toOSMNodeID" : 10837081610
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 4.5126858032952546,
+          "endCoordinateIndex" : 119,
+          "fromOSMNodeID" : 10837081610,
+          "isCrossing" : true,
+          "osmWayID" : 1165081362,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 118,
+          "toOSMNodeID" : 10837081611
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 4.2952765526666195,
+          "endCoordinateIndex" : 120,
+          "fromOSMNodeID" : 10837081611,
+          "osmWayID" : 25988117,
+          "roadClass" : "service",
+          "startCoordinateIndex" : 119,
+          "toOSMNodeID" : 283514184
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 49.712542224161794,
+          "endCoordinateIndex" : 123,
+          "fromOSMNodeID" : 283514184,
+          "guidanceRoad" : "Pulrose Road",
+          "osmWayID" : 25987793,
+          "road" : "Pulrose Road",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 120,
+          "toOSMNodeID" : 283492862
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 81.64691686105563,
+          "endCoordinateIndex" : 127,
+          "fromOSMNodeID" : 283492862,
+          "guidanceRoad" : "Pulrose Road",
+          "osmWayID" : 25988263,
+          "road" : "Pulrose Road",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 123,
+          "toOSMNodeID" : 283479148
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 4.1557934913900541,
+          "endCoordinateIndex" : 128,
+          "fromOSMNodeID" : 283479148,
+          "osmWayID" : 25989253,
+          "roadClass" : "service",
+          "startCoordinateIndex" : 127,
+          "toOSMNodeID" : 10837418929
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 2.6636531677251778,
+          "endCoordinateIndex" : 129,
+          "fromOSMNodeID" : 10837418929,
+          "isCrossing" : true,
+          "osmWayID" : 1165123234,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 128,
+          "toOSMNodeID" : 10837418928
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 35.670307838177209,
+          "endCoordinateIndex" : 135,
+          "fromOSMNodeID" : 10837418928,
+          "guidanceRoad" : "Pulrose Road",
+          "osmWayID" : 1165123233,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 129,
+          "toOSMNodeID" : 10837418922
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 3.3040447879634662,
+          "endCoordinateIndex" : 136,
+          "fromOSMNodeID" : 10837418922,
+          "isCrossing" : true,
+          "osmWayID" : 1165123232,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 135,
+          "toOSMNodeID" : 1721218666
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 2.5993522002344558,
+          "endCoordinateIndex" : 137,
+          "fromOSMNodeID" : 1721218666,
+          "isCrossing" : true,
+          "osmWayID" : 1165123232,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 136,
+          "toOSMNodeID" : 10837418921
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 22.951935268101277,
+          "endCoordinateIndex" : 139,
+          "fromOSMNodeID" : 10837418921,
+          "osmWayID" : 25987041,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 137,
+          "toOSMNodeID" : 10315012499
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 15.205118860281043,
+          "endCoordinateIndex" : 141,
+          "fromOSMNodeID" : 10315012499,
+          "guidanceRoad" : "Heather Crescent",
+          "osmWayID" : 1165123227,
+          "road" : "Heather Crescent",
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 139,
+          "toOSMNodeID" : 10837418906
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 4.3697566565282058,
+          "endCoordinateIndex" : 142,
+          "fromOSMNodeID" : 10837418906,
+          "guidanceRoad" : "Heather Crescent",
+          "isCrossing" : true,
+          "osmWayID" : 1165123229,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 141,
+          "toOSMNodeID" : 10837418912
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 5.0446729045083085,
+          "endCoordinateIndex" : 143,
+          "fromOSMNodeID" : 10837418912,
+          "guidanceRoad" : "Heather Crescent",
+          "isCrossing" : true,
+          "osmWayID" : 1165123229,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 142,
+          "toOSMNodeID" : 10837418913
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 171.92994618443981,
+          "endCoordinateIndex" : 148,
+          "fromOSMNodeID" : 10837418913,
+          "guidanceRoad" : "Heather Crescent",
+          "osmWayID" : 1165123230,
+          "road" : "Heather Crescent",
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 143,
+          "toOSMNodeID" : 13720724825
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 176.51491114353649,
+          "endCoordinateIndex" : 150,
+          "fromOSMNodeID" : 13720724825,
+          "guidanceRoad" : "Heather Crescent",
+          "osmWayID" : 1165123230,
+          "road" : "Heather Crescent",
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 148,
+          "toOSMNodeID" : 10837418919
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 3.5298931861313072,
+          "endCoordinateIndex" : 151,
+          "fromOSMNodeID" : 10837418919,
+          "isCrossing" : true,
+          "osmWayID" : 1165123231,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 150,
+          "toOSMNodeID" : 10837418920
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 21.309062303598779,
+          "endCoordinateIndex" : 152,
+          "fromOSMNodeID" : 10837418920,
+          "guidanceRoad" : "Hazel Crescent",
+          "osmWayID" : 446927494,
+          "road" : "Hazel Crescent",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 151,
+          "toOSMNodeID" : 283491111
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 39.990479707661294,
+          "endCoordinateIndex" : 155,
+          "fromOSMNodeID" : 283491111,
+          "guidanceRoad" : "224",
+          "osmWayID" : 25987574,
+          "road" : "224",
+          "roadClass" : "path",
+          "startCoordinateIndex" : 152,
+          "toOSMNodeID" : 4441420052
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 97.387049401482088,
+          "endCoordinateIndex" : 161,
+          "fromOSMNodeID" : 4441420052,
+          "guidanceRoad" : "224",
+          "osmWayID" : 25987574,
+          "road" : "224",
+          "roadClass" : "path",
+          "startCoordinateIndex" : 155,
+          "toOSMNodeID" : 9269653768
+        },
+        {
+          "avoidancePenalty" : 20,
+          "baseWeight" : 1,
+          "distanceMeters" : 32.064999140126211,
+          "endCoordinateIndex" : 164,
+          "fromOSMNodeID" : 9269653768,
+          "guidanceRoad" : "224",
+          "osmWayID" : 25987574,
+          "road" : "224",
+          "roadClass" : "path",
+          "startCoordinateIndex" : 161,
+          "toOSMNodeID" : 9269653763
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 112.53949552159099,
+          "endCoordinateIndex" : 171,
+          "fromOSMNodeID" : 9269653763,
+          "guidanceRoad" : "224",
+          "osmWayID" : 25987574,
+          "road" : "224",
+          "roadClass" : "path",
+          "startCoordinateIndex" : 164,
+          "toOSMNodeID" : 4441420048
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 22.874913327982455,
+          "endCoordinateIndex" : 173,
+          "fromOSMNodeID" : 4441420048,
+          "guidanceRoad" : "224",
+          "osmWayID" : 25987574,
+          "road" : "224",
+          "roadClass" : "path",
+          "startCoordinateIndex" : 171,
+          "toOSMNodeID" : 2217780896
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 19.275195049915407,
+          "endCoordinateIndex" : 174,
+          "fromOSMNodeID" : 2217780896,
+          "guidanceRoad" : "Hampton Farm Road",
+          "osmWayID" : 164539377,
+          "road" : "Hampton Farm Road",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 173,
+          "toOSMNodeID" : 9270199559
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 31.557940081051679,
+          "endCoordinateIndex" : 175,
+          "fromOSMNodeID" : 9270199559,
+          "guidanceRoad" : "Hampton Farm Road",
+          "osmWayID" : 164539377,
+          "road" : "Hampton Farm Road",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 174,
+          "toOSMNodeID" : 10837323429
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 33.886693340266092,
+          "endCoordinateIndex" : 176,
+          "fromOSMNodeID" : 10837323429,
+          "guidanceRoad" : "Hampton Farm Road",
+          "osmWayID" : 164539377,
+          "road" : "Hampton Farm Road",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 175,
+          "toOSMNodeID" : 2217780898
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 21.393129308062768,
+          "endCoordinateIndex" : 177,
+          "fromOSMNodeID" : 2217780898,
+          "guidanceRoad" : "Hampton Farm Road",
+          "osmWayID" : 164539377,
+          "road" : "Hampton Farm Road",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 176,
+          "toOSMNodeID" : 10837323419
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 7.1506866529235413,
+          "endCoordinateIndex" : 179,
+          "fromOSMNodeID" : 10837323419,
+          "guidanceRoad" : "Hampton Farm Road",
+          "osmWayID" : 164539377,
+          "road" : "Hampton Farm Road",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 177,
+          "toOSMNodeID" : 1761636499
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 3.2600368119971934,
+          "endCoordinateIndex" : 180,
+          "fromOSMNodeID" : 1761636499,
+          "guidanceRoad" : "Hampton Farm Road",
+          "isCrossing" : true,
+          "osmWayID" : 1165110923,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 179,
+          "toOSMNodeID" : 10837323415
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 9.9268295772348658,
+          "endCoordinateIndex" : 183,
+          "fromOSMNodeID" : 10837323415,
+          "guidanceRoad" : "Hampton Farm Road",
+          "osmWayID" : 1165110922,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 180,
+          "toOSMNodeID" : 10837323409
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 7.3655959485921665,
+          "endCoordinateIndex" : 185,
+          "fromOSMNodeID" : 10837323409,
+          "osmWayID" : 1165110919,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 183,
+          "toOSMNodeID" : 10837323407
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 13.613655453787949,
+          "endCoordinateIndex" : 187,
+          "fromOSMNodeID" : 10837323407,
+          "isCrossing" : true,
+          "osmWayID" : 1165110921,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 185,
+          "toOSMNodeID" : 10837323411
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 13.111256073802524,
+          "endCoordinateIndex" : 188,
+          "fromOSMNodeID" : 10837323411,
+          "guidanceRoad" : "Anagh Coar Road",
+          "osmWayID" : 1165110920,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 187,
+          "toOSMNodeID" : 10837323410
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 16.961039737967642,
+          "endCoordinateIndex" : 189,
+          "fromOSMNodeID" : 10837323410,
+          "guidanceRoad" : "Cullyn Link",
+          "osmWayID" : 92055450,
+          "road" : "Cullyn Link",
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 188,
+          "toOSMNodeID" : 1069288750
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 126.77251609299904,
+          "endCoordinateIndex" : 193,
+          "fromOSMNodeID" : 1069288750,
+          "guidanceRoad" : "Cullyn Link",
+          "osmWayID" : 92055450,
+          "road" : "Cullyn Link",
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 189,
+          "toOSMNodeID" : 1069288813
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 60.340562243151922,
+          "endCoordinateIndex" : 196,
+          "fromOSMNodeID" : 1069288813,
+          "osmWayID" : 92055440,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 193,
+          "toOSMNodeID" : 1069288736
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 77.390527843487348,
+          "endCoordinateIndex" : 200,
+          "fromOSMNodeID" : 1069288736,
+          "guidanceRoad" : "The Avenue",
+          "osmWayID" : 92055465,
+          "road" : "The Avenue",
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 196,
+          "toOSMNodeID" : 1069288777
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 7.6953869809240825,
+          "endCoordinateIndex" : 201,
+          "fromOSMNodeID" : 1069288777,
+          "osmWayID" : 165560629,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 200,
+          "toOSMNodeID" : 1069288853
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 16.471463171389402,
+          "endCoordinateIndex" : 202,
+          "fromOSMNodeID" : 1069288853,
+          "osmWayID" : 92055463,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 201,
+          "toOSMNodeID" : 8776466546
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 34.467136905731778,
+          "endCoordinateIndex" : 203,
+          "fromOSMNodeID" : 8776466546,
+          "osmWayID" : 92055463,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 202,
+          "toOSMNodeID" : 1069288819
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 2.008367063393258,
+          "endCoordinateIndex" : 204,
+          "fromOSMNodeID" : 1069288819,
+          "osmWayID" : 92055443,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 203,
+          "toOSMNodeID" : 1069288849
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 39.560902515629046,
+          "endCoordinateIndex" : 205,
+          "fromOSMNodeID" : 1069288849,
+          "osmWayID" : 1238818648,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 204,
+          "toOSMNodeID" : 1069288761
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 13.41026798204798,
+          "endCoordinateIndex" : 206,
+          "fromOSMNodeID" : 1069288761,
+          "guidanceRoad" : "Annacur Lane",
+          "osmWayID" : 1238818648,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 205,
+          "toOSMNodeID" : 1069288771
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 20.691032439415846,
+          "endCoordinateIndex" : 208,
+          "fromOSMNodeID" : 1069288771,
+          "guidanceRoad" : "Annacur Lane",
+          "osmWayID" : 1238818654,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 206,
+          "toOSMNodeID" : 11508282810
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 5.8830316691265079,
+          "endCoordinateIndex" : 209,
+          "fromOSMNodeID" : 11508282810,
+          "guidanceRoad" : "Annacur Lane",
+          "osmWayID" : 1238818654,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 208,
+          "toOSMNodeID" : 11508282823
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 2.9123125449498164,
+          "endCoordinateIndex" : 210,
+          "fromOSMNodeID" : 11508282823,
+          "guidanceRoad" : "Annacur Lane",
+          "isCrossing" : true,
+          "osmWayID" : 1238818649,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 209,
+          "toOSMNodeID" : 1069288865
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 3.5478816181987303,
+          "endCoordinateIndex" : 211,
+          "fromOSMNodeID" : 1069288865,
+          "guidanceRoad" : "Annacur Lane",
+          "isCrossing" : true,
+          "osmWayID" : 1238818649,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 210,
+          "toOSMNodeID" : 11508282822
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 12.771633525840954,
+          "endCoordinateIndex" : 212,
+          "fromOSMNodeID" : 11508282822,
+          "guidanceRoad" : "Annacur Lane",
+          "osmWayID" : 1238823892,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 211,
+          "toOSMNodeID" : 11508282821
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 3.1349776305698289,
+          "endCoordinateIndex" : 213,
+          "fromOSMNodeID" : 11508282821,
+          "guidanceRoad" : "Farmhill Lane",
+          "osmWayID" : 1238818647,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 212,
+          "toOSMNodeID" : 11508282820
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 4.1786681875949325,
+          "endCoordinateIndex" : 214,
+          "fromOSMNodeID" : 11508282820,
+          "isCrossing" : true,
+          "osmWayID" : 1238818646,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 213,
+          "toOSMNodeID" : 11508282819
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 4.9225453960399479,
+          "endCoordinateIndex" : 215,
+          "fromOSMNodeID" : 11508282819,
+          "isCrossing" : true,
+          "osmWayID" : 1238818646,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 214,
+          "toOSMNodeID" : 11508282818
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 26.703533194375204,
+          "endCoordinateIndex" : 220,
+          "fromOSMNodeID" : 11508282818,
+          "osmWayID" : 1238818653,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 215,
+          "toOSMNodeID" : 11508282831
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 3.828819238725369,
+          "endCoordinateIndex" : 221,
+          "fromOSMNodeID" : 11508282831,
+          "isCrossing" : true,
+          "osmWayID" : 1238823895,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 220,
+          "toOSMNodeID" : 11508336273
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 27.695184184897002,
+          "endCoordinateIndex" : 222,
+          "fromOSMNodeID" : 11508336273,
+          "guidanceRoad" : "Farmhill Lane",
+          "osmWayID" : 25989271,
+          "road" : "Farmhill Lane",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 221,
+          "toOSMNodeID" : 10739943535
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 88.953752530893851,
+          "endCoordinateIndex" : 223,
+          "fromOSMNodeID" : 10739943535,
+          "guidanceRoad" : "Farmhill Lane",
+          "osmWayID" : 25989271,
+          "road" : "Farmhill Lane",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 222,
+          "toOSMNodeID" : 13532208345
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 10.116610667614724,
+          "endCoordinateIndex" : 224,
+          "fromOSMNodeID" : 13532208345,
+          "guidanceRoad" : "Farmhill Lane",
+          "osmWayID" : 25989271,
+          "road" : "Farmhill Lane",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 223,
+          "toOSMNodeID" : 283518904
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 62.098789675093343,
+          "endCoordinateIndex" : 225,
+          "fromOSMNodeID" : 283518904,
+          "guidanceRoad" : "Farmhill Lane",
+          "osmWayID" : 25989409,
+          "road" : "Farmhill Lane",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 224,
+          "toOSMNodeID" : 283498929
+        },
+        {
+          "avoidancePenalty" : 20,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 92.670151834430754,
+          "endCoordinateIndex" : 227,
+          "fromOSMNodeID" : 283518904,
+          "guidanceRoad" : "Farmhill Lane",
+          "osmWayID" : 25989409,
+          "road" : "Farmhill Lane",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 225,
+          "toOSMNodeID" : 283498929
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 71.230484550776183,
+          "endCoordinateIndex" : 230,
+          "fromOSMNodeID" : 283498929,
+          "guidanceRoad" : "Farmhill Park",
+          "osmWayID" : 25987268,
+          "road" : "Farmhill Park",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 227,
+          "toOSMNodeID" : 283516454
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 73.136335224771116,
+          "endCoordinateIndex" : 232,
+          "fromOSMNodeID" : 283516454,
+          "guidanceRoad" : "Farmhill Park",
+          "osmWayID" : 25987268,
+          "road" : "Farmhill Park",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 230,
+          "toOSMNodeID" : 283522111
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 95.246149023219004,
+          "endCoordinateIndex" : 236,
+          "fromOSMNodeID" : 283522111,
+          "guidanceRoad" : "Farmhill Park",
+          "osmWayID" : 25987268,
+          "road" : "Farmhill Park",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 232,
+          "toOSMNodeID" : 283496966
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 32.051267982413094,
+          "endCoordinateIndex" : 237,
+          "fromOSMNodeID" : 283496966,
+          "guidanceRoad" : "Farmhill Park",
+          "osmWayID" : 1451793490,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 236,
+          "toOSMNodeID" : 13314910250
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 8.9012602583633527,
+          "endCoordinateIndex" : 238,
+          "fromOSMNodeID" : 13314910250,
+          "osmWayID" : 1451793491,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 237,
+          "toOSMNodeID" : 13314910251
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1,
+          "distanceMeters" : 156.56184459179872,
+          "endCoordinateIndex" : 248,
+          "fromOSMNodeID" : 13314910251,
+          "osmWayID" : 218346424,
+          "roadClass" : "footway",
+          "startCoordinateIndex" : 238,
+          "toOSMNodeID" : 2353538421
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 2.9790323330570203,
+          "endCoordinateIndex" : 249,
+          "fromOSMNodeID" : 2353538421,
+          "guidanceRoad" : "Meadow Crescent",
+          "osmWayID" : 164407819,
+          "road" : "Meadow Crescent",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 248,
+          "toOSMNodeID" : 283496772
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 47.421407126278183,
+          "endCoordinateIndex" : 252,
+          "fromOSMNodeID" : 283496772,
+          "guidanceRoad" : "Ashbourne Avenue",
+          "osmWayID" : 25986160,
+          "road" : "Ashbourne Avenue",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 249,
+          "toOSMNodeID" : 283484617
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 134.77880460068633,
+          "endCoordinateIndex" : 259,
+          "fromOSMNodeID" : 283484617,
+          "guidanceRoad" : "Ashbourne Avenue",
+          "osmWayID" : 25986160,
+          "road" : "Ashbourne Avenue",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 252,
+          "toOSMNodeID" : 283516326
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 101.36941638201677,
+          "endCoordinateIndex" : 265,
+          "fromOSMNodeID" : 283516326,
+          "osmWayID" : 422026332,
+          "roadClass" : "service",
+          "startCoordinateIndex" : 259,
+          "toOSMNodeID" : 4217491425
+        },
+        {
+          "avoidancePenalty" : 1,
+          "baseWeight" : 1.25,
+          "distanceMeters" : 36.019852334979142,
+          "endCoordinateIndex" : 266,
+          "fromOSMNodeID" : 4217491425,
+          "guidanceRoad" : "Ashberry Avenue",
+          "osmWayID" : 25987257,
+          "road" : "Ashberry Avenue",
+          "roadClass" : "residential",
+          "startCoordinateIndex" : 265,
+          "toOSMNodeID" : 283486191
+        }
+      ],
+      "engine" : "onDevice",
+      "graphChunks" : [
+
+      ],
+      "graphDataVersion" : 1,
+      "graphEdgeCount" : 1174,
+      "graphNodeCount" : 972,
+      "requestedStart" : [
+        -4.5178374121238161,
+        54.15767997688426
+      ],
+      "requestedTargetMeters" : 4000,
+      "schemaVersion" : 1,
+      "snappedStart" : [
+        -4.5178331957039504,
+        54.157682801130854
+      ],
+      "variation" : 345
+    },
+    "routeID" : "98DEED68-BD82-426D-B9DD-B70C4C393EEC",
+    "routeName" : "East loop",
+    "routeWasReversed" : false,
+    "routingEngine" : "onDevice",
+    "sessionID" : "DAF84FCE-2452-4DBD-B52B-905227932B2D",
+    "sourceRevision" : "working-tree-2026-10-02",
+    "steps" : [
+      {
+        "cumulativeEndMeters" : 169,
+        "cumulativeStartMeters" : 0,
+        "distanceMeters" : 169,
+        "endCoordinateIndex" : 9,
+        "index" : 0,
+        "instruction" : "Set off along Ashberry Avenue",
+        "maneuver" : "continue",
+        "road" : "Ashberry Avenue",
+        "roadClass" : "residential",
+        "startCoordinateIndex" : 0
+      },
+      {
+        "cumulativeEndMeters" : 271,
+        "cumulativeStartMeters" : 169,
+        "distanceMeters" : 102,
+        "endCoordinateIndex" : 14,
+        "index" : 1,
+        "instruction" : "Turn left onto Meadow Crescent",
+        "maneuver" : "turn-left",
+        "road" : "Meadow Crescent",
+        "roadClass" : "residential",
+        "startCoordinateIndex" : 9
+      },
+      {
+        "cumulativeEndMeters" : 619,
+        "cumulativeStartMeters" : 271,
+        "distanceMeters" : 348,
+        "endCoordinateIndex" : 27,
+        "index" : 2,
+        "instruction" : "Turn right onto Ballaughton Manor Hill",
+        "maneuver" : "turn-right",
+        "road" : "Ballaughton Manor Hill",
+        "roadClass" : "residential",
+        "startCoordinateIndex" : 14
+      },
+      {
+        "cumulativeEndMeters" : 801,
+        "cumulativeStartMeters" : 619,
+        "distanceMeters" : 182,
+        "endCoordinateIndex" : 43,
+        "index" : 3,
+        "instruction" : "Turn left onto Ballaughton Manor Hill",
+        "maneuver" : "turn-left",
+        "road" : "Ballaughton Manor Hill",
+        "roadClass" : "residential",
+        "startCoordinateIndex" : 27
+      },
+      {
+        "cumulativeEndMeters" : 1153,
+        "cumulativeStartMeters" : 801,
+        "distanceMeters" : 352,
+        "endCoordinateIndex" : 56,
+        "index" : 4,
+        "instruction" : "Turn right onto Saddle Road",
+        "maneuver" : "turn-right",
+        "road" : "Spring Valley Terrace",
+        "roadClass" : "residential",
+        "startCoordinateIndex" : 43
+      },
+      {
+        "cumulativeEndMeters" : 1312,
+        "cumulativeStartMeters" : 1153,
+        "distanceMeters" : 159,
+        "endCoordinateIndex" : 62,
+        "index" : 5,
+        "instruction" : "Continue",
+        "maneuver" : "continue",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 56
+      },
+      {
+        "cumulativeEndMeters" : 1405,
+        "cumulativeStartMeters" : 1312,
+        "distanceMeters" : 93,
+        "endCoordinateIndex" : 76,
+        "index" : 6,
+        "instruction" : "Turn left onto Groves Road",
+        "maneuver" : "turn-left",
+        "road" : "Groves Road",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 62
+      },
+      {
+        "cumulativeEndMeters" : 1512,
+        "cumulativeStartMeters" : 1405,
+        "distanceMeters" : 107,
+        "endCoordinateIndex" : 84,
+        "index" : 7,
+        "instruction" : "Cross to the opposite pavement",
+        "maneuver" : "cross-opposite-pavement",
+        "road" : "Groves Road",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 76
+      },
+      {
+        "cumulativeEndMeters" : 1546,
+        "cumulativeStartMeters" : 1512,
+        "distanceMeters" : 34,
+        "endCoordinateIndex" : 96,
+        "index" : 8,
+        "instruction" : "Turn right",
+        "maneuver" : "turn-right",
+        "roadClass" : "path",
+        "startCoordinateIndex" : 84
+      },
+      {
+        "cumulativeEndMeters" : 1641,
+        "cumulativeStartMeters" : 1546,
+        "distanceMeters" : 95,
+        "endCoordinateIndex" : 106,
+        "index" : 9,
+        "instruction" : "Turn left",
+        "maneuver" : "turn-left",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 96
+      },
+      {
+        "cumulativeEndMeters" : 1694,
+        "cumulativeStartMeters" : 1641,
+        "distanceMeters" : 53,
+        "endCoordinateIndex" : 110,
+        "index" : 10,
+        "instruction" : "Bear right",
+        "maneuver" : "keep-right",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 106
+      },
+      {
+        "cumulativeEndMeters" : 1839,
+        "cumulativeStartMeters" : 1694,
+        "distanceMeters" : 145,
+        "endCoordinateIndex" : 123,
+        "index" : 11,
+        "instruction" : "Bear right onto Pulrose Road",
+        "maneuver" : "keep-right",
+        "road" : "Pulrose Road",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 110
+      },
+      {
+        "cumulativeEndMeters" : 1992,
+        "cumulativeStartMeters" : 1839,
+        "distanceMeters" : 153,
+        "endCoordinateIndex" : 139,
+        "index" : 12,
+        "instruction" : "Turn left onto Pulrose Road",
+        "maneuver" : "turn-left",
+        "road" : "Pulrose Road",
+        "roadClass" : "residential",
+        "startCoordinateIndex" : 123
+      },
+      {
+        "cumulativeEndMeters" : 2369,
+        "cumulativeStartMeters" : 1992,
+        "distanceMeters" : 377,
+        "endCoordinateIndex" : 151,
+        "index" : 13,
+        "instruction" : "Bear left onto Heather Crescent",
+        "maneuver" : "keep-left",
+        "road" : "Heather Crescent",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 139
+      },
+      {
+        "cumulativeEndMeters" : 2390,
+        "cumulativeStartMeters" : 2369,
+        "distanceMeters" : 21,
+        "endCoordinateIndex" : 152,
+        "index" : 14,
+        "instruction" : "Turn left onto Hazel Crescent",
+        "maneuver" : "turn-left",
+        "road" : "Hazel Crescent",
+        "roadClass" : "residential",
+        "startCoordinateIndex" : 151
+      },
+      {
+        "cumulativeEndMeters" : 2695,
+        "cumulativeStartMeters" : 2390,
+        "distanceMeters" : 305,
+        "endCoordinateIndex" : 173,
+        "index" : 15,
+        "instruction" : "Turn right onto 224",
+        "maneuver" : "turn-right",
+        "road" : "224",
+        "roadClass" : "path",
+        "startCoordinateIndex" : 152
+      },
+      {
+        "cumulativeEndMeters" : 2808,
+        "cumulativeStartMeters" : 2695,
+        "distanceMeters" : 113,
+        "endCoordinateIndex" : 179,
+        "index" : 16,
+        "instruction" : "Continue onto Hampton Farm Road",
+        "maneuver" : "continue",
+        "road" : "Hampton Farm Road",
+        "roadClass" : "residential",
+        "startCoordinateIndex" : 173
+      },
+      {
+        "cumulativeEndMeters" : 2829,
+        "cumulativeStartMeters" : 2808,
+        "distanceMeters" : 21,
+        "endCoordinateIndex" : 185,
+        "index" : 17,
+        "instruction" : "Turn right onto Hampton Farm Road",
+        "maneuver" : "turn-right",
+        "road" : "Hampton Farm Road",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 179
+      },
+      {
+        "cumulativeEndMeters" : 2843,
+        "cumulativeStartMeters" : 2829,
+        "distanceMeters" : 14,
+        "endCoordinateIndex" : 187,
+        "index" : 18,
+        "instruction" : "Turn left",
+        "maneuver" : "turn-left",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 185
+      },
+      {
+        "cumulativeEndMeters" : 2856,
+        "cumulativeStartMeters" : 2843,
+        "distanceMeters" : 13,
+        "endCoordinateIndex" : 188,
+        "index" : 19,
+        "instruction" : "Turn right onto Anagh Coar Road",
+        "maneuver" : "turn-right",
+        "road" : "Anagh Coar Road",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 187
+      },
+      {
+        "cumulativeEndMeters" : 3000,
+        "cumulativeStartMeters" : 2856,
+        "distanceMeters" : 144,
+        "endCoordinateIndex" : 193,
+        "index" : 20,
+        "instruction" : "Turn left onto Cullyn Link",
+        "maneuver" : "turn-left",
+        "road" : "Cullyn Link",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 188
+      },
+      {
+        "cumulativeEndMeters" : 3060,
+        "cumulativeStartMeters" : 3000,
+        "distanceMeters" : 60,
+        "endCoordinateIndex" : 196,
+        "index" : 21,
+        "instruction" : "Continue",
+        "maneuver" : "continue",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 193
+      },
+      {
+        "cumulativeEndMeters" : 3137,
+        "cumulativeStartMeters" : 3060,
+        "distanceMeters" : 77,
+        "endCoordinateIndex" : 200,
+        "index" : 22,
+        "instruction" : "Turn right onto The Avenue",
+        "maneuver" : "turn-right",
+        "road" : "The Avenue",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 196
+      },
+      {
+        "cumulativeEndMeters" : 3238,
+        "cumulativeStartMeters" : 3137,
+        "distanceMeters" : 101,
+        "endCoordinateIndex" : 205,
+        "index" : 23,
+        "instruction" : "Continue",
+        "maneuver" : "continue",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 200
+      },
+      {
+        "cumulativeEndMeters" : 3297,
+        "cumulativeStartMeters" : 3238,
+        "distanceMeters" : 59,
+        "endCoordinateIndex" : 212,
+        "index" : 24,
+        "instruction" : "Continue onto Annacur Lane",
+        "maneuver" : "continue",
+        "road" : "Annacur Lane",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 205
+      },
+      {
+        "cumulativeEndMeters" : 3309,
+        "cumulativeStartMeters" : 3297,
+        "distanceMeters" : 12,
+        "endCoordinateIndex" : 215,
+        "index" : 25,
+        "instruction" : "Turn left onto Farmhill Lane",
+        "maneuver" : "turn-left",
+        "road" : "Farmhill Lane",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 212
+      },
+      {
+        "cumulativeEndMeters" : 3340,
+        "cumulativeStartMeters" : 3309,
+        "distanceMeters" : 31,
+        "endCoordinateIndex" : 221,
+        "index" : 26,
+        "instruction" : "Turn right",
+        "maneuver" : "turn-right",
+        "roadClass" : "footway",
+        "startCoordinateIndex" : 215
+      },
+      {
+        "cumulativeEndMeters" : 3622,
+        "cumulativeStartMeters" : 3340,
+        "distanceMeters" : 282,
+        "endCoordinateIndex" : 227,
+        "index" : 27,
+        "instruction" : "Turn left onto Farmhill Lane",
+        "maneuver" : "turn-left",
+        "road" : "Farmhill Lane",
+        "roadClass" : "residential",
+        "startCoordinateIndex" : 221
+      },
+      {
+        "cumulativeEndMeters" : 3693,
+        "cumulativeStartMeters" : 3622,
+        "distanceMeters" : 71,
+        "endCoordinateIndex" : 230,
+        "index" : 28,
+        "instruction" : "Sharp right onto Farmhill Park",
+        "maneuver" : "sharp-right",
+        "road" : "Farmhill Park",
+        "roadClass" : "residential",
+        "startCoordinateIndex" : 227
+      },
+      {
+        "cumulativeEndMeters" : 3766,
+        "cumulativeStartMeters" : 3693,
+        "distanceMeters" : 73,
+        "endCoordinateIndex" : 232,
+        "index" : 29,
+        "instruction" : "Turn left onto Farmhill Park",
+        "maneuver" : "turn-left",
+        "road" : "Farmhill Park",
+        "roadClass" : "residential",
+        "startCoordinateIndex" : 230
+      },
+      {
+        "cumulativeEndMeters" : 4062,
+        "cumulativeStartMeters" : 3766,
+        "distanceMeters" : 296,
+        "endCoordinateIndex" : 249,
+        "index" : 30,
+        "instruction" : "Bear right onto Farmhill Park",
+        "maneuver" : "keep-right",
+        "road" : "Farmhill Park",
+        "roadClass" : "residential",
+        "startCoordinateIndex" : 232
+      },
+      {
+        "cumulativeEndMeters" : 4109,
+        "cumulativeStartMeters" : 4062,
+        "distanceMeters" : 47,
+        "endCoordinateIndex" : 252,
+        "index" : 31,
+        "instruction" : "Turn right onto Ashbourne Avenue",
+        "maneuver" : "turn-right",
+        "road" : "Ashbourne Avenue",
+        "roadClass" : "residential",
+        "startCoordinateIndex" : 249
+      },
+      {
+        "cumulativeEndMeters" : 4244,
+        "cumulativeStartMeters" : 4109,
+        "distanceMeters" : 135,
+        "endCoordinateIndex" : 259,
+        "index" : 32,
+        "instruction" : "Turn left onto Ashbourne Avenue",
+        "maneuver" : "turn-left",
+        "road" : "Ashbourne Avenue",
+        "roadClass" : "residential",
+        "startCoordinateIndex" : 252
+      },
+      {
+        "cumulativeEndMeters" : 4345,
+        "cumulativeStartMeters" : 4244,
+        "distanceMeters" : 101,
+        "endCoordinateIndex" : 265,
+        "index" : 33,
+        "instruction" : "Turn left",
+        "maneuver" : "turn-left",
+        "roadClass" : "service",
+        "startCoordinateIndex" : 259
+      },
+      {
+        "cumulativeEndMeters" : 4381,
+        "cumulativeStartMeters" : 4345,
+        "distanceMeters" : 36,
+        "endCoordinateIndex" : 266,
+        "index" : 34,
+        "instruction" : "Turn left onto Ashberry Avenue",
+        "maneuver" : "turn-left",
+        "road" : "Ashberry Avenue",
+        "roadClass" : "residential",
+        "startCoordinateIndex" : 265
+      },
+      {
+        "cumulativeEndMeters" : 4381,
+        "cumulativeStartMeters" : 4381,
+        "distanceMeters" : 0,
+        "endCoordinateIndex" : 266,
+        "index" : 35,
+        "instruction" : "You’re back where you started",
+        "maneuver" : "finish",
+        "startCoordinateIndex" : 266
+      }
+    ]
+  }
+}

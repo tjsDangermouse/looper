@@ -110,6 +110,26 @@ final class WalkingMathsTests: XCTestCase {
         XCTAssertEqual(steps.count, 2)
     }
 
+    func testKeepsARealTurnOnTwoWaysWithTheSameStreetName() {
+        let steps = tidySteps([
+            Step(instruction: "Head along Main Street", distanceMeters: 60, durationSeconds: 40, road: "Main Street"),
+            Step(instruction: "Turn right onto Main Street", distanceMeters: 40, durationSeconds: 30,
+                 maneuver: .name("turn-right"), road: "Main Street"),
+        ])
+        XCTAssertEqual(steps.map(\.instruction), ["Head along Main Street", "Turn right onto Main Street"])
+    }
+
+    func testKeepsARealTurnWhoseFollowingStretchIsUnderTenMetres() {
+        let steps = tidySteps([
+            Step(instruction: "Head along Main Street", distanceMeters: 60, durationSeconds: 40, road: "Main Street"),
+            Step(instruction: "Turn left onto the path", distanceMeters: 7, durationSeconds: 5, maneuver: .name("turn-left"), road: "Path"),
+            Step(instruction: "Turn right onto Quay Road", distanceMeters: 90, durationSeconds: 70, maneuver: .name("turn-right"), road: "Quay Road"),
+        ])
+        XCTAssertEqual(steps.map(\.instruction), [
+            "Head along Main Street", "Turn left onto the path", "Turn right onto Quay Road",
+        ])
+    }
+
     func testSelectsNextTurn() {
         XCTAssertEqual(nextTurn(sample, 110)?.instruction, "Arrive")
     }

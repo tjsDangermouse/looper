@@ -37,6 +37,13 @@ public enum LocalLegRouter {
     public static let avoidPenalty = 20.0
     public static let relaxedAvoidPenalty = 5.0
 
+    /// A routed endpoint for a soft, generated shaping point.
+    struct ShapedLeg {
+        var target: Point
+        var targetSnap: EdgeSnap
+        var leg: Leg
+    }
+
     /// One anchor-to-anchor leg, as ground.
     public struct Leg: Sendable {
         /// One entry per base edge walked, oriented the way it was walked.
@@ -131,6 +138,57 @@ public enum LocalLegRouter {
         )
     }
 
+    /// Route towards a generated geographic objective rather than forcing the
+    /// route onto whichever single edge happens to be closest to it.
+    ///
+    /// The endpoint candidates stay in a narrow band around the nearest edge.
+    /// Each is then judged by the complete walking cost to reach it, including
+    /// pedestrian-way and avoidance weights, plus the small geographic miss.
+    /// User-selected waypoints deliberately do not use this: their exact snap
+    /// remains authoritative.
+    static func routeToShapingPoint(
+        graph: LocalWalkingGraph,
+        index: LocalEdgeIndex,
+        from: Point,
+        sourceSnap: EdgeSnap? = nil,
+        towards aim: Point,
+        penalising: Set<Int32> = [],
+        penalty: Double = 4,
+        maximumSnapMetres: Double = 500
+    ) throws -> ShapedLeg {
+        let candidates = index.shapingPointCandidates(
+            lat: aim.lat, lon: aim.lng, graph: graph, maximumMetres: maximumSnapMetres
+        )
+        guard !candidates.isEmpty else { throw Failure.nothingToSnapTo(aim) }
+
+        var best: (answer: ShapedLeg, score: Double, miss: Double)?
+        for snap in candidates {
+            let target = Point(snap.lon, snap.lat)
+            guard let leg = try? route(
+                graph: graph, index: index, from: from, to: target,
+                penalising: penalising, penalty: penalty, weighted: true,
+                maximumSnapMetres: maximumSnapMetres,
+                sourceSnap: sourceSnap, targetSnap: snap
+            ), leg.metres > 0 else { continue }
+
+            let walkingCost = leg.legs.reduce(0.0) {
+                $0 + $1.metres * $1.baseWeight * $1.avoidancePenalty
+            }
+            // Missing a mathematical corner is not walked distance, but it is
+            // charged enough to keep the loop's intended shape. A pavement a
+            // few metres beside the point remains competitive; a different
+            // street tens of metres away must earn that displacement through a
+            // materially better walking leg.
+            let score = walkingCost + snap.distanceMetres * 2
+            if best == nil || score < best!.score
+                || (score == best!.score && snap.distanceMetres < best!.miss) {
+                best = (ShapedLeg(target: target, targetSnap: snap, leg: leg), score, snap.distanceMetres)
+            }
+        }
+        guard let best else { throw Failure.unreachable(from: from, to: aim) }
+        return best.answer
+    }
+
     /// One hop. `penalising` edges are still walkable — a penalty is not a
     /// wall, and treating it as one is how a leg with only one honest way
     /// through becomes no leg at all — but they cost `penalty` times their
@@ -156,13 +214,19 @@ public enum LocalLegRouter {
         /// corridor exists to settle, and until the waypoint router settles it
         /// the same way, it is better served by the costs it was tuned on.
         weighted: Bool = false,
-        maximumSnapMetres: Double = 500
+        maximumSnapMetres: Double = 500,
+        sourceSnap: EdgeSnap? = nil,
+        targetSnap: EdgeSnap? = nil
     ) throws -> Leg {
         guard graph.edgeCount > 0 else { throw Failure.nothingToSnapTo(from) }
-        guard let source = index.snap(lat: from.lat, lon: from.lng, graph: graph, maximumMetres: maximumSnapMetres) else {
+        guard let source = sourceSnap ?? index.snap(
+            lat: from.lat, lon: from.lng, graph: graph, maximumMetres: maximumSnapMetres
+        ) else {
             throw Failure.nothingToSnapTo(from)
         }
-        guard let target = index.snap(lat: to.lat, lon: to.lng, graph: graph, maximumMetres: maximumSnapMetres) else {
+        guard let target = targetSnap ?? index.snap(
+            lat: to.lat, lon: to.lng, graph: graph, maximumMetres: maximumSnapMetres
+        ) else {
             throw Failure.nothingToSnapTo(to)
         }
 
@@ -219,9 +283,10 @@ public enum LocalLegRouter {
             if graph.edgeForward[source.edge] { departures.append((sourceTo, source.metresToEnd, .towardsTo)) }
         }
         let sourcePenalty = penalising.contains(Int32(source.edge)) ? penalty : 1
+        let sourceBaseWeight = weighted ? graph.edgeWeight[source.edge] : 1
         var departureOf: [Int: Departure] = [:]
         for entry in departures {
-            let seed = entry.metres * sourcePenalty
+            let seed = entry.metres * sourceBaseWeight * sourcePenalty
             guard seed < distance[entry.node] else { continue }
             distance[entry.node] = seed
             departureOf[entry.node] = entry.departure
@@ -244,6 +309,7 @@ public enum LocalLegRouter {
         }
         guard !arrivals.isEmpty else { throw Failure.unreachable(from: from, to: to) }
         let targetPenalty = penalising.contains(Int32(target.edge)) ? penalty : 1
+        let targetBaseWeight = weighted ? graph.edgeWeight[target.edge] : 1
         let wanted = Set(arrivals.map(\.node))
 
         // ------------------------------------------------------------- A*
@@ -316,7 +382,7 @@ public enum LocalLegRouter {
         var best: (node: Int, arrival: Arrival, key: Double)?
         for entry in arrivals {
             guard distance[entry.node].isFinite else { continue }
-            let key = distance[entry.node] + entry.metres * targetPenalty
+            let key = distance[entry.node] + entry.metres * targetBaseWeight * targetPenalty
             if best == nil || key < best!.key { best = (entry.node, entry.arrival, key) }
         }
         guard let arrival = best else { throw Failure.unreachable(from: from, to: to) }
@@ -340,9 +406,11 @@ public enum LocalLegRouter {
             case .atNode: break
             case .towardsFrom:
                 legs.append(half(source, graph: graph, index: index, towardsFrom: true, reversed: false))
+                legs[legs.count - 1].baseWeight = weighted ? graph.edgeWeight[source.edge] : 1
                 legs[legs.count - 1].avoidancePenalty = sourcePenalty
             case .towardsTo:
                 legs.append(half(source, graph: graph, index: index, towardsFrom: false, reversed: false))
+                legs[legs.count - 1].baseWeight = weighted ? graph.edgeWeight[source.edge] : 1
                 legs[legs.count - 1].avoidancePenalty = sourcePenalty
             }
         }
@@ -365,9 +433,11 @@ public enum LocalLegRouter {
             // From the edge's `from` end inward: the towards-from half, walked
             // the other way.
             legs.append(half(target, graph: graph, index: index, towardsFrom: true, reversed: true))
+            legs[legs.count - 1].baseWeight = weighted ? graph.edgeWeight[target.edge] : 1
             legs[legs.count - 1].avoidancePenalty = targetPenalty
         case .fromEdgeEnd:
             legs.append(half(target, graph: graph, index: index, towardsFrom: false, reversed: true))
+            legs[legs.count - 1].baseWeight = weighted ? graph.edgeWeight[target.edge] : 1
             legs[legs.count - 1].avoidancePenalty = targetPenalty
         }
 

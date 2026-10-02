@@ -21,6 +21,7 @@ export type PlanningEdgeSpan = {
   toOSMNodeID: number
   roadClass: string
   road?: string
+  guidanceRoad?: string
   isCrossing?: boolean
   distanceMeters: number
   baseWeight: number

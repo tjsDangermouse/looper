@@ -8,7 +8,6 @@ import XCTest
 /// reductions are exact, the prunes lose nothing admissible, the gate applies
 /// the same thresholds, and a walk is edge-simple.
 final class LocalRoutingSearchTests: XCTestCase {
-
     private func searchGraph(_ data: OSMData, at point: Point = SyntheticOSM.douglas, radius: Double = 2000) throws -> (WalkSearchGraph, LocalWalkingGraph, RoutingSubgraph) {
         let (graph, _) = LocalWalkingGraphBuilder.build(from: data)
         let index = LocalEdgeIndex(graph: graph)
@@ -539,7 +538,7 @@ final class LocalRoutingSearchTests: XCTestCase {
         XCTAssertEqual(turnKind(checked.steps[1]), .arrive)
     }
 
-    func testRouteStartCallsAStraightPavementRoadPavementSequenceOneCrossing() {
+    func testRouteStartDoesNotCallAStraightPavementRoadPavementSequenceATurn() {
         let start = SyntheticOSM.douglas
         let kerb1Value = LocalGeo.destination(lat: start.lat, lon: start.lng, metres: 100, bearing: 0)
         let kerb1 = Point(kerb1Value.lon, kerb1Value.lat)
@@ -574,19 +573,17 @@ final class LocalRoutingSearchTests: XCTestCase {
 
         let checked = reassessDirections(route)
 
-        XCTAssertEqual(checked.steps.count, 3)
-        XCTAssertEqual(checked.steps[1].instruction, "Cross the road and continue straight")
-        XCTAssertFalse(checked.steps[1].instruction.contains("Main Road"))
-        XCTAssertEqual(checked.steps[1].distanceMeters, 114)
-        XCTAssertEqual(turnKind(checked.steps[1]), .straight)
-        XCTAssertEqual(turnKind(checked.steps[2]), .arrive)
+        XCTAssertEqual(checked.steps.count, 2)
+        XCTAssertEqual(checked.steps[0].distanceMeters, 214)
+        XCTAssertFalse(checked.steps[0].instruction.contains("Cross the road"))
+        XCTAssertEqual(turnKind(checked.steps[1]), .arrive)
 
         let checkedBackwards = reassessDirections(reverseRoute(route))
-        XCTAssertEqual(checkedBackwards.steps[1].instruction, "Cross the road and continue straight")
-        XCTAssertEqual(checkedBackwards.steps[1].distanceMeters, 114)
+        XCTAssertEqual(checkedBackwards.steps.count, 2)
+        XCTAssertFalse(checkedBackwards.steps[0].instruction.contains("Cross the road"))
     }
 
-    func testMappedFootwayCrossingIsNotMergedIntoTheSidewalk() {
+    func testMappedStraightFootwayCrossingIsMergedIntoTheWalk() {
         let start = SyntheticOSM.douglas
         var pavement = leg(from: start, bearing: 0, metres: 100, name: nil)
         pavement.roadClass = .footway
@@ -597,7 +594,7 @@ final class LocalRoutingSearchTests: XCTestCase {
         onward.roadClass = .footway
 
         let rawSteps = LocalInstructions.steps(for: [pavement, crossing, onward])
-        XCTAssertEqual(rawSteps[1].maneuver, .name("cross-road"))
+        XCTAssertFalse(rawSteps.contains { $0.instruction.contains("Cross") })
 
         let route = Route(
             id: "mapped-crossing", name: "Mapped crossing fixture", distanceMeters: 214,
@@ -609,15 +606,224 @@ final class LocalRoutingSearchTests: XCTestCase {
         )
         let checked = reassessDirections(route)
 
-        XCTAssertEqual(checked.steps.count, 3)
-        XCTAssertEqual(checked.steps[1].instruction, "Cross the road and continue straight")
-        XCTAssertEqual(checked.steps[1].maneuver, .name("cross-road"))
-        XCTAssertEqual(checked.steps[1].distanceMeters, 114)
+        XCTAssertEqual(checked.steps.count, 2)
+        XCTAssertEqual(checked.steps[0].distanceMeters, 214)
+        XCTAssertFalse(checked.steps[0].instruction.contains("Cross the road"))
 
         let checkedBackwards = reassessDirections(reverseRoute(route))
-        XCTAssertEqual(checkedBackwards.steps[1].instruction, "Cross the road and continue straight")
-        XCTAssertEqual(checkedBackwards.steps[1].maneuver, .name("cross-road"))
-        XCTAssertEqual(checkedBackwards.steps[1].distanceMeters, 114)
+        XCTAssertEqual(checkedBackwards.steps.count, 2)
+        XCTAssertFalse(checkedBackwards.steps[0].instruction.contains("Cross the road"))
+    }
+
+    func testMappedCrossingWithARealDirectionChangeUsesDirectionalGuidance() {
+        let start = SyntheticOSM.douglas
+        var approach = leg(from: start, bearing: 0, metres: 100, name: nil)
+        approach.roadClass = .footway
+        var crossing = leg(from: approach.coordinates.last!, bearing: 55, metres: 14, name: nil)
+        crossing.roadClass = .footway
+        crossing.isCrossing = true
+        var onward = leg(from: crossing.coordinates.last!, bearing: 55, metres: 100, name: nil)
+        onward.roadClass = .footway
+        let rawSteps = LocalInstructions.steps(for: [approach, crossing, onward])
+        let route = Route(
+            id: "turning-crossing", name: "Turning crossing fixture", distanceMeters: 214,
+            durationSeconds: 154, targetDifferencePercent: 0,
+            geometry: LineGeometry(coordinates: [
+                start, approach.coordinates.last!, crossing.coordinates.last!, onward.coordinates.last!,
+            ]),
+            steps: rawSteps
+        )
+
+        let checked = reassessDirections(route)
+
+        XCTAssertEqual(checked.steps.count, 3)
+        XCTAssertEqual(checked.steps[1].instruction, "Turn right")
+        XCTAssertEqual(checked.steps[1].maneuver, .name("turn-right"))
+        XCTAssertEqual(checked.steps[1].distanceMeters, 114)
+    }
+
+    func testShortLeftBeforeMappedCrossingIsPreservedAndCrossingStaysSilent() {
+        let start = SyntheticOSM.douglas
+        var approach = leg(from: start, bearing: 0, metres: 100, name: "Approach")
+        approach.roadClass = .footway
+        var shortLeft = leg(from: approach.coordinates.last!, bearing: -90, metres: 7.25, name: nil)
+        shortLeft.roadClass = .footway
+        var crossing = leg(from: shortLeft.coordinates.last!, bearing: -90, metres: 9, name: nil)
+        crossing.roadClass = .footway
+        crossing.isCrossing = true
+        var onward = leg(from: crossing.coordinates.last!, bearing: 0, metres: 40, name: "Groves Road")
+        onward.roadClass = .footway
+
+        let rawSteps = LocalInstructions.steps(for: [approach, shortLeft, crossing, onward])
+        let route = Route(
+            id: "short-left-crossing", name: "Short left crossing fixture", distanceMeters: 156.25,
+            durationSeconds: 113, targetDifferencePercent: 0,
+            geometry: LineGeometry(coordinates: [
+                start, approach.coordinates.last!, shortLeft.coordinates.last!,
+                crossing.coordinates.last!, onward.coordinates.last!,
+            ]),
+            steps: tidySteps(rawSteps)
+        )
+
+        let checked = reassessDirections(route)
+
+        XCTAssertTrue(checked.steps.contains { turnKind($0) == .left })
+        XCTAssertFalse(checked.steps.contains { $0.instruction.contains("Cross") })
+        XCTAssertEqual(checked.steps.dropLast().map(\.instruction), [
+            "Set off along Approach", "Turn left", "Turn right onto Groves Road",
+        ])
+    }
+
+    func testEastLoopDiagnosticFragmentKeepsTheLeftAndSilencesMappedCrossing() {
+        let points = [
+            Point(-4.5055139, 54.1529672),
+            Point(-4.5055152, 54.152791),
+            Point(-4.5055280903928185, 54.15265583665692),
+            Point(-4.5055603, 54.1523181),
+            Point(-4.5055693, 54.1523072),
+            Point(-4.5055032, 54.1522885),
+            Point(-4.5054654, 54.1522903),
+            Point(-4.5053982, 54.152271),
+            Point(-4.5053385, 54.1522556),
+            Point(-4.505327, 54.1522353),
+            Point(-4.5053089, 54.1522179),
+            Point(-4.5052001, 54.1521851),
+            Point(-4.5051112, 54.1521909),
+            Point(-4.5049925, 54.152162),
+        ]
+        func metres(_ coordinates: [Point]) -> Double {
+            zip(coordinates, coordinates.dropFirst()).reduce(0) { $0 + haversine($1.0, $1.1) }
+        }
+        func fragment(_ range: ClosedRange<Int>, name: String? = nil, crossing: Bool = false) -> WalkLeg {
+            let coordinates = Array(points[range])
+            return WalkLeg(
+                coordinates: coordinates, metres: metres(coordinates), name: name,
+                roadClass: .footway, isCrossing: crossing
+            )
+        }
+        let legs = [
+            fragment(0...2), fragment(2...3), fragment(3...4), fragment(4...6),
+            fragment(6...7, crossing: true), fragment(7...8, crossing: true),
+            fragment(8...13, name: "Groves Road"),
+        ]
+        // OSM way 25988446 carries Groves Road's name through this junction.
+        // The parallel footway is unnamed until after the crossing. These are
+        // the carriageway nodes in the OSM extract, rather than an invented
+        // parallel line.
+        let road = [
+            OSMNode(id: 10837248956, lat: 54.1522960, lon: -4.5056829),
+            OSMNode(id: 1749022044, lat: 54.1522680, lon: -4.5056020),
+            OSMNode(id: 283505150, lat: 54.1522156, lon: -4.5054435),
+            OSMNode(id: 6737245039, lat: 54.1521429, lon: -4.5051955),
+            OSMNode(id: 6737245040, lat: 54.1520405, lon: -4.5048117),
+        ]
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: OSMData(
+            nodes: road,
+            ways: [OSMWay(id: 25988446, nodes: road.map(\.id),
+                          tags: ["highway": "unclassified", "name": "Groves Road"])]
+        ))
+        let rawSteps = LocalInstructions.steps(for: legs, graph: graph, index: LocalEdgeIndex(graph: graph))
+        let route = Route(
+            id: "east-loop-diagnostic-replay", name: "East loop diagnostic replay",
+            distanceMeters: legs.reduce(0) { $0 + $1.metres }, durationSeconds: 0,
+            targetDifferencePercent: 0, geometry: LineGeometry(coordinates: points),
+            steps: tidySteps(rawSteps)
+        )
+
+        let checked = reassessDirections(route)
+
+        XCTAssertFalse(checked.steps.contains { $0.instruction.contains("Cross") })
+        XCTAssertEqual(checked.steps.map(\.instruction), [
+            "Set off", "Turn left onto Groves Road", "You’re back where you started",
+        ])
+        XCTAssertEqual(checked.steps.map(\.startIndex), [0, 4, 13])
+        XCTAssertEqual(checked.steps.map(\.endIndex), [4, 13, 13])
+    }
+
+    func testMapTopologyDistinguishesUnavoidableBendFromRouteChoice() {
+        let a = Point(-4.50, 54.15)
+        let b = Point(-4.50, 54.1502)
+        let c = Point(-4.4998, 54.1502)
+        let d = Point(-4.5002, 54.1502)
+        func graph(withBranch: Bool) -> LocalWalkingGraph {
+            let nodes = [a, b, c, d].enumerated().map {
+                OSMNode(id: Int64($0.offset + 1), lat: $0.element.lat, lon: $0.element.lng)
+            }
+            var ways = [
+                OSMWay(id: 11, nodes: [1, 2], tags: ["highway": "footway"]),
+                OSMWay(id: 12, nodes: [2, 3], tags: ["highway": "footway"]),
+            ]
+            if withBranch { ways.append(OSMWay(id: 13, nodes: [2, 4], tags: ["highway": "footway"])) }
+            return LocalWalkingGraphBuilder.build(from: OSMData(nodes: nodes, ways: ways)).graph
+        }
+        func directions(in graph: LocalWalkingGraph) -> [String] {
+            let first = graph.edgeWayID.firstIndex(of: 11)!
+            let second = graph.edgeWayID.firstIndex(of: 12)!
+            let legs = [
+                WalkLeg(coordinates: [a, b], metres: haversine(a, b), name: nil,
+                        roadClass: .footway, physical: Int32(first)),
+                WalkLeg(coordinates: [b, c], metres: haversine(b, c), name: nil,
+                        roadClass: .footway, physical: Int32(second)),
+            ]
+            return LocalInstructions.steps(for: legs, graph: graph, index: LocalEdgeIndex(graph: graph))
+                .map(\.instruction)
+        }
+
+        XCTAssertEqual(directions(in: graph(withBranch: false)), ["Set off", "You’re back where you started"])
+        XCTAssertEqual(directions(in: graph(withBranch: true)), ["Set off", "Turn right", "You’re back where you started"])
+    }
+
+    func testMappedCrossingToOppositeSideOfSameStreetIsAnExplicitAction() {
+        let southA = Point(-4.5002, 54.14992)
+        let southB = Point(-4.5000, 54.14992)
+        let northB = Point(-4.5000, 54.15008)
+        let northC = Point(-4.4998, 54.15008)
+        let roadNodes = [
+            OSMNode(id: 1, lat: 54.15, lon: -4.5004),
+            OSMNode(id: 2, lat: 54.15, lon: -4.4996),
+        ]
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: OSMData(
+            nodes: roadNodes,
+            ways: [OSMWay(id: 1, nodes: [1, 2], tags: ["highway": "residential", "name": "Main Street"])]
+        ))
+        let legs = [
+            WalkLeg(coordinates: [southA, southB], metres: haversine(southA, southB), name: nil, roadClass: .footway),
+            WalkLeg(coordinates: [southB, northB], metres: haversine(southB, northB), name: nil,
+                    roadClass: .footway, isCrossing: true),
+            WalkLeg(coordinates: [northB, northC], metres: haversine(northB, northC), name: nil, roadClass: .footway),
+        ]
+
+        let steps = LocalInstructions.steps(for: legs, graph: graph, index: LocalEdgeIndex(graph: graph))
+        XCTAssertEqual(steps.map(\.instruction), [
+            "Set off along Main Street", "Cross to the opposite pavement", "You’re back where you started",
+        ])
+        XCTAssertEqual(steps[1].maneuver, .name("cross-opposite-pavement"))
+    }
+
+    func testVerifiedOppositePavementCrossingRemainsAStandaloneAction() {
+        let start = SyntheticOSM.douglas
+        let firstValue = LocalGeo.destination(lat: start.lat, lon: start.lng, metres: 100, bearing: 0)
+        let secondValue = LocalGeo.destination(lat: firstValue.lat, lon: firstValue.lon, metres: 10, bearing: 0)
+        let endValue = LocalGeo.destination(lat: secondValue.lat, lon: secondValue.lon, metres: 100, bearing: 0)
+        let route = Route(
+            id: "opposite-pavement", name: "Explicit pavement crossing", distanceMeters: 210,
+            durationSeconds: 151, targetDifferencePercent: 0,
+            geometry: LineGeometry(coordinates: [
+                start, Point(firstValue.lon, firstValue.lat), Point(secondValue.lon, secondValue.lat),
+                Point(endValue.lon, endValue.lat),
+            ]),
+            steps: [
+                Step(instruction: "Set off", distanceMeters: 100, durationSeconds: 72, startIndex: 0, endIndex: 1),
+                Step(instruction: "Old wording", distanceMeters: 10, durationSeconds: 7, startIndex: 1, endIndex: 2, maneuver: .name("cross-opposite-pavement")),
+                Step(instruction: "Continue", distanceMeters: 100, durationSeconds: 72, startIndex: 2, endIndex: 3, maneuver: .name("continue")),
+                Step(instruction: "Arrive", distanceMeters: 0, durationSeconds: 0, startIndex: 3, endIndex: 3, maneuver: .name("finish")),
+            ]
+        )
+
+        let checked = reassessDirections(route)
+
+        XCTAssertEqual(checked.steps[1].instruction, "Cross to the opposite pavement")
+        XCTAssertEqual(checked.steps[1].maneuver, Maneuver.name("cross-opposite-pavement"))
     }
 
     func testLocalInstructionsPreserveRoadClassTransitionsForTheRouteStartCheck() {

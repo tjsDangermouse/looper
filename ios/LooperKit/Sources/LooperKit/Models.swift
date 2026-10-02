@@ -169,6 +169,10 @@ public struct RoutePlanningDiagnostics: Codable, Equatable, Sendable {
         public var toOSMNodeID: Int64
         public var roadClass: String
         public var road: String?
+        /// Street identified for guidance using the surrounding walking graph.
+        /// `road` remains the traversed OSM way's own tag. Optional so route
+        /// snapshots from earlier builds still decode.
+        public var guidanceRoad: String?
         /// The traversed OSM way is explicitly tagged as a pedestrian crossing.
         public var isCrossing: Bool?
         public var distanceMeters: Double

@@ -209,7 +209,12 @@ extension LocalLoopRouter {
         let legBudget = targetMetres * LocalLoopRouter.ringLegBudgetShare
         let abandonAbove = targetMetres * LocalLoopRouter.ringAbandonShare
 
+        guard let startSnap = index.snap(
+            lat: start.lat, lon: start.lng, graph: graph,
+            maximumMetres: LocalLoopRouter.ringLegSnapMetres
+        ) else { return nil }
         var points: [Point] = [start]
+        var pointSnaps: [EdgeSnap] = [startSnap]
         var routed: [LocalLegRouter.Leg] = []
         var running = 0.0
         var heading = initialBearing
@@ -228,12 +233,13 @@ extension LocalLoopRouter {
             let closing = step == corners
             let legsLeft = corners - step + 1
             let from = points[points.count - 1]
+            let fromSnap = pointSnaps[pointSnaps.count - 1]
             let planned = Swift.max(0, targetMetres - running) / Double(legsLeft)
             let avoiding = spent(keeping: routed.count)
 
             // The closing leg has no budget to fit and so gets one aim: home.
             let attempts = closing ? 0 : LocalLoopRouter.ringMaxLegAttempts
-            var best: (target: Point, leg: LocalLegRouter.Leg)?
+            var best: (target: Point, targetSnap: EdgeSnap, leg: LocalLegRouter.Leg)?
             for attempt in 0...attempts {
                 let aim: Point
                 if closing {
@@ -251,38 +257,61 @@ extension LocalLoopRouter {
                 // penalty; and if it routed but ran a long way round its budget
                 // to dodge the corridor, try the relaxed penalty once more and
                 // keep whichever is shorter.
-                var leg: LocalLegRouter.Leg
-                if let strong = try? LocalLegRouter.route(
+                var shaped: LocalLegRouter.ShapedLeg
+                if closing, let leg = try? LocalLegRouter.route(
                     graph: graph, index: index, from: from, to: aim,
                     penalising: avoiding, penalty: LocalLegRouter.avoidPenalty, weighted: true,
+                    maximumSnapMetres: LocalLoopRouter.ringLegSnapMetres,
+                    sourceSnap: fromSnap, targetSnap: startSnap
+                ), leg.metres > 0 {
+                    shaped = .init(target: aim, targetSnap: startSnap, leg: leg)
+                } else if !closing, let answer = try? LocalLegRouter.routeToShapingPoint(
+                    graph: graph, index: index, from: from, sourceSnap: fromSnap, towards: aim,
+                    penalising: avoiding, penalty: LocalLegRouter.avoidPenalty,
                     maximumSnapMetres: LocalLoopRouter.ringLegSnapMetres
-                ), strong.metres > 0 {
-                    leg = strong
+                ), answer.leg.metres > 0 {
+                    shaped = answer
+                } else if !avoiding.isEmpty {
+                    if closing, let leg = try? LocalLegRouter.route(
+                        graph: graph, index: index, from: from, to: aim,
+                        penalising: avoiding, penalty: LocalLegRouter.relaxedAvoidPenalty, weighted: true,
+                        maximumSnapMetres: LocalLoopRouter.ringLegSnapMetres,
+                        sourceSnap: fromSnap, targetSnap: startSnap
+                    ), leg.metres > 0 {
+                        shaped = .init(target: aim, targetSnap: startSnap, leg: leg)
+                    } else if !closing, let answer = try? LocalLegRouter.routeToShapingPoint(
+                        graph: graph, index: index, from: from, sourceSnap: fromSnap, towards: aim,
+                        penalising: avoiding, penalty: LocalLegRouter.relaxedAvoidPenalty,
+                        maximumSnapMetres: LocalLoopRouter.ringLegSnapMetres
+                    ), answer.leg.metres > 0 {
+                        shaped = answer
+                    } else {
+                        continue
+                    }
+                } else {
+                    continue
+                }
+
+                var leg = shaped.leg
+                if !closing {
                     let straightLine = LocalGeo.distance(lat1: from.lat, lon1: from.lng, lat2: aim.lat, lon2: aim.lng)
                     let detoursRoundSomething = leg.metres > straightLine * LocalLoopRouter.ringBudgetDetourRatio
                     if !closing, !avoiding.isEmpty, detoursRoundSomething, leg.metres > legBudget,
-                       let cheaper = try? LocalLegRouter.route(
-                           graph: graph, index: index, from: from, to: aim,
-                           penalising: avoiding, penalty: LocalLegRouter.relaxedAvoidPenalty, weighted: true,
+                       let cheaper = try? LocalLegRouter.routeToShapingPoint(
+                           graph: graph, index: index, from: from, sourceSnap: fromSnap, towards: aim,
+                           penalising: avoiding, penalty: LocalLegRouter.relaxedAvoidPenalty,
                            maximumSnapMetres: LocalLoopRouter.ringLegSnapMetres
-                       ), cheaper.metres > 0, cheaper.metres < leg.metres {
-                        leg = cheaper
+                       ), cheaper.leg.metres > 0, cheaper.leg.metres < leg.metres {
+                        shaped = cheaper
+                        leg = cheaper.leg
                     }
-                } else if !avoiding.isEmpty, let relaxed = try? LocalLegRouter.route(
-                    graph: graph, index: index, from: from, to: aim,
-                    penalising: avoiding, penalty: LocalLegRouter.relaxedAvoidPenalty, weighted: true,
-                    maximumSnapMetres: LocalLoopRouter.ringLegSnapMetres
-                ), relaxed.metres > 0 {
-                    leg = relaxed
-                } else {
-                    continue
                 }
 
                 // Overwriting on every attempt keeps the *last* one, which is
                 // the shortest and most swung guess the leg made rather than its
                 // closest fit. `keepBestLegAttempt` is off in production and this
                 // reproduces that, deliberately.
-                best = (aim, leg)
+                best = (shaped.target, shaped.targetSnap, leg)
                 if closing { break }
 
                 let fitsBudget = leg.metres <= planned * LocalLoopRouter.ringLegOvershootTolerance
@@ -311,19 +340,23 @@ extension LocalLoopRouter {
             if routed.count >= 1,
                let repair = repairRingJoin(
                    previousCorner: points[points.count - 2],
+                   previousSnap: pointSnaps[pointSnaps.count - 2],
                    previousLine: routed[routed.count - 1].coordinates,
-                   corner: from, next: chosen.target, currentLine: chosen.leg.coordinates,
+                   corner: from, next: chosen.target, nextSnap: chosen.targetSnap,
+                   currentLine: chosen.leg.coordinates,
                    start: start, avoiding: spent(keeping: routed.count - 1),
                    graph: graph, index: index
                ) {
                 running -= routed.removeLast().metres
                 corridors.removeLast()
                 points.removeLast()
+                pointSnaps.removeLast()
                 points.append(repair.corner)
+                pointSnaps.append(repair.cornerSnap)
                 routed.append(repair.previous)
                 corridors.append(ringCorridor(around: repair.previous.coordinates, from: start, graph: graph, index: index))
                 running += repair.previous.metres
-                chosen = (chosen.target, repair.next)
+                chosen = (chosen.target, chosen.targetSnap, repair.next)
             }
 
             running += chosen.leg.metres
@@ -344,6 +377,7 @@ extension LocalLoopRouter {
             }
             if running > abandonAbove { return nil }
             points.append(chosen.target)
+            pointSnaps.append(chosen.targetSnap)
             routed.append(chosen.leg)
             corridors.append(ringCorridor(around: chosen.leg.coordinates, from: start, graph: graph, index: index))
             if !closing {
@@ -383,10 +417,10 @@ extension LocalLoopRouter {
     /// measured on the *routed* geometry after, against the routed turn before.
     /// No straight-line pre-check: the reference routes first, then compares.
     func repairRingJoin(
-        previousCorner: Point, previousLine: [Point], corner: Point,
-        next: Point, currentLine: [Point], start: Point,
+        previousCorner: Point, previousSnap: EdgeSnap, previousLine: [Point], corner: Point,
+        next: Point, nextSnap: EdgeSnap, currentLine: [Point], start: Point,
         avoiding: Set<Int32>, graph: LocalWalkingGraph, index: LocalEdgeIndex
-    ) -> (corner: Point, previous: LocalLegRouter.Leg, next: LocalLegRouter.Leg)? {
+    ) -> (corner: Point, cornerSnap: EdgeSnap, previous: LocalLegRouter.Leg, next: LocalLegRouter.Leg)? {
         let turn = joinTurn(previousLine, currentLine)
         guard turn > LocalLoopRouter.ringJoinTurnDegrees else { return nil }
 
@@ -397,21 +431,22 @@ extension LocalLoopRouter {
             metres: home * LocalLoopRouter.ringPullbackScale, bearing: outward
         )
         let pulled = Point(placed.lon, placed.lat)
-        guard let before = try? LocalLegRouter.route(
-            graph: graph, index: index, from: previousCorner, to: pulled,
-            penalising: avoiding, penalty: LocalLegRouter.avoidPenalty, weighted: true,
+        guard let before = try? LocalLegRouter.routeToShapingPoint(
+            graph: graph, index: index, from: previousCorner, sourceSnap: previousSnap, towards: pulled,
+            penalising: avoiding, penalty: LocalLegRouter.avoidPenalty,
             maximumSnapMetres: LocalLoopRouter.ringLegSnapMetres
-        ), before.metres > 0 else { return nil }
+        ), before.leg.metres > 0 else { return nil }
         var after = avoiding
-        for walked in before.legs where walked.physical >= 0 { after.insert(walked.physical) }
+        for walked in before.leg.legs where walked.physical >= 0 { after.insert(walked.physical) }
         guard let onward = try? LocalLegRouter.route(
-            graph: graph, index: index, from: pulled, to: next,
+            graph: graph, index: index, from: before.target, to: next,
             penalising: after, penalty: LocalLegRouter.avoidPenalty, weighted: true,
-            maximumSnapMetres: LocalLoopRouter.ringLegSnapMetres
+            maximumSnapMetres: LocalLoopRouter.ringLegSnapMetres,
+            sourceSnap: before.targetSnap, targetSnap: nextSnap
         ), onward.metres > 0 else { return nil }
         // Kept only if the pulled-in point actually straightened the join.
-        guard joinTurn(before.coordinates, onward.coordinates) < turn else { return nil }
-        return (pulled, before, onward)
+        guard joinTurn(before.leg.coordinates, onward.coordinates) < turn else { return nil }
+        return (before.target, before.targetSnap, before.leg, onward)
     }
 
     // MARK: - Corridors
@@ -901,7 +936,7 @@ extension LocalLoopRouter {
                 durationSeconds: seconds.rounded(),
                 targetDifferencePercent: requested > 0 ? ((actual / requested - 1) * 100).rounded() : 0,
                 geometry: LineGeometry(coordinates: entry.coordinates),
-                steps: tidySteps(LocalInstructions.steps(for: entry.legs, paceMinutesPerKm: request.paceMinutesPerKm)),
+                steps: tidySteps(LocalInstructions.steps(for: entry.legs, paceMinutesPerKm: request.paceMinutesPerKm, graph: graph, index: index)),
                 routingEngine: .onDevice,
                 planningDiagnostics: routePlanningDiagnostics(
                     legs: entry.legs, graph: graph, index: index,
@@ -936,7 +971,9 @@ extension LocalLoopRouter {
         var records: [(leg: WalkLeg, span: RoutePlanningDiagnostics.EdgeSpan)] = []
         records.reserveCapacity(legs.count)
 
-        for leg in legs where leg.physical >= 0 {
+        let guidanceRoads = LocalRoadContext.names(for: legs, graph: graph, index: index)
+
+        for (position, leg) in legs.enumerated() where leg.physical >= 0 {
             let edge = Int(leg.physical)
             guard graph.edgeFrom.indices.contains(edge), let first = leg.coordinates.first else { continue }
             let fromNode = Int(graph.edgeFrom[edge]), toNode = Int(graph.edgeTo[edge])
@@ -957,6 +994,7 @@ extension LocalLoopRouter {
                 fromOSMNodeID: graph.nodeOSMID[forward ? fromNode : toNode],
                 toOSMNodeID: graph.nodeOSMID[forward ? toNode : fromNode],
                 roadClass: String(describing: leg.roadClass), road: leg.name,
+                guidanceRoad: guidanceRoads[position],
                 isCrossing: leg.isCrossing ? true : nil,
                 distanceMeters: leg.metres, baseWeight: leg.baseWeight,
                 avoidancePenalty: leg.avoidancePenalty

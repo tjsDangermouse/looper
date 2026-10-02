@@ -217,6 +217,59 @@ final class LocalLegRouterTests: XCTestCase {
         XCTAssertEqual(viaGuide.metres, direct.metres + 6 * spacing, accuracy: 5)
     }
 
+    /// A generated corner is only a request to take the loop through this
+    /// neighbourhood. It must not become a hard pin on a carriageway merely
+    /// because that carriageway is a few metres nearer than its pavement.
+    func testShapingPointChoosesTheBestNearbyRoutedEndpoint() throws {
+        let origin = SyntheticOSM.douglas
+        func point(east: Double, north: Double) -> Point {
+            let moved = LocalGeo.destination(
+                lat: origin.lat, lon: origin.lng, metres: east, bearing: 90
+            )
+            let placed = LocalGeo.destination(
+                lat: moved.lat, lon: moved.lon, metres: north, bearing: 0
+            )
+            return Point(placed.lon, placed.lat)
+        }
+
+        let pavement = (0...3).map { point(east: Double($0) * 100, north: 6) }
+        let road = (0...3).map { point(east: Double($0) * 100, north: 0) }
+        let pavementNodes = pavement.enumerated().map {
+            OSMNode(id: Int64($0.offset + 1), lat: $0.element.lat, lon: $0.element.lng)
+        }
+        let roadNodes = road.enumerated().map {
+            OSMNode(id: Int64($0.offset + 11), lat: $0.element.lat, lon: $0.element.lng)
+        }
+        let data = OSMData(
+            nodes: pavementNodes + roadNodes,
+            ways: [
+                OSMWay(id: 100, nodes: pavementNodes.map(\.id), tags: ["highway": "footway", "name": "Pavement"]),
+                OSMWay(id: 200, nodes: roadNodes.map(\.id), tags: ["highway": "residential", "name": "Road"]),
+                OSMWay(id: 300, nodes: [pavementNodes[0].id, roadNodes[0].id], tags: ["highway": "footway", "footway": "crossing"]),
+            ]
+        )
+        let (graph, _) = LocalWalkingGraphBuilder.build(from: data)
+        let index = LocalEdgeIndex(graph: graph)
+        let from = point(east: 20, north: 6)
+        let aim = road[3]
+
+        let nearest = try XCTUnwrap(index.snap(lat: aim.lat, lon: aim.lng, graph: graph))
+        XCTAssertEqual(graph.roadClass(ofEdge: nearest.edge), .residential, "the old single snap lands on the road")
+        let forced = try LocalLegRouter.route(graph: graph, index: index, from: from, to: aim, weighted: true)
+        XCTAssertGreaterThan(
+            forced.legs.filter { !$0.roadClass.isPedestrianWay }.reduce(0.0) { $0 + $1.metres },
+            250,
+            "an exact road endpoint pulls the leg along the carriageway"
+        )
+
+        let shaped = try LocalLegRouter.routeToShapingPoint(
+            graph: graph, index: index, from: from, towards: aim
+        )
+        XCTAssertLessThan(haversine(shaped.target, pavement[3]), 1)
+        XCTAssertTrue(shaped.leg.legs.allSatisfy(\.roadClass.isPedestrianWay))
+        XCTAssertEqual(shaped.leg.metres, 280, accuracy: 4)
+    }
+
     /// The exact replacement for the remote engine's geometric spike trim: the
     /// same edge, immediately again, the other way, is not part of the walk.
     func testWalkingOntoAPieceOfGroundAndStraightOffItIsCutOut() {

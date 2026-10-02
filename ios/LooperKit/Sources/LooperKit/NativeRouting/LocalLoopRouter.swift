@@ -419,7 +419,7 @@ public struct LocalLoopRouter: Sendable {
                 durationSeconds: seconds.rounded(),
                 targetDifferencePercent: ((entry.metres / request.targetMetres - 1) * 100).rounded(),
                 geometry: LineGeometry(coordinates: entry.coordinates),
-                steps: tidySteps(LocalInstructions.steps(for: entry.legs)),
+                steps: tidySteps(LocalInstructions.steps(for: entry.legs, graph: graph, index: index)),
                 routingEngine: .onDevice,
                 planningDiagnostics: routePlanningDiagnostics(
                     legs: entry.legs, graph: graph, index: index,

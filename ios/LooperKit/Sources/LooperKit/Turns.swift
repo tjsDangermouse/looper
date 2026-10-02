@@ -25,7 +25,8 @@ private let orsTurns: [Int: Turn] = [
 private let namedTurns: [String: Turn] = [
     "turn-left": .left, "turn-right": .right, "keep-left": .slightLeft, "keep-right": .slightRight,
     "u-turn-left": .uTurn, "u-turn-right": .uTurn, "continue": .straight, "roundabout": .straight,
-    "cross-road": .straight, "finish": .arrive, "waypoint": .arrive,
+    "cross-road": .straight, "cross-opposite-pavement": .straight,
+    "finish": .arrive, "waypoint": .arrive,
 ]
 
 private func matches(_ text: String, _ pattern: String) -> Bool {
@@ -97,34 +98,73 @@ private func onto(_ instruction: String, road: String?) -> String {
     return "\(bare) onto \(road)"
 }
 
-/// Routers occasionally clip a metre into a side road and straight back out. A
-/// walker cannot act on that: it calls a turn onto the road already underfoot
-/// and hides the turn that genuinely comes next. Steps too short to walk are
-/// folded into the one before, as is any step that rejoins the road already
-/// being walked — you cannot turn onto the road you are on. The ground covered
-/// is kept, so the distances still add up to the length of the loop.
+/// Routers occasionally clip briefly into a side road and straight back out.
+/// Remove only that demonstrated leave-and-rejoin shape. Distance alone cannot
+/// decide whether a manoeuvre matters: a seven-metre street can still begin
+/// with the only left turn that keeps the walker on route.
 private let microStepMetres = 10.0
+private let kerbAlignmentMetres = 3.0
 
 private func isRoadCrossing(_ step: Step) -> Bool {
     if case .name("cross-road")? = step.maneuver { return true }
     return false
 }
 
+private func isOppositePavementCrossing(_ step: Step) -> Bool {
+    if case .name("cross-opposite-pavement")? = step.maneuver { return true }
+    return false
+}
+
 public func tidySteps(_ steps: [Step]) -> [Step] {
     var out: [Step] = []
-    for step in steps {
+    var index = 0
+    while index < steps.count {
+        let step = steps[index]
         if var last = out.last {
-            let rejoins = last.road != nil && last.road == step.road
-            if turnKind(step) != .arrive && !isRoadCrossing(step)
-                && (step.distanceMeters < microStepMetres || rejoins) {
+            if step.distanceMeters < kerbAlignmentMetres, index + 1 < steps.count {
+                let thisTurn = turnKind(step), nextTurn = turnKind(steps[index + 1])
+                let isMinorAlignment = thisTurn == .slightLeft || thisTurn == .slightRight
+                let nextIsDefiniteTurn: Bool
+                switch nextTurn {
+                case .left, .right, .sharpLeft, .sharpRight, .uTurn: nextIsDefiniteTurn = true
+                default: nextIsDefiniteTurn = false
+                }
+                if isMinorAlignment && nextIsDefiniteTurn {
+                    last.distanceMeters += step.distanceMeters
+                    last.durationSeconds += step.durationSeconds
+                    last.endIndex = step.endIndex
+                    out[out.count - 1] = last
+                    index += 1
+                    continue
+                }
+            }
+            let sameRoadContinuation = last.road != nil && last.road == step.road
+                && turnKind(step) == .straight
+            if !isOppositePavementCrossing(step) && sameRoadContinuation {
                 last.distanceMeters += step.distanceMeters
                 last.durationSeconds += step.durationSeconds
                 last.endIndex = step.endIndex
                 out[out.count - 1] = last
+                index += 1
                 continue
+            }
+            if step.distanceMeters < microStepMetres,
+               !isRoadCrossing(step), !isOppositePavementCrossing(step),
+               index + 1 < steps.count {
+                let next = steps[index + 1]
+                let returnsToCurrentRoad = last.road != nil && next.road == last.road
+                if returnsToCurrentRoad && turnKind(next) != .arrive {
+                    last.distanceMeters += step.distanceMeters + next.distanceMeters
+                    last.durationSeconds += step.durationSeconds + next.durationSeconds
+                    last.endIndex = next.endIndex
+                    out[out.count - 1] = last
+                    index += 2
+                    continue
+                }
             }
         }
         out.append(step)
+        index += 1
     }
     return out
 }
@@ -138,22 +178,38 @@ public func tidySteps(_ steps: [Step]) -> [Step] {
 /// answer on the phone, Watch and speech system.
 public func reassessDirections(_ route: Route) -> Route {
     let coordinates = route.geometry.coordinates
-    let crossings = Set(route.steps.indices.filter { index in
+    // A mapped crossing is routing data, not a navigation decision. It stays
+    // silent regardless of its angle. Only the separately modelled, verified
+    // cross-opposite-pavement action is spoken.
+    let silentCrossings = Set(route.steps.indices.filter { index in
         isRoadCrossing(route.steps[index])
             || isStraightRoadCrossing(route.steps, at: index, coordinates: coordinates)
     })
-    let crossingExits = Set(crossings.map { $0 + 1 })
+    let silentCrossingExits = Set(silentCrossings.map { $0 + 1 })
     var steps: [Step] = []
     for (index, original) in route.steps.enumerated() {
         var step = original
         var wasFalseTurn = false
-        if crossings.contains(index) {
-            step.maneuver = .name("cross-road")
-            step.instruction = "Cross the road and continue straight"
-        } else if crossingExits.contains(index) {
+        let followsCrossing = silentCrossingExits.contains(index)
+        let continuesAfterCrossing = turnKind(step) == .straight
+            || (turnKind(step) != .arrive
+                && step.startIndex.flatMap { sustainedDirectionAngle(coordinates, pivot: $0) }
+                    .map { abs($0) < 20 } == true)
+        if isOppositePavementCrossing(step) {
+            step.instruction = "Cross to the opposite pavement"
+        } else if silentCrossings.contains(index)
+            || (followsCrossing && continuesAfterCrossing) {
             // Leaving the carriageway is the second half of the same crossing,
-            // not another instruction. Keep its distance in the crossing step.
-            wasFalseTurn = true
+            // not another instruction. Keep its distance in the stretch that
+            // was already being walked.
+            if steps.isEmpty {
+                // A legacy saved route can begin on an inferred crossing. It
+                // still needs a harmless first step, but never crossing speech.
+                step.maneuver = .name("continue")
+                step.instruction = step.road.map { "Set off along \($0)" } ?? "Set off"
+            } else {
+                wasFalseTurn = true
+            }
         } else if turnKind(step) != .straight, turnKind(step) != .arrive,
            let pivot = step.startIndex,
            let angle = sustainedDirectionAngle(coordinates, pivot: pivot),
@@ -290,12 +346,16 @@ public func reverseRoute(_ route: Route) -> Route {
         } else {
             let joins = walked[joinsIndex]
             var turned = road
-            if isRoadCrossing(road) {
-                // Crossing identity is symmetric. Keep it explicit so the
-                // reversed route gets the same speech, Watch cue and exit
-                // folding as the direction originally generated.
-                turned.maneuver = .name("cross-road")
-                turned.instruction = "Cross the road and continue straight"
+            if isOppositePavementCrossing(road) {
+                // This explicit action is symmetric; unlike a mapped crossing,
+                // it remains a standalone instruction in either direction.
+                turned.maneuver = .name("cross-opposite-pavement")
+                turned.instruction = "Cross to the opposite pavement"
+            } else if isRoadCrossing(road) {
+                // Legacy routes may still contain the old inferred action.
+                // Keep it silent until reassessment folds it into the walk.
+                turned.maneuver = .name("continue")
+                turned.instruction = "Continue"
             } else {
                 turned.maneuver = .name(mirrorTurn(turnKind(joins)).rawValue)
                 turned.instruction = onto(mirrorInstruction(joins.instruction), road: road.road)

@@ -198,6 +198,62 @@ public struct LocalEdgeIndex: Sendable {
         return nil
     }
 
+    /// Plausible places for a generated shaping point to meet the network.
+    ///
+    /// A generated point is not a place the walker asked to visit, so making
+    /// its single nearest edge a hard destination is the wrong abstraction. A
+    /// carriageway can be a metre nearer than its pavement and thereby pull a
+    /// whole leg onto the road. The ring router instead asks for the nearby
+    /// alternatives and lets the routed legs decide which one is best.
+    ///
+    /// One projection per OSM way keeps a junction split into many graph edges
+    /// from crowding a genuinely different nearby way out of the shortlist.
+    func shapingPointCandidates(
+        lat: Double,
+        lon: Double,
+        graph: LocalWalkingGraph,
+        maximumMetres: Double = 500,
+        additionalMetres: Double = 30,
+        limit: Int = 12
+    ) -> [EdgeSnap] {
+        guard limit > 0,
+              let nearest = snap(lat: lat, lon: lon, graph: graph, maximumMetres: maximumMetres)
+        else { return [] }
+
+        // Only move a shaping point locally. This admits a separately mapped
+        // pavement beside the nearest carriageway without letting the point
+        // migrate to a different part of the street network.
+        let radius = Swift.min(maximumMetres, nearest.distanceMetres + additionalMetres)
+        let latRadius = radius / LocalGeo.metresPerDegreeLatitude
+        let scale = Swift.max(0.01, cos(LocalGeo.toRadians(lat)))
+        let lonRadius = radius / (LocalGeo.metresPerDegreeLatitude * scale)
+        let nearby = edges(
+            minLat: lat - latRadius, maxLat: lat + latRadius,
+            minLon: lon - lonRadius, maxLon: lon + lonRadius
+        )
+
+        let ordinaryOnly = !graph.edgeSnapPrevented[nearest.edge]
+        var bestByWay: [Int64: EdgeSnap] = [graph.edgeWayID[nearest.edge]: nearest]
+        for rawEdge in nearby {
+            let edge = Int(rawEdge)
+            if ordinaryOnly && graph.edgeSnapPrevented[edge] { continue }
+            guard let candidate = project(lat: lat, lon: lon, onto: edge, graph: graph),
+                  candidate.distanceMetres <= radius
+            else { continue }
+            let way = graph.edgeWayID[edge]
+            if bestByWay[way] == nil || candidate.distanceMetres < bestByWay[way]!.distanceMetres {
+                bestByWay[way] = candidate
+            }
+        }
+        return bestByWay.values.sorted {
+            if $0.distanceMetres != $1.distanceMetres { return $0.distanceMetres < $1.distanceMetres }
+            let lhsPedestrian = graph.roadClass(ofEdge: $0.edge).isPedestrianWay
+            let rhsPedestrian = graph.roadClass(ofEdge: $1.edge).isPedestrianWay
+            if lhsPedestrian != rhsPedestrian { return lhsPedestrian }
+            return $0.edge < $1.edge
+        }.prefix(limit).map { $0 }
+    }
+
     /// Perpendicular projection onto every segment of one edge.
     func project(lat: Double, lon: Double, onto edge: Int, graph: LocalWalkingGraph) -> EdgeSnap? {
         let line = graph.line(ofEdge: edge)
