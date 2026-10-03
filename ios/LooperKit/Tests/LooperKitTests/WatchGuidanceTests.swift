@@ -367,13 +367,17 @@ final class MapAnchorTests: XCTestCase {
         XCTAssertEqual(steps, steps.sorted())
     }
 
-    func testAnchorsStopWhereTheTurnsRunOut() throws {
+    func testAnchorsAfterTheLastTurnPointAtTheFinish() throws {
         let pack = plan(for: loopRoute())
-        let anchors = mapAnchors(
-            geometry: try XCTUnwrap(pack.plannedGeometry),
-            maneuvers: try XCTUnwrap(pack.plannedManeuvers)
-        )
+        let geometry = try XCTUnwrap(pack.plannedGeometry)
+        let anchors = mapAnchors(geometry: geometry, maneuvers: try XCTUnwrap(pack.plannedManeuvers))
         let last = try XCTUnwrap(pack.plannedManeuvers?.map(\.distanceMeters).max())
-        XCTAssertTrue(anchors.allSatisfy { $0.maneuver.distanceMeters <= last })
+        let beyond = anchors.filter { $0.maneuver.distanceMeters > last }
+        XCTAssertFalse(beyond.isEmpty, "the last stretch still has maps")
+        for anchor in beyond {
+            XCTAssertEqual(anchor.maneuver.stepIndex, finishStepIndex)
+            XCTAssertEqual(anchor.maneuver.coordinate, geometry.last)
+            XCTAssertGreaterThan(anchor.distanceToTurn, 0)
+        }
     }
 }

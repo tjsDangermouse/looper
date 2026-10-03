@@ -554,6 +554,32 @@ final class WatchModel: ObservableObject {
         speech.speak(text)
     }
 
+    /// Says the current instruction again, at the distance it is now, for a
+    /// wearer who tapped the banner. Spoken on the Watch even when the phone
+    /// is doing the talking: the tap was on the wrist. A tap during speech
+    /// doesn't queue another sentence behind it.
+    func repeatGuidance() {
+        guard voiceOn, result == nil, !arrivalHandled, let state, !speech.isSpeaking else { return }
+        let unit = plan?.displayUnit ?? .km
+        let text: String?
+        if state.offRoute {
+            text = plan?.script?.offRouteText ?? guidanceOffRouteText
+        } else if let next = state.next {
+            text = turnAnnouncement(TurnAnnouncementInput(
+                index: next.stepIndex, instruction: next.instruction, distanceAway: next.distanceMeters
+            ), unit: unit)?.text
+        } else if state.remainingMeters > 0 {
+            text = turnAnnouncement(TurnAnnouncementInput(
+                index: finishStepIndex, instruction: "You'll be back at the start", distanceAway: state.remainingMeters
+            ), unit: unit)?.text
+        } else {
+            text = nil
+        }
+        guard let text else { return }
+        speech.prime()
+        speech.speak(text)
+    }
+
     /// Back at the start: the Watch says so and ends the walk, which tells the
     /// phone to close its own.
     private func handleArrival() {

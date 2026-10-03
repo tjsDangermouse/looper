@@ -52,15 +52,50 @@ final class WatchSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate {
         return (british.isEmpty ? english : british).max { rank($0) < rank($1) }
     }
 
-    /// Claims the audio session for speech that ducks other audio, as the
-    /// phone does. Safe to call again.
+    /// Sets the audio session up for speech that ducks other audio, as the
+    /// phone does. Safe to call again. The session is only active while
+    /// something is being said: an active ducking session keeps the wearer's
+    /// music turned down for as long as it stays active.
     func prime() {
         reportVoicesOnce()
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.duckOthers])
+        } catch {
+            onDiagnostic?("speech.audioSessionFailed", ["error": error.localizedDescription])
+        }
+    }
+
+    /// Utterances queued and not yet finished or cancelled.
+    private var pending = 0
+    private var releaseTask: Task<Void, Never>?
+
+    var isSpeaking: Bool { pending > 0 }
+
+    private func activateSession() {
+        releaseTask?.cancel()
+        releaseTask = nil
+        do {
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             onDiagnostic?("speech.audioSessionFailed", ["error": error.localizedDescription])
+        }
+    }
+
+    /// Gives the audio back once the queue has drained, so other apps return
+    /// to full volume. A short wait first, so back-to-back sentences don't
+    /// pump the music up and down between them.
+    private func releaseSessionWhenIdle() {
+        guard pending == 0 else { return }
+        releaseTask?.cancel()
+        releaseTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard let self, !Task.isCancelled, self.pending == 0, !self.synthesizer.isSpeaking else { return }
+            self.releaseTask = nil
+            do {
+                try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            } catch {
+                self.onDiagnostic?("speech.audioReleaseFailed", ["error": error.localizedDescription])
+            }
         }
     }
 
@@ -98,21 +133,29 @@ final class WatchSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate {
         utterance.voice = resolveVoice()
         if let completion { completions[ObjectIdentifier(utterance)] = completion }
         onDiagnostic?("speech.queued", ["text": text])
+        activateSession()
+        pending += 1
         synthesizer.speak(utterance)
     }
 
     func stop() {
-        synthesizer.stopSpeaking(at: .immediate)
         completions.removeAll()
+        synthesizer.stopSpeaking(at: .immediate)
+    }
+
+    private func utteranceEnded(_ id: ObjectIdentifier) {
+        pending = max(0, pending - 1)
+        completions.removeValue(forKey: id)?()
+        releaseSessionWhenIdle()
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         let id = ObjectIdentifier(utterance)
-        Task { @MainActor in self.completions.removeValue(forKey: id)?() }
+        Task { @MainActor in self.utteranceEnded(id) }
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         let id = ObjectIdentifier(utterance)
-        Task { @MainActor in self.completions.removeValue(forKey: id)?() }
+        Task { @MainActor in self.utteranceEnded(id) }
     }
 }

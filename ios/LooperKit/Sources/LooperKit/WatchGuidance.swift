@@ -356,9 +356,29 @@ public struct MapAnchor: Equatable, Sendable {
     public var distanceToTurn: Double
 }
 
+/// The step index of the finish: no real step has it, so it never collides
+/// with a turn's map or haptic identity.
+public let finishStepIndex = Int.max
+
+/// The end of the loop as something to head for, measured from the start like
+/// the planned turns. The turn list leaves arrival out, so without this the
+/// last stretch has nothing for the map or the banner to aim at.
+public func finishManeuver(geometry: [Point]) -> ManeuverPayload? {
+    guard geometry.count > 1, let end = geometry.last else { return nil }
+    let length = zip(geometry, geometry.dropFirst()).reduce(0) { $0 + haversine($1.0, $1.1) }
+    return ManeuverPayload(
+        stepIndex: finishStepIndex,
+        turn: .arrive,
+        instruction: "Back at the start",
+        distanceMeters: length,
+        coordinate: end
+    )
+}
+
 /// Anchors every `spacingMeters` along the route, each paired with the next
-/// manoeuvre beyond it. The same list is computed when the maps are saved and
-/// when one is looked up, so the two always agree.
+/// manoeuvre beyond it — the finish once the turns run out. The same list is
+/// computed when the maps are saved and when one is looked up, so the two
+/// always agree.
 public func mapAnchors(
     geometry: [Point],
     maneuvers: [ManeuverPayload],
@@ -366,6 +386,7 @@ public func mapAnchors(
 ) -> [MapAnchor] {
     guard geometry.count > 1, spacingMeters > 0 else { return [] }
     let ordered = maneuvers.filter { $0.coordinate != nil }.sorted { $0.distanceMeters < $1.distanceMeters }
+        + [finishManeuver(geometry: geometry)].compactMap { $0 }
     var anchors: [MapAnchor] = []
     var nextAt = 0.0
     var travelled = 0.0

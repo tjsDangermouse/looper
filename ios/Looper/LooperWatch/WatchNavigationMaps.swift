@@ -577,13 +577,20 @@ final class WatchNavigationMapCache: ObservableObject {
     /// The route still ahead of the live fix, through the next junction and
     /// briefly beyond it. A closed loop can legitimately wrap past the end
     /// of its geometry, so that case joins the tail and head without ever
-    /// switching to a whole-route overview.
+    /// switching to a whole-route overview. Heading for the finish, the line
+    /// stops there: running on into the loop's start would read as more walk.
     static func routeWindow(from position: Point, through turn: Point, in geometry: [Point]) -> [Point] {
         guard geometry.count > 1 else { return [position, turn] }
-        let start = geometry.indices.min {
+        let toFinish = turn == geometry.last
+        var start = geometry.indices.min {
             haversine(geometry[$0], position) < haversine(geometry[$1], position)
         } ?? 0
-        let pivot = geometry.indices.min {
+        // Beside the finish of a closed loop the nearest vertex can be the
+        // start, which sits on the same spot; that is the end, not the loop.
+        if toFinish, let end = geometry.last, haversine(geometry[start], end) < 1 {
+            start = geometry.count - 1
+        }
+        let pivot = toFinish ? geometry.count - 1 : geometry.indices.min {
             haversine(geometry[$0], turn) < haversine(geometry[$1], turn)
         } ?? start
 
@@ -594,7 +601,7 @@ final class WatchNavigationMapCache: ObservableObject {
             result = Array(geometry[start...]) + Array(geometry[...pivot])
         }
 
-        var distance = 0.0
+        var distance = toFinish ? .infinity : 0.0
         var index = pivot
         while distance < 100, index < geometry.count - 1 {
             distance += haversine(geometry[index], geometry[index + 1])
