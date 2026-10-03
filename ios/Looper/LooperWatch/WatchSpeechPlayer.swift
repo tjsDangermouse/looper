@@ -32,19 +32,58 @@ final class WatchSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate {
         if let resolvedVoiceIdentifier, resolvedVoiceIdentifier == voiceIdentifier { return voice }
         resolvedVoiceIdentifier = .some(voiceIdentifier)
         voice = voiceIdentifier.flatMap { AVSpeechSynthesisVoice(identifier: $0) }
+            ?? bestInstalledVoice()
             ?? AVSpeechSynthesisVoice(language: "en-GB")
         return voice
+    }
+
+    /// The phone's chosen voice is often not on the Watch. Take the best
+    /// English voice that is — British first, premium before enhanced.
+    private func bestInstalledVoice() -> AVSpeechSynthesisVoice? {
+        let english = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.lowercased().hasPrefix("en") }
+        let british = english.filter { $0.language == "en-GB" }
+        let rank: (AVSpeechSynthesisVoice) -> Int = { voice in
+            switch voice.quality {
+            case .premium: return 3
+            case .enhanced: return 2
+            default: return 1
+            }
+        }
+        return (british.isEmpty ? english : british).max { rank($0) < rank($1) }
     }
 
     /// Claims the audio session for speech that ducks other audio, as the
     /// phone does. Safe to call again.
     func prime() {
+        reportVoicesOnce()
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt, options: [.duckOthers])
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             onDiagnostic?("speech.audioSessionFailed", ["error": error.localizedDescription])
         }
+    }
+
+    private var reportedVoices = false
+
+    /// Which English voices this Watch actually has, and which one is used —
+    /// the phone's premium voice is not among them unless watchOS offers it.
+    private func reportVoicesOnce() {
+        guard !reportedVoices else { return }
+        reportedVoices = true
+        let quality: (AVSpeechSynthesisVoice) -> String = { voice in
+            switch voice.quality {
+            case .premium: return "premium"
+            case .enhanced: return "enhanced"
+            default: return "default"
+            }
+        }
+        let english = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.lowercased().hasPrefix("en") }
+        onDiagnostic?("speech.voices", [
+            "english": english.map { "\($0.name) \($0.language) \(quality($0))" }.joined(separator: "; "),
+            "requested": voiceIdentifier ?? "none",
+            "chosen": resolveVoice().map { "\($0.name) \(quality($0)) \($0.identifier)" } ?? "none"
+        ])
     }
 
     func speak(_ text: String, completion: (() -> Void)? = nil) {

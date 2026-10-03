@@ -218,10 +218,15 @@ final class WatchWorkout: NSObject, ObservableObject {
         }
     }
 
+    /// Off while the wearer forces standalone mode: the phone is then not told
+    /// about the workout at all, as if it were out of range.
+    var mirrorsToPhone = true
+
     /// Mirroring is what wakes the iPhone app and opens the fast channel. A
     /// failure here is not fatal: WatchConnectivity still carries the plan
     /// and the state, just less promptly.
     private func startMirroring() {
+        guard mirrorsToPhone else { return }
         session?.startMirroringToCompanionDevice { _, _ in }
     }
 
@@ -292,7 +297,7 @@ final class WatchWorkout: NSObject, ObservableObject {
     // MARK: The mirrored channel
 
     func sendToPhone(_ message: WatchMessage) {
-        guard let session, let data = try? WatchLinkCodec.encode(message) else { return }
+        guard mirrorsToPhone, let session, let data = try? WatchLinkCodec.encode(message) else { return }
         session.sendToRemoteWorkoutSession(data: data) { _, _ in
             // WatchConnectivity carries the same message as a fallback; a
             // failure here needs no separate handling.

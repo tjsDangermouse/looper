@@ -83,6 +83,20 @@ struct StartLoopView: View {
                 }
 
                 SavedRoutesList(model: model)
+
+                // For testing: act as if the phone were out of range.
+                Toggle(isOn: $model.standaloneForced) {
+                    Label("Standalone", systemImage: "iphone.slash")
+                        .font(.caption2)
+                }
+                .tint(Color.looperAccent)
+                .padding(.top, 8)
+                if model.standaloneForced {
+                    Text("Ignoring the iPhone. Routes already on this Watch still work.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

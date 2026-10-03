@@ -60,6 +60,15 @@ final class WatchModel: ObservableObject {
         }
     }
 
+    /// A testing switch: behave as if the phone were out of range, whether or
+    /// not it is. Nothing is sent to it and nothing from it is acted on.
+    @Published var standaloneForced: Bool {
+        didSet {
+            defaults.set(standaloneForced, forKey: Self.standaloneKey)
+            workout.mirrorsToPhone = !standaloneForced
+        }
+    }
+
     let workout = WatchWorkout()
     let navigationMaps = WatchNavigationMapCache()
     private let link = WatchLinkSession()
@@ -82,14 +91,17 @@ final class WatchModel: ObservableObject {
     private let defaults = UserDefaults.standard
     private static let planKey = "watch.last-plan"
     private static let voiceKey = "watch.voice"
+    private static let standaloneKey = "watch.force-standalone"
     /// How long since the phone last reported before the Watch speaks for it.
     private static let phoneSpeaksWithin: TimeInterval = 12
     private static let snapshotInterval: TimeInterval = 15
 
     init() {
         voiceOn = (defaults.object(forKey: Self.voiceKey) as? Bool) ?? true
+        standaloneForced = defaults.bool(forKey: Self.standaloneKey)
         plan = loadStoredPlan()
         savedRoutes = WatchFiles.load(SavedRoutesPayload.self, named: "saved-routes")?.routes ?? []
+        workout.mirrorsToPhone = !standaloneForced
         workout.onStatus = { [weak self] status in
             if status.state == .saved { self?.savedWorkoutID = status.workoutID }
             self?.send(.workoutStatus(status))
@@ -594,6 +606,7 @@ final class WatchModel: ObservableObject {
     // MARK: Messages
 
     private func send(_ message: WatchMessage) {
+        guard !standaloneForced else { return }
         // Diagnostics are only worth having now. Queued durably they would
         // pile up while the phone is at home and arrive as a flood.
         if case .diagnostic = message {
@@ -609,10 +622,12 @@ final class WatchModel: ObservableObject {
     }
 
     private func requestPlan() {
+        guard !standaloneForced else { return }
         link.send(.command(WatchCommandPayload(kind: .requestPlan)), delivery: .durable)
     }
 
     private func receive(_ message: WatchMessage) {
+        guard !standaloneForced else { return }
         switch message {
         case .plan(let incoming):
             // A plan that arrives by the slow queue can be older than the one
