@@ -112,6 +112,7 @@ final class WatchModel: ObservableObject {
         link.onReachChange = { [weak self] reach in
             guard let self else { return }
             objectWillChange.send()
+            if reach.canPreload, !standaloneForced { navigationMaps.phoneBecameAvailable() }
             send(.diagnostic(WatchDiagnosticPayload(event: "connectionChanged", details: [
                 "activated": String(reach.activated),
                 "counterpartInstalled": String(reach.counterpartInstalled),
@@ -121,6 +122,14 @@ final class WatchModel: ObservableObject {
         link.onVersionMismatch = { [weak self] version in
             self?.notice = "Your iPhone is running a different version of Looper (v\(version))."
         }
+        navigationMaps.requestFromPhone = { [weak self] request in
+            guard let self, !standaloneForced, link.reach.canPreload else { return false }
+            link.send(.mapRequest(request), delivery: .durable)
+            return true
+        }
+        link.onFile = { [weak self] url, details in
+            self?.navigationMaps.receive(mapAt: url, details: details)
+        }
         navigationMaps.onDiagnostic = { [weak self] event, details in
             self?.send(.diagnostic(WatchDiagnosticPayload(event: event, details: details)))
         }
@@ -129,7 +138,7 @@ final class WatchModel: ObservableObject {
         }
         if let plan {
             speech.configure(plan.narration)
-            navigationMaps.prepare(plan)
+            prepareMaps(plan)
         }
         if !savedRoutes.isEmpty { navigationMaps.prefetch(savedRoutes) }
         #if DEBUG
@@ -379,7 +388,7 @@ final class WatchModel: ObservableObject {
         notice = nil
         speech.configure(chosen.narration)
         haptics.reset(config: chosen.guidance?.haptics ?? .forActivity(chosen.activity))
-        navigationMaps.prepare(chosen)
+        prepareMaps(chosen)
     }
 
     // MARK: Starting
@@ -402,7 +411,7 @@ final class WatchModel: ObservableObject {
         notice = nil
         haptics.reset(config: plan.guidance?.haptics ?? .forActivity(activity))
         navigationMaps.pausePrefetch()
-        navigationMaps.prepare(plan)
+        prepareMaps(plan, started: true)
         speech.configure(plan.narration)
         if voiceOn { speech.prime() }
         state = nil
@@ -610,7 +619,7 @@ final class WatchModel: ObservableObject {
             walk = WalkLog(startedAt: Date())
         }
         haptics.reset(config: plan.guidance?.haptics ?? .forActivity(plan.activity))
-        navigationMaps.prepare(plan)
+        prepareMaps(plan, started: true)
         speech.configure(plan.narration)
         if voiceOn { speech.prime() }
     }
@@ -627,6 +636,18 @@ final class WatchModel: ObservableObject {
             workoutID: savedWorkoutID
         )
         link.send(.walkRecord(record), delivery: .queued(kind: "walk-\(plan.sessionID)"))
+    }
+
+    /// Maps are sent to the Watch on two occasions only: when a route is
+    /// started and when it is saved. A route the phone is merely showing is
+    /// loaded with whatever maps it already has and nothing is fetched.
+    private func prepareMaps(_ plan: LoopPlanPayload, started: Bool = false) {
+        let walking = started || workout.isRunning || guidanceOnly
+        navigationMaps.prepare(plan, download: walking || isSaved(plan))
+    }
+
+    func isSaved(_ plan: LoopPlanPayload) -> Bool {
+        savedRoutes.contains { $0.routeID == plan.routeID }
     }
 
     // MARK: Messages
@@ -669,7 +690,7 @@ final class WatchModel: ObservableObject {
             plannedOnWatch = false
             storePlan(incoming)
             speech.configure(incoming.narration)
-            navigationMaps.prepare(incoming)
+            prepareMaps(incoming)
             haptics.reset(config: incoming.guidance?.haptics ?? .forActivity(incoming.activity))
         case .clearPlan(let clearedAt):
             // The phone left the loop-choosing screen with nothing started.
@@ -686,6 +707,9 @@ final class WatchModel: ObservableObject {
             savedRoutesSentAt = incoming.sentAt
             savedRoutes = incoming.routes
             WatchFiles.save(incoming, named: "saved-routes")
+            // The route on screen may just have been saved, which is what
+            // sends its maps.
+            if let plan { prepareMaps(plan) }
             if !workout.isRunning, !guidanceOnly, !starting {
                 navigationMaps.prefetch(incoming.routes)
             }
@@ -723,7 +747,7 @@ final class WatchModel: ObservableObject {
             case .start, .requestPlan:
                 break
             }
-        case .workoutStatus, .diagnostic, .walkRecord:
+        case .workoutStatus, .diagnostic, .walkRecord, .mapRequest:
             break
         }
     }

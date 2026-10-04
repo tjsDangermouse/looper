@@ -459,6 +459,40 @@ public struct WatchWalkRecordPayload: Codable, Equatable, Sendable {
     }
 }
 
+/// The Watch asking the iPhone for the maps a route still needs. The Watch
+/// works out each picture's camera — it is the one that knows how it frames
+/// the walker — and the phone only renders them and sends each back as a file.
+public struct WatchMapRequestPayload: Codable, Equatable, Sendable {
+    public struct Item: Codable, Equatable, Sendable {
+        public var key: String
+        public var center: Point
+        public var distanceMeters: Double
+        public var headingDegrees: Double
+
+        public init(key: String, center: Point, distanceMeters: Double, headingDegrees: Double) {
+            self.key = key
+            self.center = center
+            self.distanceMeters = distanceMeters
+            self.headingDegrees = headingDegrees
+        }
+    }
+
+    public var routeID: String
+    /// The Watch's screen, so the pictures fit it exactly.
+    public var widthPoints: Double
+    public var heightPoints: Double
+    public var scale: Double
+    public var items: [Item]
+
+    public init(routeID: String, widthPoints: Double, heightPoints: Double, scale: Double, items: [Item]) {
+        self.routeID = routeID
+        self.widthPoints = widthPoints
+        self.heightPoints = heightPoints
+        self.scale = scale
+        self.items = items
+    }
+}
+
 /// One message on the wire.
 public enum WatchMessage: Codable, Equatable, Sendable {
     case plan(LoopPlanPayload)
@@ -469,6 +503,7 @@ public enum WatchMessage: Codable, Equatable, Sendable {
     case diagnostic(WatchDiagnosticPayload)
     case savedRoutes(SavedRoutesPayload)
     case walkRecord(WatchWalkRecordPayload)
+    case mapRequest(WatchMapRequestPayload)
     /// The phone has left the loop-choosing screen with nothing started —
     /// the Watch should stop offering the loop it was last shown. Carries a
     /// timestamp for the same reason `LoopPlanPayload.preparedAt` does: one

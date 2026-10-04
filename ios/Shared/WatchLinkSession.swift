@@ -51,6 +51,10 @@ final class WatchLinkSession: NSObject {
     /// read — one device updated, the other not.
     var onVersionMismatch: ((Int) -> Void)?
 
+    /// Called on the main actor for every file that arrives, with the
+    /// details sent alongside it. The file is this app's to move or delete.
+    var onFile: ((URL, [String: Any]) -> Void)?
+
     private(set) var reach = Reach()
     private var session: WCSession? { WCSession.isSupported() ? WCSession.default : nil }
 
@@ -104,6 +108,31 @@ final class WatchLinkSession: NSObject {
         }
     }
 
+    /// Queues a file for the counterpart. The system delivers it whenever it
+    /// can, in order, and the file is deleted here once it has gone.
+    func sendFile(_ url: URL, details: [String: Any]) {
+        guard let session, session.activationState == .activated else {
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
+        session.transferFile(url, metadata: details)
+    }
+
+    /// The details of every file still waiting to go.
+    var filesInFlight: [[String: Any]] {
+        guard let session, session.activationState == .activated else { return [] }
+        return session.outstandingFileTransfers.filter(\.isTransferring).compactMap { $0.file.metadata }
+    }
+
+    /// Withdraws queued files the counterpart no longer wants.
+    func cancelFiles(where unwanted: ([String: Any]) -> Bool) {
+        guard let session, session.activationState == .activated else { return }
+        for transfer in session.outstandingFileTransfers where unwanted(transfer.file.metadata ?? [:]) {
+            transfer.cancel()
+            try? FileManager.default.removeItem(at: transfer.file.fileURL)
+        }
+    }
+
     private func refreshReach() {
         guard let session else { return publishReach(Reach(supported: false)) }
         var next = Reach()
@@ -152,6 +181,20 @@ extension WatchLinkSession: WCSessionDelegate {
 
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
         handle(applicationContext)
+    }
+
+    func session(_ session: WCSession, didReceive file: WCSessionFile) {
+        // The system deletes the file when this returns, so it is moved first.
+        let kept = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        guard (try? FileManager.default.moveItem(at: file.fileURL, to: kept)) != nil else { return }
+        let details = file.metadata ?? [:]
+        Task { @MainActor [onFile] in
+            if let onFile { onFile(kept, details) } else { try? FileManager.default.removeItem(at: kept) }
+        }
+    }
+
+    func session(_ session: WCSession, didFinish fileTransfer: WCSessionFileTransfer, error: Error?) {
+        try? FileManager.default.removeItem(at: fileTransfer.file.fileURL)
     }
 
     func sessionReachabilityDidChange(_ session: WCSession) {

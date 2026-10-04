@@ -375,8 +375,9 @@ public func finishManeuver(geometry: [Point]) -> ManeuverPayload? {
     )
 }
 
-/// Anchors every `spacingMeters` along the route, each paired with the next
-/// manoeuvre beyond it — the finish once the turns run out. The same list is
+/// Anchors every `spacingMeters` along the route and at each turn, each paired
+/// with the next manoeuvre beyond it — the finish once the turns run out, in
+/// route order. The same list is
 /// computed when the maps are saved and when one is looked up, so the two
 /// always agree.
 public func mapAnchors(
@@ -407,5 +408,19 @@ public func mapAnchors(
         }
         travelled += length
     }
-    return anchors
+    // A stretch's first map would otherwise be up to a spacing beyond its
+    // turn, with the walker behind it and off the picture, so each stretch
+    // also gets one from the turn that begins it.
+    for (turn, ahead) in zip(ordered, ordered.dropFirst()) {
+        guard let position = turn.coordinate, ahead.distanceMeters > turn.distanceMeters else { continue }
+        anchors.append(MapAnchor(
+            key: "s\(turn.stepIndex)",
+            position: position,
+            maneuver: ahead,
+            distanceToTurn: ahead.distanceMeters - turn.distanceMeters
+        ))
+    }
+    return anchors.sorted {
+        $0.maneuver.distanceMeters - $0.distanceToTurn < $1.maneuver.distanceMeters - $1.distanceToTurn
+    }
 }

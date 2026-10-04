@@ -29,6 +29,9 @@ struct StartLoopView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
 
+                    RouteReadiness(model: model, plan: plan)
+                        .padding(.vertical, 2)
+
                     Button(action: model.startFromWatch) {
                         if model.starting {
                             ProgressView()
@@ -44,8 +47,6 @@ struct StartLoopView: View {
                     .disabled(model.starting)
                     .padding(.top, 1)
                     .accessibilityLabel("Start \(plan.activity == .running ? "run" : "walk"), \(plan.routeName), \(plan.targetDescription)")
-
-                    MapReadiness(model: model, plan: plan)
 
                     // Said before the walk rather than after it goes wrong:
                     // spoken directions need something to play through.
@@ -103,9 +104,11 @@ struct StartLoopView: View {
     }
 }
 
-/// Whether the maps for the chosen route are on the Watch yet. Said plainly,
-/// because the walk is where a missing map would otherwise show up.
-private struct MapReadiness: View {
+/// How much of the chosen route is on the Watch: a ring that fills as its maps
+/// arrive from the iPhone, and a plain tick once all of it is here. Shown above
+/// Start, because the time to find out a route is only half here is before
+/// walking away from the phone, not at the first missing map.
+private struct RouteReadiness: View {
     @ObservedObject var model: WatchModel
     @ObservedObject private var maps: WatchNavigationMapCache
     let plan: LoopPlanPayload
@@ -116,21 +119,66 @@ private struct MapReadiness: View {
         _maps = ObservedObject(wrappedValue: model.navigationMaps)
     }
 
+    private var counts: (saved: Int, total: Int) { maps.progress(plan) ?? (0, 0) }
+    private var fraction: Double { counts.total > 0 ? Double(counts.saved) / Double(counts.total) : 0 }
+    private var ready: Bool { maps.isReady(plan) }
+
     var body: some View {
-        if maps.isReady(plan) {
-            Label("Route maps saved on this Watch", systemImage: "checkmark.circle")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        } else if maps.isPreparing {
-            Label("Saving route maps — keep a connection until done", systemImage: "arrow.down.circle")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        } else {
-            Label("Maps not saved yet — without a connection you'll see the route line only", systemImage: "map")
-                .font(.caption2)
-                .foregroundStyle(.orange)
-                .fixedSize(horizontal: false, vertical: true)
+        HStack(spacing: 8) {
+            ZStack {
+                Circle().stroke(Color.white.opacity(0.18), lineWidth: 4)
+                Circle()
+                    .trim(from: 0, to: ready ? 1 : fraction)
+                    .stroke(tint, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeOut(duration: 0.3), value: fraction)
+                if ready {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(tint)
+                }
+            }
+            .frame(width: 26, height: 26)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ready ? tint : .primary)
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title). \(detail)")
+    }
+
+    /// Maps are only sent for a saved route or once a walk starts; a route
+    /// just being looked at on the phone is waiting, not failing.
+    private var waiting: Bool { !ready && !maps.isPreparing && !model.isSaved(plan) }
+
+    private var tint: Color {
+        if waiting { return .secondary }
+        return ready || maps.isPreparing ? Color.looperAccent : .orange
+    }
+
+    private var title: String {
+        if ready { return "Ready to walk" }
+        if maps.isPreparing { return maps.receivingFromPhone ? "Sending from iPhone" : "Downloading maps" }
+        return waiting ? "Maps not sent yet" : "Not all here yet"
+    }
+
+    private var detail: String {
+        let count = "\(counts.saved) of \(counts.total) maps"
+        if ready { return "Route and maps are on this Watch" }
+        if maps.isPreparing {
+            return maps.receivingFromPhone ? "\(count) — keep your iPhone near" : "\(count) — keep a connection"
+        }
+        if waiting { return "Sent when you start, or save the route on your iPhone" }
+        return counts.total > 0
+            ? "\(count). Open Looper on your iPhone to finish"
+            : "Open Looper on your iPhone to send the maps"
     }
 }
 
@@ -167,14 +215,24 @@ struct SavedRoutesList: View {
                         if model.plan?.routeID == route.routeID {
                             Image(systemName: "checkmark")
                                 .foregroundStyle(Color.looperAccent)
-                        } else if maps.hasTurnMaps(route) {
-                            Image(systemName: "map.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                        } else if maps.isReady(route) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.footnote)
+                                .foregroundStyle(Color.looperAccent)
+                        } else {
+                            // Filling in from the iPhone behind the chosen route.
+                            ZStack {
+                                Circle().stroke(Color.white.opacity(0.18), lineWidth: 2.5)
+                                Circle()
+                                    .trim(from: 0, to: maps.savedFractions[route.routeID] ?? 0)
+                                    .stroke(Color.looperAccent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                                    .rotationEffect(.degrees(-90))
+                            }
+                            .frame(width: 14, height: 14)
                         }
                     }
                 }
-                .accessibilityLabel("\(route.routeName), \(formatDistance(route.plannedDistanceMeters, unit: route.displayUnit))\(maps.hasTurnMaps(route) ? ", maps saved" : "")")
+                .accessibilityLabel("\(route.routeName), \(formatDistance(route.plannedDistanceMeters, unit: route.displayUnit)), \(maps.isReady(route) ? "ready on this Watch" : "\(Int((maps.savedFractions[route.routeID] ?? 0) * 100)) percent sent")")
             }
         }
     }

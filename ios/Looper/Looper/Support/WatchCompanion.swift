@@ -1,6 +1,7 @@
 import Foundation
 import HealthKit
 import LooperKit
+import UIKit
 
 /// How the iPhone sees the Watch right now. The wording each case turns into
 /// lives in the views; this is only the truth of the connection.
@@ -86,6 +87,7 @@ final class WatchCompanion: NSObject, ObservableObject {
     /// The outing the Watch is currently being asked about. Anything quoting
     /// a different session id is left over from a previous walk.
     private var currentSessionID: String?
+    private var mapTask: Task<Void, Never>?
     private var startContinuation: CheckedContinuation<Bool, Never>?
     private var startTimeout: Task<Void, Never>?
     /// Commands already acted on, so a command arriving down both channels —
@@ -321,10 +323,66 @@ final class WatchCompanion: NSObject, ObservableObject {
             onDiagnostic?(diagnostic)
         case .walkRecord(let record):
             onWalkRecord?(record)
+        case .mapRequest(let request):
+            sendMaps(request)
         case .plan, .state, .result, .clearPlan, .savedRoutes:
             // The phone is the source of all four; anything coming back is
             // an echo and is ignored.
             break
+        }
+    }
+
+    // MARK: Maps for the Watch
+
+    /// Renders the maps the Watch has asked for and sends each as a file, in
+    /// the order asked — the order they are walked. The Watch counts them in,
+    /// which is what its progress ring shows, and asks again for any that
+    /// never arrive, so nothing here needs to remember what was sent.
+    private func sendMaps(_ request: WatchMapRequestPayload) {
+        mapTask?.cancel()
+        // A newer request replaces an older route's; maps already queued for
+        // this route are still on their way and aren't made twice.
+        link.cancelFiles { $0["routeID"] as? String != request.routeID }
+        let queued = Set(link.filesInFlight.compactMap { $0["key"] as? String })
+        let items = request.items.filter { !queued.contains($0.key) }
+        guard !items.isEmpty else { return }
+        onDiagnostic?(WatchDiagnosticPayload(event: "mapUploadStarted", details: ["maps": String(items.count)]))
+
+        let size = CGSize(width: request.widthPoints, height: request.heightPoints)
+        // The Watch usually asks while this app is on screen, straight after
+        // a route is planned. Asked in the background, this buys the time to
+        // send what it can; the Watch fetches the rest itself.
+        var background = UIBackgroundTaskIdentifier.invalid
+        background = UIApplication.shared.beginBackgroundTask(withName: "watch-maps") { [weak self] in
+            self?.mapTask?.cancel()
+            UIApplication.shared.endBackgroundTask(background)
+            background = .invalid
+        }
+        mapTask = Task { [weak self] in
+            var sent = 0
+            for item in items {
+                guard !Task.isCancelled, let self else { break }
+                guard let rendered = try? await MapSnapshotRenderer.render(
+                    center: item.center, distance: item.distanceMeters, heading: item.headingDegrees,
+                    size: size, scale: request.scale
+                ), !Task.isCancelled,
+                      let image = rendered.image.jpegData(compressionQuality: 0.72),
+                      let projection = try? JSONEncoder().encode(rendered.projection) else { continue }
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent("watch-map-\(UUID().uuidString).jpg")
+                guard (try? image.write(to: url, options: .atomic)) != nil else { continue }
+                self.link.sendFile(url, details: [
+                    "routeID": request.routeID, "key": item.key,
+                    "projection": projection, "scale": Double(rendered.image.scale)
+                ])
+                sent += 1
+            }
+            self?.onDiagnostic?(WatchDiagnosticPayload(event: "mapUploadQueued", details: [
+                "maps": String(sent), "asked": String(items.count)
+            ]))
+            if background != .invalid {
+                UIApplication.shared.endBackgroundTask(background)
+                background = .invalid
+            }
         }
     }
 
