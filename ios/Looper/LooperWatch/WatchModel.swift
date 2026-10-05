@@ -82,6 +82,10 @@ final class WatchModel: ObservableObject {
     /// The last time the phone's own navigation was heard from. Not shown
     /// anywhere: it only matters when the phone owns the walk's recording.
     private var lastPhoneStateAt: Date?
+    private var lastPlanRequestAt = Date.distantPast
+    /// A walk has just begun with the phone in range: its first state is on
+    /// its way, and the Watch must not start guiding on its own in the gap.
+    private var tetheredGraceUntil = Date.distantPast
     private var savedWorkoutID: String?
     private var lastSnapshotAt = Date.distantPast
     private var plannedOnWatch = false
@@ -92,7 +96,8 @@ final class WatchModel: ObservableObject {
     private static let planKey = "watch.last-plan"
     private static let voiceKey = "watch.voice"
     private static let standaloneKey = "watch.force-standalone"
-    /// How long since the phone last reported before the Watch speaks for it.
+    /// How long since the phone last reported before the Watch stops treating
+    /// it as the one guiding the walk.
     private static let phoneSpeaksWithin: TimeInterval = 12
     private static let snapshotInterval: TimeInterval = 15
 
@@ -289,10 +294,18 @@ final class WatchModel: ObservableObject {
     /// The Watch does the talking whenever it is guiding, so the walk sounds
     /// the same with or without a phone. The one exception is a walk the phone
     /// owns because Health recording is off here: the phone is speaking then.
-    private var watchSpeaks: Bool {
-        guard voiceOn else { return false }
-        if guidanceOnly, let last = lastPhoneStateAt { return Date().timeIntervalSince(last) >= Self.phoneSpeaksWithin }
-        return true
+    private var watchSpeaks: Bool { voiceOn && !isTethered }
+
+    /// Whether the phone is the one guiding this walk. While it is, the Watch
+    /// only shows what the phone says — its route, its next turn, its maps —
+    /// and stays silent. The Watch follows its own route only when the phone
+    /// can't be heard (out of range, or the Standalone switch is on), and
+    /// picks the walk up from where it had got to when that happens.
+    private var isTethered: Bool {
+        if standaloneForced { return false }
+        if Date() < tetheredGraceUntil { return true }
+        guard let last = lastPhoneStateAt else { return false }
+        return Date().timeIntervalSince(last) < Self.phoneSpeaksWithin
     }
 
     func activate() {
@@ -409,6 +422,10 @@ final class WatchModel: ObservableObject {
         starting = true
         defer { starting = false }
         notice = nil
+        // A phone in reach is about to guide this walk. One that isn't is not,
+        // and the Watch follows the route itself from the first step.
+        lastPhoneStateAt = nil
+        tetheredGraceUntil = !standaloneForced && link.reach.reachable ? Date().addingTimeInterval(15) : .distantPast
         haptics.reset(config: plan.guidance?.haptics ?? .forActivity(activity))
         navigationMaps.pausePrefetch()
         prepareMaps(plan, started: true)
@@ -523,6 +540,12 @@ final class WatchModel: ObservableObject {
               let plan, let tracker else { return }
 
         walk.record(location, progress: update, now: Date())
+        // The phone is guiding: the tracker is kept up to date so the Watch can
+        // take over seamlessly, but nothing is shown, played or said from it.
+        if isTethered {
+            narrate(update)
+            return
+        }
         let elapsed = workout.elapsedSeconds > 0 ? workout.elapsedSeconds : walk.movingSeconds()
         let tracked = makeTrackedState(
             plan: plan,
@@ -670,6 +693,7 @@ final class WatchModel: ObservableObject {
 
     private func requestPlan() {
         guard !standaloneForced else { return }
+        lastPlanRequestAt = Date()
         link.send(.command(WatchCommandPayload(kind: .requestPlan)), delivery: .durable)
     }
 
@@ -684,9 +708,16 @@ final class WatchModel: ObservableObject {
             // radio. Accept that late plan when it belongs to this workout,
             // but never let another outing replace the route in progress.
             if workout.isRunning || guidanceOnly {
-                guard incoming.sessionID == workout.sessionID || incoming.sessionID == plan?.sessionID else { return }
+                guard incoming.sessionID == workout.sessionID
+                        || incoming.sessionID == plan?.sessionID
+                        || incoming.sessionID == state?.sessionID else { return }
             }
+            let changedMidWalk = (workout.isRunning || guidanceOnly) && incoming.sessionID != plan?.sessionID
             plan = incoming
+            if changedMidWalk {
+                tracker = RouteTracker(plan: incoming)
+                cueSpeaker = incoming.script.map { CueSpeaker(script: $0) }
+            }
             plannedOnWatch = false
             storePlan(incoming)
             speech.configure(incoming.narration)
@@ -714,15 +745,38 @@ final class WatchModel: ObservableObject {
                 navigationMaps.prefetch(incoming.routes)
             }
         case .state(let incoming):
-            // The phone's own picture of the walk is not drawn — the Watch
-            // follows the route itself, so it looks the same without a phone.
-            // It only says the phone is out walking too, and so will speak.
+            // The phone's picture of the walk is what the wrist shows while the
+            // phone is guiding. A state for an outing this Watch has no plan
+            // for means the plan didn't reach us; chase it.
+            // One delivered late — queued while the phone was away — describes
+            // a walk that is over, and says nothing about the phone now.
+            guard abs(incoming.updatedAt.timeIntervalSinceNow) < 20 else { return }
             lastPhoneStateAt = Date()
-            // A state for an outing this Watch has never heard of means the
-            // plan didn't reach us; chase it.
-            if plan?.sessionID != incoming.sessionID, !workout.isRunning {
+            if plan?.sessionID != incoming.sessionID, Date().timeIntervalSince(lastPlanRequestAt) > 5 {
                 requestPlan()
             }
+            if let current = state,
+               current.sessionID == incoming.sessionID,
+               incoming.updatedAt <= current.updatedAt {
+                return
+            }
+            let previousStep = state?.next?.stepIndex
+            state = incoming
+            if previousStep != incoming.next?.stepIndex {
+                send(.diagnostic(WatchDiagnosticPayload(event: "stepDisplayed", details: [
+                    "previousStep": previousStep.map(String.init) ?? "none",
+                    "step": incoming.next.map { String($0.stepIndex) } ?? "none",
+                    "distanceM": incoming.next.map { String(format: "%.1f", $0.distanceMeters) } ?? "none"
+                ])))
+            }
+            // A phone walking an outing this Watch has no workout for means
+            // guidance only — but not while a workout is still starting, and
+            // not once one is running.
+            if !workout.isRunning, !starting, incoming.phase == .active || incoming.phase == .paused {
+                guidanceOnly = true
+            }
+            notice = nil
+            haptics.respond(to: incoming)
         case .result(let incoming):
             guard incoming.sessionID == plan?.sessionID || result == nil else { return }
             // The phone decides how the loop went; the Watch adds the one
