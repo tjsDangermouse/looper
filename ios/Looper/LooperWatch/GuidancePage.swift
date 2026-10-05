@@ -7,7 +7,8 @@ import WatchKit
 /// overview. Its camera follows the Watch's own GPS fix — a live map while
 /// there is a connection, the maps saved along the route when there isn't —
 /// so it looks the same with or without a phone. The route line alone is the
-/// last resort.
+/// last resort. Whichever it is, it turns about the walker so the way they
+/// are going is up.
 struct GuidancePage: View {
     @ObservedObject var model: WatchModel
     @ObservedObject private var navigationMaps: WatchNavigationMapCache
@@ -18,6 +19,10 @@ struct GuidancePage: View {
     }
 
     @State private var bannerFrame: CGRect = .zero
+    /// The direction drawn as up. It runs on past 360 rather than wrapping, so
+    /// the map always turns the short way round.
+    @State private var course: Double?
+    @State private var courseReported = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -25,7 +30,9 @@ struct GuidancePage: View {
                 scene: currentScene,
                 route: currentScene?.route ?? fallbackRoute,
                 turn: target?.coordinate,
-                turnKind: target?.turnKind
+                turnKind: target?.turnKind,
+                walker: model.state?.position,
+                course: mapCourse
             )
             .ignoresSafeArea()
 
@@ -43,15 +50,22 @@ struct GuidancePage: View {
                 scene: currentScene,
                 route: currentScene?.route ?? fallbackRoute,
                 position: model.state?.position,
-                bannerFrame: bannerFrame
+                bannerFrame: bannerFrame,
+                course: mapCourse
             )
             .ignoresSafeArea()
         }
         .coordinateSpace(name: Self.space)
         .onPreferenceChange(BannerFrameKey.self) { bannerFrame = $0 }
         .ignoresSafeArea()
-        .onAppear(perform: prepareLiveMap)
-        .onChange(of: model.state?.updatedAt) { _, _ in prepareLiveMap() }
+        .onAppear {
+            followCourse()
+            prepareLiveMap()
+        }
+        .onChange(of: model.state?.updatedAt) { _, _ in
+            followCourse()
+            prepareLiveMap()
+        }
     }
 
     private static let space = "guidance"
@@ -91,7 +105,36 @@ struct GuidancePage: View {
         guard let position = model.state?.position,
               let target,
               let geometry = model.plan?.plannedGeometry else { return }
-        navigationMaps.prepareLive(position: position, next: target, geometry: geometry)
+        navigationMaps.prepareLive(position: position, course: course, next: target, geometry: geometry)
+    }
+
+    /// Up on the map. Before any direction is known the picture is left the
+    /// way it was taken.
+    private var mapCourse: Double { course ?? currentScene?.projection.heading ?? 0 }
+
+    /// The way the route runs from where the walker is.
+    private var routeCourse: Double? {
+        guard let position = model.state?.position else { return nil }
+        let ahead = fallbackRoute.dropFirst()
+        guard let aim = ahead.first(where: { haversine(position, $0) >= 15 }) ?? ahead.last else { return nil }
+        return WatchNavigationMapCache.bearing(from: position, to: aim)
+    }
+
+    /// Turns the map towards the walker's direction of travel. GPS gives no
+    /// direction to someone standing still, so the last one is kept; until the
+    /// first arrives the route's own direction stands in. Each fix moves the
+    /// map only part of the way, which keeps a jittery course from shaking it.
+    private func followCourse() {
+        let reported = model.state?.courseDegrees
+        if reported != nil { courseReported = true }
+        guard let aim = reported ?? (courseReported ? nil : routeCourse) else { return }
+        guard let shown = course else {
+            course = aim
+            return
+        }
+        let turn = WatchNavigationMapCache.turn(from: shown, to: aim)
+        guard abs(turn) >= 2 else { return }
+        withAnimation(.easeInOut(duration: 0.8)) { course = shown + turn * 0.6 }
     }
 
     @ViewBuilder
@@ -124,35 +167,67 @@ private struct BannerFrameKey: PreferenceKey {
 }
 
 /// Places route coordinates on the screen: through the map's own projection
-/// when there is one, else by fitting the route line to the screen.
+/// when there is one, turned about the walker so their course is up, else by
+/// fitting the route line to the screen with their course up.
 private struct MapProjector {
     let scene: WatchNavigationScene?
     let route: [Point]
     let size: CGSize
+    let walker: Point?
+    let course: Double
+
+    /// How far the picture is turned, clockwise, to put the course at the top.
+    var turn: Angle { .degrees((scene?.projection.heading ?? course) - course) }
+
+    /// Where the walker falls on the picture before it is turned: the point
+    /// it turns about.
+    var pivot: CGPoint? {
+        guard let scene, let walker else { return nil }
+        return place(walker, on: scene)
+    }
+
+    private func place(_ coordinate: Point, on scene: WatchNavigationScene) -> CGPoint {
+        let imageSize = scene.image.size
+        let scale = max(size.width / imageSize.width, size.height / imageSize.height)
+        let point = scene.projection.point(for: coordinate)
+        return CGPoint(
+            x: point.x * scale + (size.width - imageSize.width * scale) / 2,
+            y: point.y * scale + (size.height - imageSize.height * scale) / 2
+        )
+    }
 
     func points(_ coordinates: [Point]) -> [CGPoint] {
         if let scene {
-            let imageSize = scene.image.size
-            let scale = max(size.width / imageSize.width, size.height / imageSize.height)
-            let xInset = (size.width - imageSize.width * scale) / 2
-            let yInset = (size.height - imageSize.height * scale) / 2
-            return coordinates.map {
-                let point = scene.projection.point(for: $0)
-                return CGPoint(x: point.x * scale + xInset, y: point.y * scale + yInset)
+            let placed = coordinates.map { place($0, on: scene) }
+            guard let pivot else { return placed }
+            let sine = sin(turn.radians), cosine = cos(turn.radians)
+            return placed.map {
+                let dx = $0.x - pivot.x, dy = $0.y - pivot.y
+                return CGPoint(x: pivot.x + dx * cosine - dy * sine, y: pivot.y + dx * sine + dy * cosine)
             }
         }
 
-        let latitudes = coordinates.map(\.lat)
-        let longitudes = coordinates.map(\.lng)
-        guard let minLat = latitudes.min(), let maxLat = latitudes.max(),
-              let minLng = longitudes.min(), let maxLng = longitudes.max() else { return [] }
+        // Metres right of and ahead of the first point, for someone facing
+        // along the course.
+        guard let origin = coordinates.first else { return [] }
+        let theta = course * Double.pi / 180
+        let metres = coordinates.map { coordinate -> (right: Double, up: Double) in
+            let east = (coordinate.lng - origin.lng) * 111_320 * cos(origin.lat * Double.pi / 180)
+            let north = (coordinate.lat - origin.lat) * 111_320
+            return (east * cos(theta) - north * sin(theta), east * sin(theta) + north * cos(theta))
+        }
+        let rights = metres.map(\.right), ups = metres.map(\.up)
+        guard let minRight = rights.min(), let maxRight = rights.max(),
+              let minUp = ups.min(), let maxUp = ups.max() else { return [] }
         let padding = 28.0
-        let width = max(0.000_001, maxLng - minLng)
-        let height = max(0.000_001, maxLat - minLat)
-        return coordinates.map {
+        let scale = min(
+            (size.width - padding * 2) / max(1, maxRight - minRight),
+            (size.height - padding * 2) / max(1, maxUp - minUp)
+        )
+        return metres.map {
             CGPoint(
-                x: padding + (($0.lng - minLng) / width) * (size.width - padding * 2),
-                y: padding + ((maxLat - $0.lat) / height) * (size.height - padding * 2)
+                x: size.width / 2 + ($0.right - (minRight + maxRight) / 2) * scale,
+                y: size.height / 2 - ($0.up - (minUp + maxUp) / 2) * scale
             )
         }
     }
@@ -170,16 +245,24 @@ private struct MapProjector {
 
 /// The walker, drawn above the banner. Where the two overlap the dot turns
 /// to a faint ring: still findable, without covering the words.
-private struct LocationDot: View {
+private struct LocationDot: View, Animatable {
     let scene: WatchNavigationScene?
     let route: [Point]
     let position: Point?
     let bannerFrame: CGRect
+    var course: Double
+
+    var animatableData: Double {
+        get { course }
+        set { course = newValue }
+    }
 
     var body: some View {
         Canvas { context, size in
             guard let position,
-                  let point = MapProjector(scene: scene, route: route, size: size).point(position) else { return }
+                  let point = MapProjector(
+                      scene: scene, route: route, size: size, walker: position, course: course
+                  ).point(position) else { return }
             let outer = Path(ellipseIn: CGRect(x: point.x - 9, y: point.y - 9, width: 18, height: 18))
             let inner = Path(ellipseIn: CGRect(x: point.x - 6, y: point.y - 6, width: 12, height: 12))
             if bannerFrame.insetBy(dx: -4, dy: -4).contains(point) {
@@ -195,26 +278,49 @@ private struct LocationDot: View {
     }
 }
 
-private struct TurnMapArtwork: View {
+/// The map and the route over it. The picture is turned as a whole; the route
+/// and the turn marker are drawn already turned, which keeps the marker's
+/// arrow upright.
+private struct TurnMapArtwork: View, Animatable {
     let scene: WatchNavigationScene?
     let route: [Point]
     let turn: Point?
     let turnKind: Turn?
+    let walker: Point?
+    var course: Double
+
+    var animatableData: Double {
+        get { course }
+        set { course = newValue }
+    }
 
     var body: some View {
         GeometryReader { proxy in
             ZStack {
+                // Shows wherever a turned picture doesn't reach.
+                Color(red: 0.12, green: 0.14, blue: 0.15)
                 if let scene {
+                    let projector = MapProjector(
+                        scene: scene, route: route, size: proxy.size, walker: walker, course: course
+                    )
+                    let pivot = projector.pivot ?? CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
                     Image(uiImage: scene.image)
                         .resizable()
                         .scaledToFill()
-                } else {
-                    Color(red: 0.12, green: 0.14, blue: 0.15)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .rotationEffect(
+                            projector.pivot == nil ? .zero : projector.turn,
+                            anchor: UnitPoint(
+                                x: pivot.x / max(1, proxy.size.width), y: pivot.y / max(1, proxy.size.height)
+                            )
+                        )
                 }
 
                 Canvas { context, size in
                     guard route.count > 1 else { return }
-                    let projector = MapProjector(scene: scene, route: route, size: size)
+                    let projector = MapProjector(
+                        scene: scene, route: route, size: size, walker: walker, course: course
+                    )
                     let points = projector.points(route)
                     var line = Path()
                     line.move(to: points[0])

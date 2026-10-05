@@ -367,6 +367,24 @@ final class MapAnchorTests: XCTestCase {
         XCTAssertEqual(steps, steps.sorted())
     }
 
+    func testAnchorsFaceTheWayTheRouteRuns() {
+        // East for 200 m, then back along the same road: the two legs lie on
+        // top of each other and only the distance walked tells them apart.
+        let east = Point(-4.4770, 54.15)
+        let geometry = [Point(-4.48, 54.15), east, Point(-4.48, 54.15)]
+        let turnBack = ManeuverPayload(
+            stepIndex: 1, turn: .uTurn, instruction: "Turn back",
+            distanceMeters: haversine(geometry[0], east), coordinate: east
+        )
+        let anchors = mapAnchors(geometry: geometry, maneuvers: [turnBack])
+        let out = anchors.filter { $0.maneuver.stepIndex == 1 }
+        let back = anchors.filter { $0.maneuver.stepIndex == finishStepIndex }
+        XCTAssertFalse(out.isEmpty)
+        XCTAssertFalse(back.isEmpty)
+        for anchor in out { XCTAssertEqual(anchor.courseDegrees, 90, accuracy: 1) }
+        for anchor in back { XCTAssertEqual(anchor.courseDegrees, 270, accuracy: 1) }
+    }
+
     func testEveryStretchHasAMapFromTheTurnThatBeginsIt() throws {
         let pack = plan(for: reassessDirections(loopRoute()))
         let maneuvers = try XCTUnwrap(pack.plannedManeuvers).filter { $0.coordinate != nil }

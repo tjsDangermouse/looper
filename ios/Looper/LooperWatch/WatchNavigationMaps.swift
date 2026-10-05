@@ -38,10 +38,13 @@ struct WatchMapStore {
         let base = (try? fileManager.url(
             for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
         )) ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        // Maps saved before the long-stretch framing was fixed left the walker
-        // off the picture; they are dropped and fetched again.
-        try? fileManager.removeItem(at: base.appendingPathComponent("Looper/maps", isDirectory: true))
-        root = base.appendingPathComponent("Looper/maps2", isDirectory: true)
+        // Maps saved before they faced the way the route runs were framed for
+        // a walker heading straight at the turn; they are dropped and fetched
+        // again.
+        for old in ["Looper/maps", "Looper/maps2"] {
+            try? fileManager.removeItem(at: base.appendingPathComponent(old, isDirectory: true))
+        }
+        root = base.appendingPathComponent("Looper/maps3", isDirectory: true)
         try? fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     }
 
@@ -147,11 +150,17 @@ final class WatchNavigationMapCache: ObservableObject {
     private var prefetchTask: Task<Void, Never>?
     private var liveTask: Task<Void, Never>?
     private var liveAnchor: Point?
+    /// The way up on the live map last asked for.
+    private var liveHeading: CLLocationDirection?
     private var requestedLiveStepIndex: Int?
     private var lastLiveAttempt = Date.distantPast
     private static let retryDelays: [UInt64] = [2, 6, 15]
     /// A failed live request is tried again no sooner than this.
     private static let liveRetrySeconds: TimeInterval = 10
+    /// A walker who has turned this far from the way the live map faces gets
+    /// a new one facing their way; until it arrives the old one is drawn
+    /// turned, with nothing in the corners it doesn't reach.
+    private static let liveTurnDegrees = 30.0
 
     private var routeID: String? { plan?.routeID }
 
@@ -171,6 +180,7 @@ final class WatchNavigationMapCache: ObservableObject {
             liveScene = nil
             liveStepIndex = nil
             liveAnchor = nil
+            liveHeading = nil
             requestedLiveStepIndex = nil
             isPreparing = false
             receivingFromPhone = false
@@ -323,7 +333,7 @@ final class WatchNavigationMapCache: ObservableObject {
             anchor.maneuver.coordinate.map {
                 liveJob(
                     key: anchor.key, position: anchor.position, turn: $0,
-                    distanceToTurn: anchor.distanceToTurn, geometry: geometry
+                    distanceToTurn: anchor.distanceToTurn, heading: anchor.courseDegrees, geometry: geometry
                 )
             }
         }
@@ -427,6 +437,7 @@ final class WatchNavigationMapCache: ObservableObject {
         liveScene = nil
         liveStepIndex = nil
         liveAnchor = nil
+        liveHeading = nil
         requestedLiveStepIndex = nil
         isPreparing = false
         receivingFromPhone = false
@@ -438,24 +449,32 @@ final class WatchNavigationMapCache: ObservableObject {
 
     /// watchOS maps are static snapshots. Refresh one after meaningful
     /// movement so the basemap follows the full walk without continuously
-    /// downloading and rendering a new image for every one-second fix.
-    func prepareLive(position: Point, next: ManeuverPayload, geometry: [Point]) {
+    /// downloading and rendering a new image for every one-second fix. The
+    /// map faces the way the walker is going, so one is also fetched when they
+    /// turn well away from the last.
+    func prepareLive(position: Point, course: Double?, next: ManeuverPayload, geometry: [Point]) {
         guard let turn = next.coordinate, geometry.count > 1 else { return }
+        let heading = course.map { ($0.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360) }
+            ?? Self.bearing(from: position, to: turn)
+        let turned = liveHeading.map { abs(Self.turn(from: $0, to: heading)) >= Self.liveTurnDegrees } ?? false
         if requestedLiveStepIndex == next.stepIndex,
            let liveAnchor,
-           haversine(liveAnchor, position) < 60 { return }
+           haversine(liveAnchor, position) < 60,
+           !turned { return }
         guard Date().timeIntervalSince(lastLiveAttempt) >= Self.liveRetrySeconds || requestedLiveStepIndex != next.stepIndex
                 || liveAnchor.map({ haversine($0, position) >= 60 }) == true else { return }
 
         liveTask?.cancel()
         liveAnchor = position
+        liveHeading = heading
         requestedLiveStepIndex = next.stepIndex
         lastLiveAttempt = Date()
         onDiagnostic?("mapSnapshotRequested", ["kind": "live", "step": String(next.stepIndex)])
         liveTask = Task { [weak self] in
             do {
                 let scene = try await Self.liveScene(
-                    position: position, turn: turn, distanceToTurn: next.distanceMeters, geometry: geometry
+                    position: position, turn: turn, distanceToTurn: next.distanceMeters,
+                    heading: heading, geometry: geometry
                 )
                 guard !Task.isCancelled else { return }
                 self?.liveScene = scene
@@ -468,6 +487,7 @@ final class WatchNavigationMapCache: ObservableObject {
                 // Forgotten, so the next fix tries again rather than waiting
                 // for the walker to move another 60 m with no map.
                 self?.liveAnchor = nil
+                self?.liveHeading = nil
                 self?.onDiagnostic?("mapSnapshotFailed", [
                     "kind": "live", "step": String(next.stepIndex), "error": error.localizedDescription
                 ])
@@ -565,6 +585,7 @@ final class WatchNavigationMapCache: ObservableObject {
         position: Point,
         turn: Point,
         distanceToTurn: Double,
+        heading: CLLocationDirection,
         geometry: [Point]
     ) async throws -> WatchNavigationScene {
         #if DEBUG
@@ -574,34 +595,39 @@ final class WatchNavigationMapCache: ObservableObject {
         }
         #endif
         return try await makeScene(liveJob(
-            key: "live", position: position, turn: turn, distanceToTurn: distanceToTurn, geometry: geometry
+            key: "live", position: position, turn: turn, distanceToTurn: distanceToTurn,
+            heading: heading, geometry: geometry
         ))
     }
 
-    /// How the map frames a walker at `position` heading for `turn`. The
-    /// junction sits in the upper-middle of the image, not against the rounded
-    /// top edge of the physical display, and a fraction behaves consistently
-    /// as the walker approaches.
+    /// How the map frames a walker at `position` facing `heading`, with
+    /// `turn` next. The top of the map is the way they are going: the route's
+    /// own direction for a saved map, the walker's for the live one. The zoom
+    /// follows the turn, so on a straight run to it the junction sits in the
+    /// upper-middle of the image, not against the rounded top edge of the
+    /// physical display.
     private static func liveJob(
         key: String,
         position: Point,
         turn: Point,
         distanceToTurn: Double,
+        heading: CLLocationDirection,
         geometry: [Point]
     ) -> MapJob {
         let direct = haversine(position, turn)
         let distance = min(1_000, max(180, distanceToTurn * 2.4))
-        // The picture looks 60% of the way to the turn, which keeps the walker
-        // near its foot while the zoom follows the turn. Past the widest zoom
-        // that would slide the walker off the bottom, so the look-ahead stops
-        // growing there and a long stretch keeps them at the same spot.
-        let lead = direct > 0 ? min(0.6, distance * 0.25 / direct) : 0
+        // The picture looks ahead 60% of the way to the turn, which keeps the
+        // walker near its foot while the zoom follows the turn. Past the widest
+        // zoom that would slide the walker off the bottom, so the look-ahead
+        // stops growing there and a long stretch keeps them at the same spot.
+        let ahead = min(direct * 0.6, distance * 0.25)
+        let radians = heading * Double.pi / 180
         let center = Point(
-            position.lng + (turn.lng - position.lng) * lead,
-            position.lat + (turn.lat - position.lat) * lead
+            position.lng + ahead * sin(radians) / (111_320 * cos(position.lat * Double.pi / 180)),
+            position.lat + ahead * cos(radians) / 111_320
         )
         return MapJob(
-            key: key, center: center, distance: distance, heading: bearing(from: position, to: turn),
+            key: key, center: center, distance: distance, heading: heading,
             route: routeWindow(from: position, through: turn, in: geometry), turn: turn
         )
     }
@@ -764,6 +790,13 @@ final class WatchNavigationMapCache: ObservableObject {
         let y = sin(delta) * cos(lat2)
         let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(delta)
         return (atan2(y, x) / radians + 360).truncatingRemainder(dividingBy: 360)
+    }
+
+    /// The shorter way round from one direction to another, in degrees:
+    /// positive clockwise, never more than half a turn.
+    static func turn(from: Double, to: Double) -> Double {
+        let delta = (to - from).truncatingRemainder(dividingBy: 360)
+        return delta > 180 ? delta - 360 : (delta < -180 ? delta + 360 : delta)
     }
 }
 

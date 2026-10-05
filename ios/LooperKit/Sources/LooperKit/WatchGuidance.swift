@@ -354,6 +354,36 @@ public struct MapAnchor: Equatable, Sendable {
     public var position: Point
     public var maneuver: ManeuverPayload
     public var distanceToTurn: Double
+    /// The way the route runs from here, in degrees clockwise from true
+    /// north: the direction a walker following it faces, and the top of the map.
+    public var courseDegrees: Double
+}
+
+/// The direction the route runs at `meters` from its start, in degrees
+/// clockwise from true north. It looks a little way ahead rather than along
+/// one segment, so a kink in the line doesn't swing it.
+public func routeCourse(geometry: [Point], atMeters meters: Double, lookAheadMeters: Double = 25) -> Double {
+    func point(at target: Double) -> Point? {
+        var travelled = 0.0
+        for (a, b) in zip(geometry, geometry.dropFirst()) {
+            let length = haversine(a, b)
+            if length > 0, target <= travelled + length {
+                let t = max(0, target - travelled) / length
+                return Point(a.lng + (b.lng - a.lng) * t, a.lat + (b.lat - a.lat) * t)
+            }
+            travelled += length
+        }
+        return nil
+    }
+    guard geometry.count > 1, let end = geometry.last else { return 0 }
+    var from = point(at: meters) ?? end
+    var to = point(at: meters + lookAheadMeters) ?? end
+    // At the very end there is nothing ahead; the way it arrived stands in.
+    if haversine(from, to) < 1, let before = point(at: max(0, meters - lookAheadMeters)) {
+        to = from
+        from = before
+    }
+    return LocalGeo.bearing(lat1: from.lat, lon1: from.lng, lat2: to.lat, lon2: to.lng)
 }
 
 /// The step index of the finish: no real step has it, so it never collides
@@ -401,7 +431,8 @@ public func mapAnchors(
                     key: "a\(Int(nextAt.rounded()))",
                     position: position,
                     maneuver: maneuver,
-                    distanceToTurn: maneuver.distanceMeters - nextAt
+                    distanceToTurn: maneuver.distanceMeters - nextAt,
+                    courseDegrees: routeCourse(geometry: geometry, atMeters: nextAt)
                 ))
             }
             nextAt += spacingMeters
@@ -417,7 +448,8 @@ public func mapAnchors(
             key: "s\(turn.stepIndex)",
             position: position,
             maneuver: ahead,
-            distanceToTurn: ahead.distanceMeters - turn.distanceMeters
+            distanceToTurn: ahead.distanceMeters - turn.distanceMeters,
+            courseDegrees: routeCourse(geometry: geometry, atMeters: turn.distanceMeters)
         ))
     }
     return anchors.sorted {

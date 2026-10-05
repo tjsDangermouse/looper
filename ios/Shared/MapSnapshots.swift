@@ -50,6 +50,12 @@ struct SnapshotProjection: Codable, Equatable {
         return Point(point.lng + east / lngScale, point.lat + north / metersPerDegree)
     }
 
+    /// The compass direction at the top of the picture, in degrees clockwise
+    /// from true north: the camera heading it was taken with.
+    var heading: Double {
+        (atan2(-c, -d) * 180 / Double.pi + 360).truncatingRemainder(dividingBy: 360)
+    }
+
     func point(for coordinate: Point) -> CGPoint {
         let x = (coordinate.lng - origin.lng) * Self.metersPerDegree * cos(origin.lat * Double.pi / 180)
         let y = (coordinate.lat - origin.lat) * Self.metersPerDegree
