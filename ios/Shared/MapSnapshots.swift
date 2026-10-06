@@ -67,6 +67,13 @@ struct SnapshotProjection: Codable, Equatable {
 /// follows the walker and as a fallback, the iPhone to make a route's maps and
 /// send them over, so the two produce the same picture for the same camera.
 enum MapSnapshotRenderer {
+    /// How much larger than the screen a picture is drawn, each way, at the
+    /// same ground scale. The Watch turns it to face the walker, which swings
+    /// its corners inwards; the extra map around the edges is what fills them.
+    static let overscan: CGFloat = 1.5
+
+    /// `size` is the screen's; the picture comes back `overscan` times larger,
+    /// with the same centre and the same metres to a point.
     static func render(
         center: Point,
         distance: CLLocationDistance,
@@ -77,11 +84,14 @@ enum MapSnapshotRenderer {
         let options = MKMapSnapshotter.Options()
         options.camera = MKMapCamera(
             lookingAtCenter: CLLocationCoordinate2D(latitude: center.lat, longitude: center.lng),
-            fromDistance: distance,
+            // The camera's field of view is fixed, so a picture overscan times
+            // taller has to be taken from overscan times further back to
+            // keep the same scale.
+            fromDistance: distance * Double(overscan),
             pitch: 0,
             heading: heading
         )
-        options.size = size
+        options.size = CGSize(width: size.width * overscan, height: size.height * overscan)
         #if os(watchOS)
         options.scale = scale
         #else

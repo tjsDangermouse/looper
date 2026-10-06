@@ -56,6 +56,8 @@ final class AppModel: ObservableObject {
     @Published var courseUp = false
     @Published var showingVoiceSettings = false
     @Published private(set) var favoriteRoutes: [Route]
+    /// The saved routes kept on the Watch for walking without the phone.
+    @Published private(set) var offlineRouteIDs: Set<String>
     @Published private(set) var selectedVoiceIdentifier: String?
     @Published var reversed = false
     @Published var findingStage = 0
@@ -152,6 +154,7 @@ final class AppModel: ObservableObject {
         self.sessionStore = sessionStore
         self.health = health ?? HealthIntegration()
         self.favoriteRoutes = favoritesStore.load()
+        self.offlineRouteIDs = favoritesStore.loadOfflineIDs()
         self.selectedVoiceIdentifier = self.speechManager.selectedVoiceIdentifier
         restoreSession()
         connectWatch()
@@ -217,6 +220,7 @@ final class AppModel: ObservableObject {
         selected = previewRoutes.first
         if ProcessInfo.processInfo.environment["LOOPER_PREVIEW_FAVORITES"] == "1" {
             favoriteRoutes = [previewRoutes[0], previewRoutes[2]]
+            offlineRouteIDs = Set(favoriteRoutes.map(\.id))
             syncSavedRoutesToWatch()
         }
         switch target {
@@ -343,12 +347,33 @@ final class AppModel: ObservableObject {
     func toggleFavorite(_ route: Route) {
         if let index = favoriteRoutes.firstIndex(where: { $0.id == route.id }) {
             favoriteRoutes.remove(at: index)
+            if offlineRouteIDs.remove(route.id) != nil { favoritesStore.saveOfflineIDs(offlineRouteIDs) }
         } else {
             // Most recently saved first makes the last route someone chose easy
             // to find in Settings.
             favoriteRoutes.insert(route, at: 0)
         }
         favoritesStore.save(favoriteRoutes)
+        syncSavedRoutesToWatch()
+    }
+
+    func isOffline(_ route: Route) -> Bool {
+        offlineRouteIDs.contains(route.id)
+    }
+
+    /// Keeps a route on the Watch, or lets it go. Keeping one that isn't saved
+    /// yet saves it too: the Watch can only hold what the phone still has.
+    func toggleOffline(_ route: Route) {
+        if offlineRouteIDs.contains(route.id) {
+            offlineRouteIDs.remove(route.id)
+        } else {
+            if !isFavorite(route) {
+                favoriteRoutes.insert(route, at: 0)
+                favoritesStore.save(favoriteRoutes)
+            }
+            offlineRouteIDs.insert(route.id)
+        }
+        favoritesStore.saveOfflineIDs(offlineRouteIDs)
         syncSavedRoutesToWatch()
     }
 
@@ -1287,11 +1312,11 @@ final class AppModel: ObservableObject {
         )
     }
 
-    /// Every saved route as a guidance pack for the Watch, so any of them can
-    /// be walked with the phone left behind.
+    /// The routes kept on the Watch as guidance packs, so any of them can be
+    /// walked with the phone left behind. Other routes follow the phone.
     func syncSavedRoutesToWatch() {
         let narration = NarrationSettings(voiceIdentifier: selectedVoiceIdentifier)
-        watch.syncSavedRoutes(favoriteRoutes.map {
+        watch.syncSavedRoutes(favoriteRoutes.filter { offlineRouteIDs.contains($0.id) }.map {
             makeSavedRoutePlan(route: $0, activity: activity, displayUnit: unit, narration: narration)
         })
     }

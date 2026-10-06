@@ -43,4 +43,17 @@ final class FavoritesStore {
         guard let data = try? JSONEncoder().encode(routes) else { return }
         defaults.set(data, forKey: key)
     }
+
+    /// The saved routes the person has asked to keep on the Watch, so they can
+    /// be walked without the phone. Every saved route is on the phone; only
+    /// these are sent across and have their maps downloaded.
+    private let offlineKey = "looper-offline-route-ids"
+
+    func loadOfflineIDs() -> Set<String> {
+        Set(defaults.stringArray(forKey: offlineKey) ?? [])
+    }
+
+    func saveOfflineIDs(_ ids: Set<String>) {
+        defaults.set(Array(ids), forKey: offlineKey)
+    }
 }

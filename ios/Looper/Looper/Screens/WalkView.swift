@@ -40,6 +40,17 @@ struct WalkView: View {
                 .buttonStyle(IconButtonStyle())
                 .accessibilityLabel("Home")
 
+                if let route = model.selected {
+                    Button { model.toggleOffline(route) } label: {
+                        Image(systemName: model.isOffline(route) ? "applewatch.radiowaves.left.and.right" : "arrow.down.circle")
+                    }
+                    .buttonStyle(IconButtonStyle())
+                    .foregroundStyle(model.isOffline(route) ? Color.looperAccent : .white)
+                    .accessibilityLabel("Available offline on Apple Watch")
+                    .accessibilityValue(model.isOffline(route) ? "On" : "Off")
+                    .accessibilityHint("Downloads this route to your Watch so you can walk it without your phone")
+                }
+
                 Spacer()
 
                 // Only ever shown while a Watch is actually carrying the

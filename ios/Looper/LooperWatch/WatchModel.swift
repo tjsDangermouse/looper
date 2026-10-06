@@ -301,7 +301,7 @@ final class WatchModel: ObservableObject {
     /// and stays silent. The Watch follows its own route only when the phone
     /// can't be heard (out of range, or the Standalone switch is on), and
     /// picks the walk up from where it had got to when that happens.
-    private var isTethered: Bool {
+    var isTethered: Bool {
         if standaloneForced { return false }
         if Date() < tetheredGraceUntil { return true }
         guard let last = lastPhoneStateAt else { return false }
@@ -428,7 +428,7 @@ final class WatchModel: ObservableObject {
         tetheredGraceUntil = !standaloneForced && link.reach.reachable ? Date().addingTimeInterval(15) : .distantPast
         haptics.reset(config: plan.guidance?.haptics ?? .forActivity(activity))
         navigationMaps.pausePrefetch()
-        prepareMaps(plan, started: true)
+        prepareMaps(plan)
         speech.configure(plan.narration)
         if voiceOn { speech.prime() }
         state = nil
@@ -642,7 +642,7 @@ final class WatchModel: ObservableObject {
             walk = WalkLog(startedAt: Date())
         }
         haptics.reset(config: plan.guidance?.haptics ?? .forActivity(plan.activity))
-        prepareMaps(plan, started: true)
+        prepareMaps(plan)
         speech.configure(plan.narration)
         if voiceOn { speech.prime() }
     }
@@ -661,14 +661,15 @@ final class WatchModel: ObservableObject {
         link.send(.walkRecord(record), delivery: .queued(kind: "walk-\(plan.sessionID)"))
     }
 
-    /// Maps are sent to the Watch on two occasions only: when a route is
-    /// started and when it is saved. A route the phone is merely showing is
-    /// loaded with whatever maps it already has and nothing is fetched.
-    private func prepareMaps(_ plan: LoopPlanPayload, started: Bool = false) {
-        let walking = started || workout.isRunning || guidanceOnly
-        navigationMaps.prepare(plan, download: walking || isSaved(plan))
+    /// Maps are downloaded only for a route the wearer has made available
+    /// offline. Any other route — shown, chosen or walked — is loaded with
+    /// whatever maps it already has and nothing is fetched: while tethered the
+    /// phone is the map, and without it the route line is what is left.
+    private func prepareMaps(_ plan: LoopPlanPayload) {
+        navigationMaps.prepare(plan, download: isSaved(plan))
     }
 
+    /// Whether the route is one of those the phone has made available offline.
     func isSaved(_ plan: LoopPlanPayload) -> Bool {
         savedRoutes.contains { $0.routeID == plan.routeID }
     }

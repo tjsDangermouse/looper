@@ -320,19 +320,34 @@ private struct FavoriteRoutesView: View {
                 .listRowBackground(Color.clear)
             } else {
                 ForEach(model.favoriteRoutes, id: \.id) { route in
-                    Button {
-                        model.openFavorite(route)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(route.name).font(.headline)
-                            Text("\(formatDistance(route.distanceMeters, unit: model.unit)) · \(formatTime(secondsForDistance(route.distanceMeters, paceMinutesPerKm: model.activePaceMinutesPerKm)))")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        Button {
+                            model.openFavorite(route)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(route.name).font(.headline)
+                                Text("\(formatDistance(route.distanceMeters, unit: model.unit)) · \(formatTime(secondsForDistance(route.distanceMeters, paceMinutesPerKm: model.activePaceMinutesPerKm)))")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Open this saved route")
+
+                        Button {
+                            model.toggleOffline(route)
+                        } label: {
+                            Image(systemName: model.isOffline(route) ? "applewatch.radiowaves.left.and.right" : "arrow.down.circle")
+                                .font(.system(size: 20))
+                                .foregroundStyle(model.isOffline(route) ? Color.looperAccent : .secondary)
+                                .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Available offline on Apple Watch")
+                        .accessibilityValue(model.isOffline(route) ? "On" : "Off")
+                        .accessibilityHint("Downloads \(route.name) to your Watch so you can walk it without your phone")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Open this saved route")
                 }
                 .onDelete { offsets in
                     for index in offsets.reversed() {

@@ -4,11 +4,11 @@ import SwiftUI
 import WatchKit
 
 /// A glanceable navigation map: no scrolling, no zooming, and no whole-loop
-/// overview. Its camera follows the Watch's own GPS fix — a live map while
-/// there is a connection, the maps saved along the route when there isn't —
-/// so it looks the same with or without a phone. The route line alone is the
-/// last resort. Whichever it is, it turns about the walker so the way they
-/// are going is up.
+/// overview. While tethered it is a live map following the walker the phone
+/// reports. Without the phone it follows the Watch's own GPS fix over the maps
+/// saved for a route made available offline, or a snapshot taken over the
+/// Watch's own connection; the route line alone is the last resort. Whichever
+/// it is, it turns about the walker so the way they are going is up.
 struct GuidancePage: View {
     @ObservedObject var model: WatchModel
     @ObservedObject private var navigationMaps: WatchNavigationMapCache
@@ -26,15 +26,26 @@ struct GuidancePage: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            TurnMapArtwork(
-                scene: currentScene,
-                route: currentScene?.route ?? fallbackRoute,
-                turn: target?.coordinate,
-                turnKind: target?.turnKind,
-                walker: model.state?.position,
-                course: mapCourse
-            )
-            .ignoresSafeArea()
+            if tethered {
+                LiveMapArtwork(
+                    route: fallbackRoute,
+                    turn: target?.coordinate,
+                    turnKind: target?.turnKind,
+                    walker: model.state?.position,
+                    framing: liveFraming
+                )
+                .ignoresSafeArea()
+            } else {
+                TurnMapArtwork(
+                    scene: currentScene,
+                    route: currentScene?.route ?? fallbackRoute,
+                    turn: target?.coordinate,
+                    turnKind: target?.turnKind,
+                    walker: model.state?.position,
+                    course: mapCourse
+                )
+                .ignoresSafeArea()
+            }
 
             guidanceBanner
                 .padding(.horizontal, 7)
@@ -45,15 +56,18 @@ struct GuidancePage: View {
                     }
                 }
 
-            // Above the banner, so the walker never disappears behind it.
-            LocationDot(
-                scene: currentScene,
-                route: currentScene?.route ?? fallbackRoute,
-                position: model.state?.position,
-                bannerFrame: bannerFrame,
-                course: mapCourse
-            )
-            .ignoresSafeArea()
+            // Above the banner, so the walker never disappears behind it. The
+            // live map carries its own.
+            if !tethered {
+                LocationDot(
+                    scene: currentScene,
+                    route: currentScene?.route ?? fallbackRoute,
+                    position: model.state?.position,
+                    bannerFrame: bannerFrame,
+                    course: mapCourse
+                )
+                .ignoresSafeArea()
+            }
         }
         .coordinateSpace(name: Self.space)
         .onPreferenceChange(BannerFrameKey.self) { bannerFrame = $0 }
@@ -69,6 +83,27 @@ struct GuidancePage: View {
     }
 
     private static let space = "guidance"
+
+    /// The phone is guiding, so the map is the live one. Without it the Watch
+    /// follows its own fixes over saved or snapshot pictures.
+    private var tethered: Bool { model.isTethered }
+
+    /// Where the live map's camera sits: looking the way the walker is going,
+    /// framed for the next turn the way the saved pictures are.
+    private var liveFraming: LiveMapFraming? {
+        guard let position = model.state?.position else { return nil }
+        let heading = (mapCourse.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360)
+        guard let target, let turn = target.coordinate else {
+            return LiveMapFraming(center: position, distance: 400, heading: heading)
+        }
+        // The walker sits higher than on a saved picture: the live map has no
+        // second layer to turn a dot into a ring where the banner covers it.
+        let frame = WatchNavigationMapCache.framing(
+            position: position, turn: turn, distanceToTurn: target.distanceMeters,
+            heading: heading, lookAheadCap: 0.12
+        )
+        return LiveMapFraming(center: frame.center, distance: frame.distance, heading: heading)
+    }
 
     private var next: ManeuverPayload? {
         guard let next = model.state?.next, next.turnKind != .arrive else { return nil }
@@ -102,6 +137,9 @@ struct GuidancePage: View {
     }
 
     private func prepareLiveMap() {
+        // Snapshots over the Watch's own connection are for when the phone
+        // isn't the map.
+        guard !tethered else { return }
         guard let position = model.state?.position,
               let target,
               let geometry = model.plan?.plannedGeometry else { return }
@@ -187,12 +225,13 @@ private struct MapProjector {
     }
 
     private func place(_ coordinate: Point, on scene: WatchNavigationScene) -> CGPoint {
+        // The picture is drawn at its own size with its centre on the screen's,
+        // so a picture larger than the screen spills past every edge.
         let imageSize = scene.image.size
-        let scale = max(size.width / imageSize.width, size.height / imageSize.height)
         let point = scene.projection.point(for: coordinate)
         return CGPoint(
-            x: point.x * scale + (size.width - imageSize.width * scale) / 2,
-            y: point.y * scale + (size.height - imageSize.height * scale) / 2
+            x: point.x + (size.width - imageSize.width) / 2,
+            y: point.y + (size.height - imageSize.height) / 2
         )
     }
 
@@ -297,21 +336,23 @@ private struct TurnMapArtwork: View, Animatable {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                // Shows wherever a turned picture doesn't reach.
+                // Shows wherever a turned picture still doesn't reach.
                 Color(red: 0.12, green: 0.14, blue: 0.15)
                 if let scene {
                     let projector = MapProjector(
                         scene: scene, route: route, size: proxy.size, walker: walker, course: course
                     )
-                    let pivot = projector.pivot ?? CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
+                    // The walker's place on the picture itself: what it turns about.
+                    let imageSize = scene.image.size
+                    let pivot = walker.map { scene.projection.point(for: $0) }
+                        ?? CGPoint(x: imageSize.width / 2, y: imageSize.height / 2)
                     Image(uiImage: scene.image)
                         .resizable()
-                        .scaledToFill()
-                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .frame(width: imageSize.width, height: imageSize.height)
                         .rotationEffect(
                             projector.pivot == nil ? .zero : projector.turn,
                             anchor: UnitPoint(
-                                x: pivot.x / max(1, proxy.size.width), y: pivot.y / max(1, proxy.size.height)
+                                x: pivot.x / max(1, imageSize.width), y: pivot.y / max(1, imageSize.height)
                             )
                         )
                 }
@@ -353,6 +394,86 @@ private struct TurnMapArtwork: View, Animatable {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .clipped()
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Where the live map's camera is.
+private struct LiveMapFraming: Equatable {
+    var center: Point
+    var distance: CLLocationDistance
+    var heading: CLLocationDirection
+}
+
+/// The live map: a real map turned about the walker, with tiles beyond every
+/// edge so it never shows a bare corner. The route and the turn marker are
+/// drawn over it in the same colours as on the saved pictures.
+private struct LiveMapArtwork: View {
+    let route: [Point]
+    let turn: Point?
+    let turnKind: Turn?
+    let walker: Point?
+    let framing: LiveMapFraming?
+
+    @State private var camera: MapCameraPosition
+
+    init(route: [Point], turn: Point?, turnKind: Turn?, walker: Point?, framing: LiveMapFraming?) {
+        self.route = route
+        self.turn = turn
+        self.turnKind = turnKind
+        self.walker = walker
+        self.framing = framing
+        _camera = State(initialValue: Self.position(framing))
+    }
+
+    private static func position(_ framing: LiveMapFraming?) -> MapCameraPosition {
+        guard let framing else { return .automatic }
+        return .camera(MapCamera(
+            centerCoordinate: framing.center.coordinate, distance: framing.distance,
+            heading: framing.heading, pitch: 0
+        ))
+    }
+
+    var body: some View {
+        ZStack {
+            Color(red: 0.12, green: 0.14, blue: 0.15)
+            Map(position: $camera, interactionModes: []) {
+                if route.count > 1 {
+                    let line = route.map(\.coordinate)
+                    MapPolyline(coordinates: line).stroke(.black.opacity(0.72), lineWidth: 9)
+                    MapPolyline(coordinates: line).stroke(Color.appleMapsRoute, lineWidth: 6)
+                }
+                if let turn {
+                    Annotation("", coordinate: turn.coordinate, anchor: .center) {
+                        ZStack {
+                            Circle().fill(Color.appleMapsRoute)
+                            Circle().strokeBorder(.white, lineWidth: 2)
+                            if let turnKind {
+                                Image(systemName: turnSymbolName(turnKind))
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                        .frame(width: 22, height: 22)
+                    }
+                }
+                if let walker {
+                    Annotation("", coordinate: walker.coordinate, anchor: .center) {
+                        ZStack {
+                            Circle().fill(.white).frame(width: 18, height: 18)
+                            Circle().fill(Color.appleMapsRoute).frame(width: 12, height: 12)
+                        }
+                    }
+                }
+            }
+            .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
+            .mapControlVisibility(.hidden)
+        }
+        .onChange(of: framing) { _, new in
+            guard new != nil else { return }
+            withAnimation(.easeInOut(duration: 0.8)) { camera = Self.position(new) }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)

@@ -11,10 +11,18 @@ struct WatchNavigationScene {
     let route: [Point]
     let turn: Point
 
-    /// Whether a position falls on the picture. The walker is framed at its
-    /// foot, a few points from the edge, so there is no margin to ask for.
+    /// Whether a position falls on the part of the picture the screen shows.
+    /// The picture is larger than the screen so it can be turned without
+    /// bare corners, and sits with its centre at the screen's centre; the
+    /// walker is framed at the foot of that screen-sized middle, a few points
+    /// from its edge, so there is no margin to ask for.
     func contains(_ position: Point) -> Bool {
-        CGRect(origin: .zero, size: image.size).contains(projection.point(for: position))
+        let screen = WKInterfaceDevice.current().screenBounds.size
+        let width = min(screen.width, image.size.width), height = min(screen.height, image.size.height)
+        let visible = CGRect(
+            x: (image.size.width - width) / 2, y: (image.size.height - height) / 2, width: width, height: height
+        )
+        return visible.contains(projection.point(for: position))
     }
 }
 
@@ -41,10 +49,12 @@ struct WatchMapStore {
         // Maps saved before they faced the way the route runs were framed for
         // a walker heading straight at the turn; they are dropped and fetched
         // again.
-        for old in ["Looper/maps", "Looper/maps2"] {
+        // Maps saved at exactly the screen's size left bare corners once turned;
+        // they are dropped for ones drawn larger.
+        for old in ["Looper/maps", "Looper/maps2", "Looper/maps3"] {
             try? fileManager.removeItem(at: base.appendingPathComponent(old, isDirectory: true))
         }
-        root = base.appendingPathComponent("Looper/maps3", isDirectory: true)
+        root = base.appendingPathComponent("Looper/maps4", isDirectory: true)
         try? fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     }
 
@@ -614,22 +624,34 @@ final class WatchNavigationMapCache: ObservableObject {
         heading: CLLocationDirection,
         geometry: [Point]
     ) -> MapJob {
+        let frame = framing(position: position, turn: turn, distanceToTurn: distanceToTurn, heading: heading)
+        return MapJob(
+            key: key, center: frame.center, distance: frame.distance, heading: heading,
+            route: routeWindow(from: position, through: turn, in: geometry), turn: turn
+        )
+    }
+
+    /// Where the camera sits and how far back. The picture looks ahead 60% of
+    /// the way to the turn, which keeps the walker near its foot while the zoom
+    /// follows the turn. Past the widest zoom that would slide the walker off
+    /// the bottom, so the look-ahead stops growing there (at `lookAheadCap` of
+    /// the zoom distance) and a long stretch keeps them at the same spot.
+    static func framing(
+        position: Point,
+        turn: Point,
+        distanceToTurn: Double,
+        heading: CLLocationDirection,
+        lookAheadCap: Double = 0.25
+    ) -> (center: Point, distance: CLLocationDistance) {
         let direct = haversine(position, turn)
         let distance = min(1_000, max(180, distanceToTurn * 2.4))
-        // The picture looks ahead 60% of the way to the turn, which keeps the
-        // walker near its foot while the zoom follows the turn. Past the widest
-        // zoom that would slide the walker off the bottom, so the look-ahead
-        // stops growing there and a long stretch keeps them at the same spot.
-        let ahead = min(direct * 0.6, distance * 0.25)
+        let ahead = min(direct * 0.6, distance * lookAheadCap)
         let radians = heading * Double.pi / 180
         let center = Point(
             position.lng + ahead * sin(radians) / (111_320 * cos(position.lat * Double.pi / 180)),
             position.lat + ahead * cos(radians) / 111_320
         )
-        return MapJob(
-            key: key, center: center, distance: distance, heading: heading,
-            route: routeWindow(from: position, through: turn, in: geometry), turn: turn
-        )
+        return (center, distance)
     }
 
     private static func makeScene(_ job: MapJob) async throws -> WatchNavigationScene {
@@ -654,7 +676,11 @@ final class WatchNavigationMapCache: ObservableObject {
     private static func fakeScene(
         center: Point, distance: CLLocationDistance, heading: CLLocationDirection, route: [Point], turn: Point
     ) -> WatchNavigationScene {
-        let size = WKInterfaceDevice.current().screenBounds.size
+        let screen = WKInterfaceDevice.current().screenBounds.size
+        let size = CGSize(
+            width: screen.width * MapSnapshotRenderer.overscan, height: screen.height * MapSnapshotRenderer.overscan
+        )
+        let distance = distance * MapSnapshotRenderer.overscan
         let scale = WKInterfaceDevice.current().screenScale
         let pixelsPerMeter = Double(size.height) / (distance * 0.8)
         let theta = heading * Double.pi / 180

@@ -154,8 +154,8 @@ private struct RouteReadiness: View {
         .accessibilityLabel("\(title). \(detail)")
     }
 
-    /// Maps are only sent for a saved route or once a walk starts; a route
-    /// just being looked at on the phone is waiting, not failing.
+    /// Maps are only sent for a route made available offline on the phone; any
+    /// other follows the phone, which is waiting, not failing.
     private var waiting: Bool { !ready && !maps.isPreparing && !model.isSaved(plan) }
 
     private var tint: Color {
@@ -166,7 +166,7 @@ private struct RouteReadiness: View {
     private var title: String {
         if ready { return "Ready to walk" }
         if maps.isPreparing { return maps.receivingFromPhone ? "Sending from iPhone" : "Downloading maps" }
-        return waiting ? "Maps not sent yet" : "Not all here yet"
+        return waiting ? "Follows your iPhone" : "Not all here yet"
     }
 
     private var detail: String {
@@ -175,7 +175,7 @@ private struct RouteReadiness: View {
         if maps.isPreparing {
             return maps.receivingFromPhone ? "\(count) — keep your iPhone near" : "\(count) — keep a connection"
         }
-        if waiting { return "Sent when you start, or save the route on your iPhone" }
+        if waiting { return "To walk it without your iPhone, make it available offline there" }
         return counts.total > 0
             ? "\(count). Open Looper on your iPhone to finish"
             : "Open Looper on your iPhone to send the maps"
@@ -194,7 +194,7 @@ struct SavedRoutesList: View {
 
     var body: some View {
         if !model.savedRoutes.isEmpty {
-            Text("Saved routes")
+            Text("Available offline")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .padding(.top, 8)
