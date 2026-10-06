@@ -377,6 +377,11 @@ final class AppModel: ObservableObject {
         syncSavedRoutesToWatch()
     }
 
+    func retryOfflineTransfer(_ route: Route) {
+        guard offlineRouteIDs.contains(route.id) else { return }
+        syncSavedRoutesToWatch()
+    }
+
     func openFavorite(_ route: Route) {
         waypoints = []
         routeWaypoints = []

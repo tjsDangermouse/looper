@@ -68,6 +68,9 @@ final class WatchCompanion: NSObject, ObservableObject {
     /// Whether a Watch with the app is paired at all — the only thing the
     /// Settings screen needs to know.
     @Published private(set) var isPairedWithApp = false
+    /// Progress reported by the Watch for routes requested for offline use.
+    /// A route is not considered downloaded until the Watch says it is ready.
+    @Published private(set) var routeTransfers: [String: WatchRouteTransferStatusPayload] = [:]
 
     /// A pause/resume/end asked for on the wrist.
     var onCommand: ((WatchCommandPayload) -> Void)?
@@ -93,6 +96,7 @@ final class WatchCompanion: NSObject, ObservableObject {
     /// Commands already acted on, so a command arriving down both channels —
     /// or retried by the system's queue — is obeyed exactly once.
     private var handledCommandIDs: Set<String> = []
+    private var requestedOfflineRouteIDs: Set<String> = []
     /// Live state is sent at most this often. The mirrored channel allows
     /// 100 KB per 10 seconds and a state payload is a few hundred bytes, so
     /// this is about legibility on the wrist, not about the budget.
@@ -144,8 +148,25 @@ final class WatchCompanion: NSObject, ObservableObject {
     /// of them can be walked with the phone left at home. Always the whole
     /// list, so a route removed here goes from the wrist too.
     func syncSavedRoutes(_ plans: [LoopPlanPayload]) {
+        requestedOfflineRouteIDs = Set(plans.map(\.routeID))
+        var next = routeTransfers.filter { requestedOfflineRouteIDs.contains($0.key) }
+        for plan in plans {
+            if next[plan.routeID] == nil || next[plan.routeID]?.state == .failed {
+                next[plan.routeID] = WatchRouteTransferStatusPayload(
+                    routeID: plan.routeID,
+                    state: .queued,
+                    completedItems: 0,
+                    totalItems: 0
+                )
+            }
+        }
+        routeTransfers = next
         guard link.reach.canPreload else { return }
         link.send(.savedRoutes(SavedRoutesPayload(routes: plans)), delivery: .queued(kind: "saved-routes"))
+    }
+
+    func routeTransfer(for routeID: String) -> WatchRouteTransferStatusPayload? {
+        routeTransfers[routeID]
     }
 
     #if DEBUG
@@ -323,6 +344,10 @@ final class WatchCompanion: NSObject, ObservableObject {
             onDiagnostic?(diagnostic)
         case .walkRecord(let record):
             onWalkRecord?(record)
+        case .routeTransferStatus(let status):
+            guard requestedOfflineRouteIDs.contains(status.routeID) else { return }
+            if let current = routeTransfers[status.routeID], current.updatedAt > status.updatedAt { return }
+            routeTransfers[status.routeID] = status
         case .mapRequest(let request):
             sendMaps(request)
         case .plan, .state, .result, .clearPlan, .savedRoutes:

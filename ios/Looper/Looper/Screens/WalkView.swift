@@ -3,13 +3,11 @@ import SwiftUI
 
 struct WalkView: View {
     @ObservedObject var model: AppModel
-    /// Observed separately so the Watch indicator redraws when the
-    /// connection changes without the whole model having to publish it.
     @ObservedObject private var watch: WatchCompanion
 
     init(model: AppModel) {
         self.model = model
-        self.watch = model.watch
+        _watch = ObservedObject(wrappedValue: model.watch)
     }
 
     var body: some View {
@@ -41,31 +39,22 @@ struct WalkView: View {
                 .accessibilityLabel("Home")
 
                 if let route = model.selected {
-                    Button { model.toggleOffline(route) } label: {
-                        Image(systemName: model.isOffline(route) ? "applewatch.radiowaves.left.and.right" : "arrow.down.circle")
+                    Button {
+                        if watch.routeTransfer(for: route.id)?.state == .failed {
+                            model.retryOfflineTransfer(route)
+                        } else {
+                            model.toggleOffline(route)
+                        }
+                    } label: {
+                        watchTransferIcon(for: route)
                     }
                     .buttonStyle(IconButtonStyle())
-                    .foregroundStyle(model.isOffline(route) ? Color.looperAccent : .white)
                     .accessibilityLabel("Available offline on Apple Watch")
-                    .accessibilityValue(model.isOffline(route) ? "On" : "Off")
-                    .accessibilityHint("Downloads this route to your Watch so you can walk it without your phone")
+                    .accessibilityValue(watchTransferAccessibilityValue(for: route))
+                    .accessibilityHint(watchTransferAccessibilityHint(for: route))
                 }
 
                 Spacer()
-
-                // Only ever shown while a Watch is actually carrying the
-                // workout — a walker without one sees nothing new here.
-                if watch.connection.isRunningOnWatch {
-                    Image(systemName: "applewatch")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(watch.connection == .live ? Color.looperAccent : .orange)
-                        .frame(width: 38, height: 38)
-                        .accessibilityLabel(
-                            watch.connection == .live
-                                ? "Recording on your Apple Watch"
-                                : "Apple Watch connection lost. Still recording on your Watch."
-                        )
-                }
 
                 Button {
                     model.following = true
@@ -155,5 +144,64 @@ struct WalkView: View {
             }
         }
         .background(Color.clear)
+    }
+
+    @ViewBuilder
+    private func watchTransferIcon(for route: Route) -> some View {
+        if !model.isOffline(route) {
+            Image(systemName: "arrow.down.circle")
+                .foregroundStyle(.white)
+        } else if let transfer = watch.routeTransfer(for: route.id) {
+            switch transfer.state {
+            case .queued:
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(Color.looperAccent)
+            case .receiving:
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.2), lineWidth: 2.5)
+                    Circle()
+                        .trim(from: 0, to: transfer.fractionComplete)
+                        .stroke(Color.looperAccent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    Text("\(Int(transfer.fractionComplete * 100))")
+                        .font(.system(size: 8, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 24, height: 24)
+            case .ready:
+                Image(systemName: "applewatch.radiowaves.left.and.right")
+                    .foregroundStyle(Color.looperAccent)
+            case .failed:
+                Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
+                    .foregroundStyle(.orange)
+            }
+        } else {
+            ProgressView()
+                .controlSize(.small)
+                .tint(Color.looperAccent)
+        }
+    }
+
+    private func watchTransferAccessibilityValue(for route: Route) -> String {
+        guard model.isOffline(route) else { return "Not downloaded" }
+        guard let transfer = watch.routeTransfer(for: route.id) else { return "Queued for Apple Watch" }
+        switch transfer.state {
+        case .queued: return "Queued for Apple Watch"
+        case .receiving: return "Sending to Apple Watch, \(Int(transfer.fractionComplete * 100)) percent"
+        case .ready: return "Downloaded to Apple Watch"
+        case .failed: return "Download failed"
+        }
+    }
+
+    private func watchTransferAccessibilityHint(for route: Route) -> String {
+        guard model.isOffline(route) else {
+            return "Downloads this route to your Watch so you can walk it without your phone"
+        }
+        if watch.routeTransfer(for: route.id)?.state == .failed {
+            return "Retries the download to your Watch"
+        }
+        return "Removes this route from your Watch"
     }
 }

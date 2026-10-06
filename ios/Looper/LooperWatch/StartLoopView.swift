@@ -194,7 +194,7 @@ struct SavedRoutesList: View {
 
     var body: some View {
         if !model.savedRoutes.isEmpty {
-            Text("Available offline")
+            Text("Offline routes")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .padding(.top, 8)
@@ -210,17 +210,20 @@ struct SavedRoutesList: View {
                             Text(formatDistance(route.plannedDistanceMeters, unit: route.displayUnit))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
+                            Text(transferLabel(route))
+                                .font(.caption2)
+                                .foregroundStyle(transferTint(route))
                         }
                         Spacer(minLength: 0)
-                        if model.plan?.routeID == route.routeID {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(Color.looperAccent)
-                        } else if maps.isReady(route) {
+                        if maps.isReady(route) {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.footnote)
                                 .foregroundStyle(Color.looperAccent)
+                        } else if maps.routeTransferStates[route.routeID] == .failed {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.footnote)
+                                .foregroundStyle(.orange)
                         } else {
-                            // Filling in from the iPhone behind the chosen route.
                             ZStack {
                                 Circle().stroke(Color.white.opacity(0.18), lineWidth: 2.5)
                                 Circle()
@@ -232,8 +235,26 @@ struct SavedRoutesList: View {
                         }
                     }
                 }
-                .accessibilityLabel("\(route.routeName), \(formatDistance(route.plannedDistanceMeters, unit: route.displayUnit)), \(maps.isReady(route) ? "ready on this Watch" : "\(Int((maps.savedFractions[route.routeID] ?? 0) * 100)) percent sent")")
+                .accessibilityLabel("\(route.routeName), \(formatDistance(route.plannedDistanceMeters, unit: route.displayUnit)), \(transferLabel(route))")
             }
+        }
+    }
+
+    private func transferLabel(_ route: LoopPlanPayload) -> String {
+        let percent = Int((maps.savedFractions[route.routeID] ?? 0) * 100)
+        switch maps.routeTransferStates[route.routeID] ?? .queued {
+        case .queued: return "Waiting for iPhone"
+        case .receiving: return "Receiving… \(percent)%"
+        case .ready: return "Downloaded"
+        case .failed: return "Download incomplete"
+        }
+    }
+
+    private func transferTint(_ route: LoopPlanPayload) -> Color {
+        switch maps.routeTransferStates[route.routeID] {
+        case .ready: return Color.looperAccent
+        case .failed: return .orange
+        case .queued, .receiving, .none: return .secondary
         }
     }
 }

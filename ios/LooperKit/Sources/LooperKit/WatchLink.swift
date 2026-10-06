@@ -12,7 +12,7 @@ public enum WatchLink {
     /// version it doesn't know throws rather than decoding half a message —
     /// the two devices can be updated separately, and an old Watch app
     /// guessing at a new phone's payload is worse than a stale screen.
-    public static let version = 7
+    public static let version = 8
 }
 
 /// Where the outing has got to, as both devices understand it. This is the
@@ -366,6 +366,43 @@ public struct SavedRoutesPayload: Codable, Equatable, Sendable {
     }
 }
 
+/// The Watch's authoritative answer to "is this route actually available
+/// offline?" The phone requests the download, but only the Watch can confirm
+/// that every map has arrived and been saved successfully.
+public struct WatchRouteTransferStatusPayload: Codable, Equatable, Sendable {
+    public enum State: String, Codable, Equatable, Sendable {
+        case queued
+        case receiving
+        case ready
+        case failed
+    }
+
+    public var routeID: String
+    public var state: State
+    public var completedItems: Int
+    public var totalItems: Int
+    public var updatedAt: Date
+
+    public init(
+        routeID: String,
+        state: State,
+        completedItems: Int,
+        totalItems: Int,
+        updatedAt: Date = Date()
+    ) {
+        self.routeID = routeID
+        self.state = state
+        self.completedItems = completedItems
+        self.totalItems = totalItems
+        self.updatedAt = updatedAt
+    }
+
+    public var fractionComplete: Double {
+        guard totalItems > 0 else { return state == .ready ? 1 : 0 }
+        return min(1, max(0, Double(completedItems) / Double(totalItems)))
+    }
+}
+
 /// A walk the Watch guided and recorded by itself, handed to the phone when
 /// the two next meet so the Loop Summary and history are not missing it.
 public struct WatchWalkRecordPayload: Codable, Equatable, Sendable {
@@ -502,6 +539,7 @@ public enum WatchMessage: Codable, Equatable, Sendable {
     case workoutStatus(WatchWorkoutStatusPayload)
     case diagnostic(WatchDiagnosticPayload)
     case savedRoutes(SavedRoutesPayload)
+    case routeTransferStatus(WatchRouteTransferStatusPayload)
     case walkRecord(WatchWalkRecordPayload)
     case mapRequest(WatchMapRequestPayload)
     /// The phone has left the loop-choosing screen with nothing started —

@@ -138,7 +138,10 @@ final class WatchNavigationMapCache: ObservableObject {
     @Published private(set) var fullyReadyRouteIDs: Set<String> = []
     /// How much of each route's maps are on the Watch, from 0 to 1.
     @Published private(set) var savedFractions: [String: Double] = [:]
+    /// The visible state of each route currently requested for offline use.
+    @Published private(set) var routeTransferStates: [String: WatchRouteTransferStatusPayload.State] = [:]
     var onDiagnostic: ((String, [String: String]) -> Void)?
+    var onRouteTransferStatus: ((WatchRouteTransferStatusPayload) -> Void)?
     /// Asks the iPhone for maps. Returns whether there is a phone to ask.
     var requestFromPhone: ((WatchMapRequestPayload) -> Bool)?
 
@@ -214,9 +217,15 @@ final class WatchNavigationMapCache: ObservableObject {
         refreshReadiness(plan)
         wantsDownload = download
         let missing = jobs.filter { !store.has(routeID: plan.routeID, key: $0.key) }
-        guard download, !missing.isEmpty, !isPreparing else { return }
+        guard download else { return }
+        if missing.isEmpty {
+            publishTransferStatus(plan, state: .ready)
+            return
+        }
+        guard !isPreparing else { return }
 
         isPreparing = true
+        publishTransferStatus(plan, state: .receiving)
         onDiagnostic?("mapPreloadStarted", ["maps": String(missing.count), "of": String(jobs.count)])
         let planID = plan.routeID
         guard requestFromPhone?(Self.request(planID, missing)) == true else {
@@ -289,11 +298,12 @@ final class WatchNavigationMapCache: ObservableObject {
         store.save(scene, routeID: fileRoute, key: key, jpeg: data)
         guard chosen else {
             backgroundReceived = Date()
-            if let plan = background?.plan { refreshReadiness(plan) }
+            if let plan = background?.plan { publishTransferStatus(plan, state: .receiving) }
             return
         }
         lastReceived = Date()
         noteSaved(job, scene)
+        if let plan { publishTransferStatus(plan, state: .receiving) }
         if receivingFromPhone, savedCount >= totalCount {
             task?.cancel()
             finishPreparing()
@@ -310,7 +320,10 @@ final class WatchNavigationMapCache: ObservableObject {
         receivingFromPhone = false
         task = nil
         refreshProgress()
-        if let plan { refreshReadiness(plan) }
+        if let plan {
+            refreshReadiness(plan)
+            publishTransferStatus(plan, state: isReady(plan) ? .ready : .failed)
+        }
         onDiagnostic?("mapPreloadFinished", ["saved": String(savedCount), "of": String(totalCount)])
     }
 
@@ -366,8 +379,15 @@ final class WatchNavigationMapCache: ObservableObject {
     func prefetch(_ plans: [LoopPlanPayload]) {
         prefetchTask?.cancel()
         savedPlans = plans
+        let wanted = Set(plans.map(\.routeID))
+        routeTransferStates = routeTransferStates.filter { wanted.contains($0.key) }
+        savedFractions = savedFractions.filter { wanted.contains($0.key) }
+        fullyReadyRouteIDs.formIntersection(wanted)
         store.prune(keeping: Set(plans.map(\.routeID)).union(routeID.map { [$0] } ?? []))
-        for plan in plans { refreshReadiness(plan) }
+        for plan in plans {
+            refreshReadiness(plan)
+            publishTransferStatus(plan, state: isReady(plan) ? .ready : .queued)
+        }
         let pending = plans.filter { !fullyReadyRouteIDs.contains($0.routeID) && $0.routeID != routeID }
         guard !pending.isEmpty else { return }
         prefetchTask = Task { [weak self] in
@@ -390,10 +410,12 @@ final class WatchNavigationMapCache: ObservableObject {
             geometry: geometry, maneuvers: maneuvers,
             anchors: mapAnchors(geometry: geometry, maneuvers: maneuvers)
         )
+        publishTransferStatus(plan, state: .receiving)
         background = (plan, jobs)
         defer {
             if background?.plan.routeID == planID { background = nil }
             refreshReadiness(plan)
+            publishTransferStatus(plan, state: isReady(plan) ? .ready : .failed)
         }
         func missing() -> [MapJob] { jobs.filter { !store.has(routeID: planID, key: $0.key) } }
         func pause() async { try? await Task.sleep(nanoseconds: 2_000_000_000) }
@@ -424,7 +446,7 @@ final class WatchNavigationMapCache: ObservableObject {
                 self?.logFailure("prefetch", job.key, attempt, error)
             }) else { continue }
             store.save(scene, routeID: planID, key: job.key)
-            refreshReadiness(plan)
+            publishTransferStatus(plan, state: .receiving)
         }
     }
 
@@ -546,13 +568,34 @@ final class WatchNavigationMapCache: ObservableObject {
     // MARK: Readiness
 
     private func refreshReadiness(_ plan: LoopPlanPayload) {
+        let counts = transferCounts(plan)
+        let routeReady = counts.total > 0 && counts.saved == counts.total
+        savedFractions[plan.routeID] = counts.total == 0 ? 0 : Double(counts.saved) / Double(counts.total)
+        if routeReady { fullyReadyRouteIDs.insert(plan.routeID) } else { fullyReadyRouteIDs.remove(plan.routeID) }
+    }
+
+    private func transferCounts(_ plan: LoopPlanPayload) -> (saved: Int, total: Int) {
         let steps = (plan.plannedManeuvers ?? []).filter { $0.coordinate != nil }.map(\.stepIndex)
         let routeAnchors = mapAnchors(geometry: plan.plannedGeometry ?? [], maneuvers: plan.plannedManeuvers ?? [])
         let keys = steps.map { "t\($0)" } + routeAnchors.map(\.key)
         let saved = keys.filter { store.has(routeID: plan.routeID, key: $0) }.count
-        let routeReady = !keys.isEmpty && saved == keys.count
-        savedFractions[plan.routeID] = keys.isEmpty ? 0 : Double(saved) / Double(keys.count)
-        if routeReady { fullyReadyRouteIDs.insert(plan.routeID) } else { fullyReadyRouteIDs.remove(plan.routeID) }
+        return (saved, keys.count)
+    }
+
+    private func publishTransferStatus(
+        _ plan: LoopPlanPayload,
+        state: WatchRouteTransferStatusPayload.State
+    ) {
+        refreshReadiness(plan)
+        let counts = transferCounts(plan)
+        let resolved: WatchRouteTransferStatusPayload.State = isReady(plan) ? .ready : state
+        routeTransferStates[plan.routeID] = resolved
+        onRouteTransferStatus?(WatchRouteTransferStatusPayload(
+            routeID: plan.routeID,
+            state: resolved,
+            completedItems: counts.saved,
+            totalItems: counts.total
+        ))
     }
 
     /// Every map for this route is on the Watch, so it can be walked with no

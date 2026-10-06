@@ -308,6 +308,12 @@ private struct RoutingTrialRatingView: View {
 
 private struct FavoriteRoutesView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject private var watch: WatchCompanion
+
+    init(model: AppModel) {
+        self.model = model
+        _watch = ObservedObject(wrappedValue: model.watch)
+    }
 
     var body: some View {
         List {
@@ -329,6 +335,11 @@ private struct FavoriteRoutesView: View {
                                 Text("\(formatDistance(route.distanceMeters, unit: model.unit)) · \(formatTime(secondsForDistance(route.distanceMeters, paceMinutesPerKm: model.activePaceMinutesPerKm)))")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
+                                if model.isOffline(route) {
+                                    Text(transferLabel(route))
+                                        .font(.caption)
+                                        .foregroundStyle(transferTint(route))
+                                }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -336,16 +347,18 @@ private struct FavoriteRoutesView: View {
                         .accessibilityHint("Open this saved route")
 
                         Button {
-                            model.toggleOffline(route)
+                            if watch.routeTransfer(for: route.id)?.state == .failed {
+                                model.retryOfflineTransfer(route)
+                            } else {
+                                model.toggleOffline(route)
+                            }
                         } label: {
-                            Image(systemName: model.isOffline(route) ? "applewatch.radiowaves.left.and.right" : "arrow.down.circle")
-                                .font(.system(size: 20))
-                                .foregroundStyle(model.isOffline(route) ? Color.looperAccent : .secondary)
+                            transferIcon(route)
                                 .frame(width: 44, height: 44)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Available offline on Apple Watch")
-                        .accessibilityValue(model.isOffline(route) ? "On" : "Off")
+                        .accessibilityValue(model.isOffline(route) ? transferLabel(route) : "Off")
                         .accessibilityHint("Downloads \(route.name) to your Watch so you can walk it without your phone")
                     }
                 }
@@ -357,6 +370,48 @@ private struct FavoriteRoutesView: View {
             }
         }
         .navigationTitle("Saved routes")
+    }
+
+    private func transferLabel(_ route: Route) -> String {
+        guard let transfer = watch.routeTransfer(for: route.id) else { return "Queued for Apple Watch" }
+        switch transfer.state {
+        case .queued: return "Queued for Apple Watch"
+        case .receiving: return "Sending to Apple Watch · \(Int(transfer.fractionComplete * 100))%"
+        case .ready: return "Downloaded to Apple Watch"
+        case .failed: return "Couldn’t download · Tap to retry"
+        }
+    }
+
+    private func transferTint(_ route: Route) -> Color {
+        watch.routeTransfer(for: route.id)?.state == .failed ? .orange : .secondary
+    }
+
+    @ViewBuilder
+    private func transferIcon(_ route: Route) -> some View {
+        if !model.isOffline(route) {
+            Image(systemName: "arrow.down.circle")
+                .font(.system(size: 20))
+                .foregroundStyle(.secondary)
+        } else if let transfer = watch.routeTransfer(for: route.id) {
+            switch transfer.state {
+            case .queued:
+                ProgressView().controlSize(.small)
+            case .receiving:
+                ProgressView(value: transfer.fractionComplete)
+                    .progressViewStyle(.circular)
+                    .tint(Color.looperAccent)
+            case .ready:
+                Image(systemName: "applewatch.radiowaves.left.and.right")
+                    .font(.system(size: 20))
+                    .foregroundStyle(Color.looperAccent)
+            case .failed:
+                Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
+                    .font(.system(size: 20))
+                    .foregroundStyle(.orange)
+            }
+        } else {
+            ProgressView().controlSize(.small)
+        }
     }
 }
 

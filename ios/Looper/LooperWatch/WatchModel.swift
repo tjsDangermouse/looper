@@ -138,6 +138,9 @@ final class WatchModel: ObservableObject {
         navigationMaps.onDiagnostic = { [weak self] event, details in
             self?.send(.diagnostic(WatchDiagnosticPayload(event: event, details: details)))
         }
+        navigationMaps.onRouteTransferStatus = { [weak self] status in
+            self?.sendRouteTransferStatus(status)
+        }
         speech.onDiagnostic = { [weak self] event, details in
             self?.send(.diagnostic(WatchDiagnosticPayload(event: event, details: details)))
         }
@@ -324,6 +327,8 @@ final class WatchModel: ObservableObject {
             // a second one.
             if await workout.recoverRunningWorkout() {
                 restoreWalk()
+            } else {
+                showRouteLibraryAfterIdleLaunch()
             }
             requestPlan()
         }
@@ -370,7 +375,11 @@ final class WatchModel: ObservableObject {
     func retryPermissions() {
         Task {
             guard await completePermissionGate() else { return }
-            if await workout.recoverRunningWorkout() { restoreWalk() }
+            if await workout.recoverRunningWorkout() {
+                restoreWalk()
+            } else {
+                showRouteLibraryAfterIdleLaunch()
+            }
             requestPlan()
         }
     }
@@ -692,6 +701,16 @@ final class WatchModel: ObservableObject {
         link.send(message, delivery: .durable)
     }
 
+    /// Intermediate progress is useful only while the phone is present. The
+    /// final answer is durable so the phone eventually learns that the route
+    /// is ready (or failed) even if it was asleep during the transfer.
+    private func sendRouteTransferStatus(_ status: WatchRouteTransferStatusPayload) {
+        guard !standaloneForced else { return }
+        workout.sendToPhone(.routeTransferStatus(status))
+        let final = status.state == .ready || status.state == .failed
+        link.send(.routeTransferStatus(status), delivery: final ? .durable : .live)
+    }
+
     private func requestPlan() {
         guard !standaloneForced else { return }
         lastPlanRequestAt = Date()
@@ -802,7 +821,7 @@ final class WatchModel: ObservableObject {
             case .start, .requestPlan:
                 break
             }
-        case .workoutStatus, .diagnostic, .walkRecord, .mapRequest:
+        case .workoutStatus, .diagnostic, .routeTransferStatus, .walkRecord, .mapRequest:
             break
         }
     }
@@ -839,8 +858,19 @@ final class WatchModel: ObservableObject {
         defaults.removeObject(forKey: Self.planKey)
     }
 
-    /// A Watch app opened cold, out of range of the phone, still shows the
-    /// last loop it was told about rather than an empty screen.
+    /// A completed outing or an old phone selection must not become the
+    /// Watch's launch destination. With no workout to recover, launch into the
+    /// route library and let the wearer choose from what is actually saved.
+    private func showRouteLibraryAfterIdleLaunch() {
+        plan = nil
+        plannedOnWatch = false
+        clearStoredPlan()
+        navigationMaps.release()
+        if !savedRoutes.isEmpty { navigationMaps.prefetch(savedRoutes) }
+    }
+
+    /// Retained only so a Watch app evicted during an active workout can
+    /// rebuild its tracker. An idle launch clears this and opens the library.
     private func loadStoredPlan() -> LoopPlanPayload? {
         guard let data = defaults.data(forKey: Self.planKey) else { return nil }
         return try? JSONDecoder().decode(LoopPlanPayload.self, from: data)

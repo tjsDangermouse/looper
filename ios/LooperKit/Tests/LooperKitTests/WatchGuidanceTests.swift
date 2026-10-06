@@ -113,6 +113,18 @@ final class GuidancePackTests: XCTestCase {
         XCTAssertEqual(try WatchLinkCodec.decode(try WatchLinkCodec.encode(.plan(pack))), .plan(pack))
         let saved = SavedRoutesPayload(routes: [pack], sentAt: Date(timeIntervalSince1970: 1_700_000_000))
         XCTAssertEqual(try WatchLinkCodec.decode(try WatchLinkCodec.encode(.savedRoutes(saved))), .savedRoutes(saved))
+        let transfer = WatchRouteTransferStatusPayload(
+            routeID: pack.routeID,
+            state: .receiving,
+            completedItems: 3,
+            totalItems: 10,
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_001)
+        )
+        XCTAssertEqual(
+            try WatchLinkCodec.decode(try WatchLinkCodec.encode(.routeTransferStatus(transfer))),
+            .routeTransferStatus(transfer)
+        )
+        XCTAssertEqual(transfer.fractionComplete, 0.3, accuracy: 0.001)
     }
 
     func testAStartFromTheWristNamesItsRoute() throws {
