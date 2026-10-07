@@ -71,30 +71,81 @@ final class WatchSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate {
 
     var isSpeaking: Bool { pending > 0 }
 
-    private func activateSession() {
+    private var sessionActive = false
+    private var activating = false
+    private var waiting: [AVSpeechUtterance] = []
+
+    /// Activation is asynchronous: on watchOS it can take seconds to settle
+    /// the audio route, and doing it on the main thread froze the tap.
+    /// Utterances wait for it and are then spoken in order.
+    private func activateSession(then utterance: AVSpeechUtterance) {
         releaseTask?.cancel()
         releaseTask = nil
-        do {
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            onDiagnostic?("speech.audioSessionFailed", ["error": error.localizedDescription])
+        if sessionActive {
+            synthesizer.speak(utterance)
+            return
+        }
+        waiting.append(utterance)
+        guard !activating else { return }
+        activating = true
+        Task { [weak self] in
+            var failure: Error?
+            do {
+                _ = try await AVAudioSession.sharedInstance().activate(options: [])
+            } catch {
+                failure = error
+            }
+            guard let self else { return }
+            self.activating = false
+            if let failure {
+                self.onDiagnostic?("speech.audioSessionFailed", ["error": failure.localizedDescription])
+            }
+            // Speak even if activation failed: better late or quiet than lost.
+            self.sessionActive = failure == nil
+            let queued = self.waiting
+            self.waiting = []
+            queued.forEach { self.synthesizer.speak($0) }
         }
     }
 
     /// Gives the audio back once the queue has drained, so other apps return
     /// to full volume. A short wait first, so back-to-back sentences don't
-    /// pump the music up and down between them.
+    /// pump the music up and down between them. Retried if the system says
+    /// it is still busy, so the music never stays turned down.
     private func releaseSessionWhenIdle() {
         guard pending == 0 else { return }
         releaseTask?.cancel()
         releaseTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 400_000_000)
-            guard let self, !Task.isCancelled, self.pending == 0, !self.synthesizer.isSpeaking else { return }
-            self.releaseTask = nil
-            do {
-                try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-            } catch {
-                self.onDiagnostic?("speech.audioReleaseFailed", ["error": error.localizedDescription])
+            for attempt in 0..<5 {
+                guard let self, !Task.isCancelled, self.pending == 0 else { return }
+                if !self.synthesizer.isSpeaking {
+                    do {
+                        try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+                        self.sessionActive = false
+                        self.releaseTask = nil
+                        return
+                    } catch {
+                        self.onDiagnostic?("speech.audioReleaseFailed", [
+                            "error": error.localizedDescription, "attempt": String(attempt)
+                        ])
+                    }
+                }
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+        }
+    }
+
+    /// Clears an utterance that never reports back (no audio route, for one),
+    /// so the queue can't stay stuck and the music can't stay ducked.
+    private func watchdog(for utterance: AVSpeechUtterance) {
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 20_000_000_000)
+            guard let self, self.pending > 0, !self.activating else { return }
+            // Still waiting 20s on: nothing is actually being said any more.
+            if !self.synthesizer.isSpeaking {
+                self.pending = 0
+                self.releaseSessionWhenIdle()
             }
         }
     }
@@ -133,14 +184,18 @@ final class WatchSpeechPlayer: NSObject, AVSpeechSynthesizerDelegate {
         utterance.voice = resolveVoice()
         if let completion { completions[ObjectIdentifier(utterance)] = completion }
         onDiagnostic?("speech.queued", ["text": text])
-        activateSession()
         pending += 1
-        synthesizer.speak(utterance)
+        activateSession(then: utterance)
+        watchdog(for: utterance)
     }
 
     func stop() {
         completions.removeAll()
+        pending -= waiting.count
+        waiting = []
+        pending = max(0, pending)
         synthesizer.stopSpeaking(at: .immediate)
+        releaseSessionWhenIdle()
     }
 
     private func utteranceEnded(_ id: ObjectIdentifier) {

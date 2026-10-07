@@ -684,11 +684,12 @@ final class WatchNavigationMapCache: ObservableObject {
         turn: Point,
         distanceToTurn: Double,
         heading: CLLocationDirection,
-        lookAheadCap: Double = 0.25
+        lookAheadCap: Double = 0.25,
+        boundByTurn: Bool = true
     ) -> (center: Point, distance: CLLocationDistance) {
         let direct = haversine(position, turn)
         let distance = min(1_000, max(180, distanceToTurn * 2.4))
-        let ahead = min(direct * 0.6, distance * lookAheadCap)
+        let ahead = boundByTurn ? min(direct * 0.6, distance * lookAheadCap) : distance * lookAheadCap
         let radians = heading * Double.pi / 180
         let center = Point(
             position.lng + ahead * sin(radians) / (111_320 * cos(position.lat * Double.pi / 180)),

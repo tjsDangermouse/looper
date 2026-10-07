@@ -97,10 +97,11 @@ struct GuidancePage: View {
             return LiveMapFraming(center: position, distance: 400, heading: heading)
         }
         // The walker sits higher than on a saved picture: the live map has no
-        // second layer to turn a dot into a ring where the banner covers it.
+        // second layer to turn a dot into a ring where the banner covers it, so
+        // the walker is held well up the screen, clear of the banner.
         let frame = WatchNavigationMapCache.framing(
             position: position, turn: turn, distanceToTurn: target.distanceMeters,
-            heading: heading, lookAheadCap: 0.12
+            heading: heading, lookAheadCap: 0.2, boundByTurn: false
         )
         return LiveMapFraming(center: frame.center, distance: frame.distance, heading: heading)
     }
