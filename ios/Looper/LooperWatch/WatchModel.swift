@@ -50,6 +50,9 @@ final class WatchModel: ObservableObject {
     /// on screen the app already knows whether it can record — and can say
     /// so, rather than finding out on the Start tap.
     @Published private(set) var canRecordToHealth = true
+    /// Names of the Health permissions that are off, for the start screen.
+    /// Empty when everything this app writes is allowed.
+    @Published private(set) var disabledHealthPermissions: [String] = []
     /// The phone's saved routes, each a complete guidance pack.
     @Published private(set) var savedRoutes: [LoopPlanPayload] = []
     /// Spoken directions on or off. The wearer's choice, kept on the Watch.
@@ -70,6 +73,7 @@ final class WatchModel: ObservableObject {
     }
 
     let workout = WatchWorkout()
+    private let diagnostics = WatchDiagnosticLog()
     let navigationMaps = WatchNavigationMapCache()
     private let link = WatchLinkSession()
     private let haptics = WatchHapticPlayer()
@@ -113,16 +117,18 @@ final class WatchModel: ObservableObject {
         }
         workout.onRemoteMessage = { [weak self] message in self?.receive(message) }
         workout.onFix = { [weak self] location in self?.ingest(location) }
+        workout.onDiagnostic = { [weak self] event, details in self?.diag(event, details) }
         link.onMessage = { [weak self] message in self?.receive(message) }
         link.onReachChange = { [weak self] reach in
             guard let self else { return }
             objectWillChange.send()
             if reach.canPreload, !standaloneForced { navigationMaps.phoneBecameAvailable() }
-            send(.diagnostic(WatchDiagnosticPayload(event: "connectionChanged", details: [
+            defer { flushDiagnostics() }
+            diag("connectionChanged", [
                 "activated": String(reach.activated),
                 "counterpartInstalled": String(reach.counterpartInstalled),
                 "reachable": String(reach.reachable)
-            ])))
+            ])
         }
         link.onVersionMismatch = { [weak self] version in
             self?.notice = "Your iPhone is running a different version of Looper (v\(version))."
@@ -136,13 +142,13 @@ final class WatchModel: ObservableObject {
             self?.navigationMaps.receive(mapAt: url, details: details)
         }
         navigationMaps.onDiagnostic = { [weak self] event, details in
-            self?.send(.diagnostic(WatchDiagnosticPayload(event: event, details: details)))
+            self?.diag(event, details)
         }
         navigationMaps.onRouteTransferStatus = { [weak self] status in
             self?.sendRouteTransferStatus(status)
         }
         speech.onDiagnostic = { [weak self] event, details in
-            self?.send(.diagnostic(WatchDiagnosticPayload(event: event, details: details)))
+            self?.diag(event, details)
         }
         if let plan {
             speech.configure(plan.narration)
@@ -362,6 +368,7 @@ final class WatchModel: ObservableObject {
             // transition clear before presenting HealthKit's larger sheet.
             try? await Task.sleep(nanoseconds: 350_000_000)
             canRecordToHealth = await workout.requestAuthorization()
+            refreshHealthPermissions()
 
             launchPhase = .ready
             return true
@@ -370,6 +377,17 @@ final class WatchModel: ObservableObject {
         let ready = await gate.value
         permissionGate = nil
         return ready
+    }
+
+    /// Reads every Health permission this app needs and records the result,
+    /// so a switch that is off is named on screen and in the log rather than
+    /// discovered afterwards as a missing heart rate or map.
+    func refreshHealthPermissions() {
+        let statuses = workout.permissionStatuses
+        disabledHealthPermissions = statuses.filter { $0.status != "authorized" }.map(\.name)
+        var details = Dictionary(uniqueKeysWithValues: statuses.map { ($0.name, $0.status) })
+        details["location"] = String(describing: workout.locationAuthorizationName)
+        diag("permissions.checked", details)
     }
 
     func retryPermissions() {
@@ -392,6 +410,26 @@ final class WatchModel: ObservableObject {
             guard await completePermissionGate() else { return }
             await start(activity: activity, initiatedHere: false)
         }
+    }
+
+
+    // MARK: Diagnostics
+
+    /// Every diagnostic event: always written to the Watch's own log, and sent
+    /// live when the phone is listening. Standalone or out of range, the log
+    /// alone keeps it until `flushDiagnostics` can hand it over.
+    private func diag(_ event: String, _ details: [String: String] = [:]) {
+        let live = !standaloneForced && link.reach.reachable
+        diagnostics.record(event, details: details, delivered: live)
+        if live { send(.diagnostic(WatchDiagnosticPayload(event: event, details: details))) }
+    }
+
+    /// Hands the phone everything it didn't hear live. Queued durably, so it
+    /// arrives even if the phone app isn't open right now.
+    private func flushDiagnostics() {
+        guard !standaloneForced, link.reach.canPreload, diagnostics.hasUndelivered else { return }
+        diagnostics.undeliveredChunks().forEach { link.send(.diagnosticBatch($0), delivery: .durable) }
+        diagnostics.markDelivered()
     }
 
     // MARK: Choosing a route
@@ -453,6 +491,13 @@ final class WatchModel: ObservableObject {
             notice = "This route has no map data. Choose it again on your iPhone."
         }
 
+        refreshHealthPermissions()
+        diag("walk.starting", [
+            "sessionID": plan.sessionID, "routeID": plan.routeID, "activity": activity.rawValue,
+            "initiatedHere": String(initiatedHere), "standaloneForced": String(standaloneForced),
+            "phoneReachable": String(link.reach.reachable), "phoneCanPreload": String(link.reach.canPreload),
+            "healthAuthorized": String(workout.isAuthorizedToRecord), "trackerReady": String(tracker != nil)
+        ])
         var recordsWorkout = false
         do {
             #if DEBUG
@@ -462,10 +507,15 @@ final class WatchModel: ObservableObject {
             #endif
             try await workout.start(activity: activity, sessionID: plan.sessionID)
             recordsWorkout = true
+            diag("workout.started", ["sessionID": plan.sessionID, "routeAuth": workout.routeAuthorizationName])
             canRecordToHealth = true
             guidanceOnly = false
         } catch {
             guidanceOnly = true
+            diag("workout.startFailed", [
+                "error": (error as? LocalizedError)?.errorDescription ?? error.localizedDescription,
+                "healthAuthorized": String(workout.isAuthorizedToRecord)
+            ])
             canRecordToHealth = workout.isAuthorizedToRecord
             notice = "Guidance only · Apple Health recording is off"
             // Without a workout nothing keeps the app running, so guidance
@@ -525,13 +575,24 @@ final class WatchModel: ObservableObject {
 
     private func finishWalk() async {
         speech.stop()
+        diag("walk.ending", [
+            "sessionID": plan?.sessionID ?? "none", "workoutRunning": String(workout.isRunning),
+            "guidanceOnly": String(guidanceOnly), "trackPoints": String(walk.track.count),
+            "standaloneForced": String(standaloneForced), "phoneReachable": String(link.reach.reachable)
+        ])
         await workout.end()
         workout.stopFollowingWithoutWorkout()
+        diag("walk.ended", [
+            "sessionID": plan?.sessionID ?? "none", "savedWorkoutID": savedWorkoutID ?? "none",
+            "trackPoints": String(walk.track.count), "workoutFailure": workout.failure ?? "none"
+        ])
         #if DEBUG
         simulation?.cancel()
         simulation = nil
         #endif
         sendWalkRecord()
+        diagnostics.persistNow()
+        flushDiagnostics()
         WatchFiles.remove(named: "walk")
         guidancePaused = false
         presentResultIfNeeded()
@@ -568,11 +629,11 @@ final class WatchModel: ObservableObject {
         let previousStep = state?.next?.stepIndex
         state = tracked
         if previousStep != tracked.next?.stepIndex {
-            send(.diagnostic(WatchDiagnosticPayload(event: "stepDisplayed", details: [
+            diag("stepDisplayed", [
                 "previousStep": previousStep.map(String.init) ?? "none",
                 "step": tracked.next.map { String($0.stepIndex) } ?? "none",
                 "distanceM": tracked.next.map { String(format: "%.1f", $0.distanceMeters) } ?? "none"
-            ])))
+            ])
         }
         haptics.respond(to: tracked)
         narrate(update)
@@ -783,11 +844,11 @@ final class WatchModel: ObservableObject {
             let previousStep = state?.next?.stepIndex
             state = incoming
             if previousStep != incoming.next?.stepIndex {
-                send(.diagnostic(WatchDiagnosticPayload(event: "stepDisplayed", details: [
+                diag("stepDisplayed", [
                     "previousStep": previousStep.map(String.init) ?? "none",
                     "step": incoming.next.map { String($0.stepIndex) } ?? "none",
                     "distanceM": incoming.next.map { String(format: "%.1f", $0.distanceMeters) } ?? "none"
-                ])))
+                ])
             }
             // A phone walking an outing this Watch has no workout for means
             // guidance only — but not while a workout is still starting, and
@@ -821,7 +882,7 @@ final class WatchModel: ObservableObject {
             case .start, .requestPlan:
                 break
             }
-        case .workoutStatus, .diagnostic, .routeTransferStatus, .walkRecord, .mapRequest:
+        case .workoutStatus, .diagnostic, .diagnosticBatch, .routeTransferStatus, .walkRecord, .mapRequest:
             break
         }
     }

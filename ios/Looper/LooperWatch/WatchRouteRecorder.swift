@@ -18,6 +18,14 @@ final class WatchRouteRecorder: NSObject {
     /// Every usable fix as it arrives, for following the route. Separate from
     /// the batches above, which are only for HealthKit.
     var onFix: ((CLLocation) -> Void)?
+    /// Facts for the diagnostic log: authorization, start and stop, errors,
+    /// and a periodic count of fixes received against fixes kept.
+    var onDiagnostic: ((String, [String: String]) -> Void)?
+    private var received = 0
+    private var dropped = 0
+    private var lastAccuracy: Double?
+    private var lastSummaryAt = Date.distantPast
+    private static let summaryInterval: TimeInterval = 30
     private var authorizationContinuation: CheckedContinuation<CLAuthorizationStatus, Never>?
     /// Fixes are handed over in batches rather than one at a time; HealthKit
     /// would rather have a handful than a steady drip.
@@ -42,8 +50,31 @@ final class WatchRouteRecorder: NSObject {
         }
     }
 
+    var authorizationName: String { Self.name(manager.authorizationStatus) }
+
+    private static func name(_ status: CLAuthorizationStatus) -> String {
+        switch status {
+        case .notDetermined: return "notDetermined"
+        case .restricted: return "restricted"
+        case .denied: return "denied"
+        case .authorizedAlways: return "always"
+        case .authorizedWhenInUse: return "whenInUse"
+        @unknown default: return "unknown"
+        }
+    }
+
     func start(onBatch: (([CLLocation]) -> Void)? = nil) {
         self.onBatch = onBatch
+        received = 0
+        dropped = 0
+        lastAccuracy = nil
+        lastSummaryAt = Date()
+        onDiagnostic?("location.start", [
+            "authorization": Self.name(manager.authorizationStatus),
+            "accuracyAuthorization": manager.accuracyAuthorization == .fullAccuracy ? "full" : "reduced",
+            "locationServicesEnabled": String(CLLocationManager.locationServicesEnabled()),
+            "buildsRoute": String(onBatch != nil)
+        ])
         // `allowsBackgroundLocationUpdates` was tried here and reliably
         // crashed on a real Watch (`CLClientIsBackgroundable` false) even
         // with Always authorization confirmed granted in Settings. That flag
@@ -60,6 +91,9 @@ final class WatchRouteRecorder: NSObject {
     }
 
     func stop() {
+        onDiagnostic?("location.stop", [
+            "received": String(received), "dropped": String(dropped), "unflushed": String(pending.count)
+        ])
         onBatch = nil
         manager.stopUpdatingLocation()
     }
@@ -74,6 +108,7 @@ final class WatchRouteRecorder: NSObject {
 
 extension WatchRouteRecorder: CLLocationManagerDelegate {
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        onDiagnostic?("location.authorization", ["status": Self.name(manager.authorizationStatus)])
         guard manager.authorizationStatus != .notDetermined,
               let continuation = authorizationContinuation else { return }
         authorizationContinuation = nil
@@ -85,6 +120,16 @@ extension WatchRouteRecorder: CLLocationManagerDelegate {
         // CoreLocation couldn't place, or placed to within a hundred metres,
         // is not a point on anybody's route.
         let usable = locations.filter { $0.horizontalAccuracy > 0 && $0.horizontalAccuracy <= 100 }
+        received += locations.count
+        dropped += locations.count - usable.count
+        lastAccuracy = locations.last?.horizontalAccuracy
+        if Date().timeIntervalSince(lastSummaryAt) >= Self.summaryInterval {
+            lastSummaryAt = Date()
+            onDiagnostic?("location.fixes", [
+                "received": String(received), "dropped": String(dropped),
+                "lastAccuracyM": lastAccuracy.map { String(format: "%.0f", $0) } ?? "none"
+            ])
+        }
         usable.forEach { onFix?($0) }
         // With no workout there is no route to build, and fixes are only for
         // following; nothing is held on to.
@@ -98,6 +143,7 @@ extension WatchRouteRecorder: CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         // A workout with no map is still a workout; nothing here should
-        // interrupt the recording.
+        // interrupt the recording — but it is written down.
+        onDiagnostic?("location.failed", ["error": error.localizedDescription])
     }
 }

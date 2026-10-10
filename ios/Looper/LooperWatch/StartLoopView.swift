@@ -76,6 +76,16 @@ struct StartLoopView: View {
                     }
                 }
 
+                if !model.disabledHealthPermissions.isEmpty {
+                    Label(
+                        "Health is blocking: \(model.disabledHealthPermissions.joined(separator: ", ")). Turn on in Health on your iPhone → Apps → Looper.",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 if let notice = model.notice {
                     Text(notice)
                         .font(.caption2)

@@ -50,11 +50,18 @@ final class WatchWorkout: NSObject, ObservableObject {
     var onRemoteMessage: ((WatchMessage) -> Void)?
     /// Each usable GPS fix, for following the route.
     var onFix: ((CLLocation) -> Void)?
+    /// Everything worth knowing afterwards about how the workout and its
+    /// route went, for the diagnostic log.
+    var onDiagnostic: ((String, [String: String]) -> Void)?
 
     private let store = HKHealthStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
     private var routeBuilder: HKWorkoutRouteBuilder?
+    /// Every fix given to the route, kept so the route can be saved again
+    /// from scratch if HealthKit lost it. One failed insert ends the builder's
+    /// series for good, and nothing else would say so.
+    private var routeFixes: [CLLocation] = []
     private let locations = WatchRouteRecorder()
     /// Following the route with no workout — Health recording refused. Only
     /// while the app is in front, since only a workout keeps it running.
@@ -72,12 +79,52 @@ final class WatchWorkout: NSObject, ObservableObject {
     /// is only ever finished, and only ever reported, once.
     private var isFinishing = false
 
+    /// Whether Health will accept a route for the workout. A separate switch
+    /// ("Workout Routes") from permission to save the workout itself, so a
+    /// workout can save with heart rate and everything else but no map.
+    var routeAuthorizationName: String {
+        switch store.authorizationStatus(for: HKSeriesType.workoutRoute()) {
+        case .notDetermined: return "notDetermined"
+        case .sharingDenied: return "denied"
+        case .sharingAuthorized: return "authorized"
+        @unknown default: return "unknown"
+        }
+    }
+
+    /// Every kind of data this app writes, with what Health says about it now.
+    /// HealthKit only ever reveals *write* permission. A switch for reading
+    /// something (the Watch's own sensors feeding the workout) can't be seen
+    /// from here, so only what is visible is checked.
+    var permissionStatuses: [(name: String, status: String)] {
+        let checks: [(String, HKObjectType?)] = [
+            ("Workouts", HKObjectType.workoutType()),
+            ("Workout Routes", HKSeriesType.workoutRoute()),
+            ("Distance", HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)),
+            ("Heart Rate", HKObjectType.quantityType(forIdentifier: .heartRate)),
+            ("Active Energy", HKObjectType.quantityType(forIdentifier: .activeEnergyBurned))
+        ]
+        return checks.compactMap { name, type in
+            guard let type else { return nil }
+            switch store.authorizationStatus(for: type) {
+            case .sharingAuthorized: return (name, "authorized")
+            case .sharingDenied: return (name, "denied")
+            case .notDetermined: return (name, "notDetermined")
+            @unknown default: return (name, "unknown")
+            }
+        }
+    }
+
+    var isAuthorizedToRecordRoute: Bool { routeAuthorizationName == "authorized" }
+
     var isRunning: Bool { session != nil && (phase == .active || phase == .paused) }
 
     override init() {
         super.init()
         locations.onFix = { [weak self] location in
             Task { @MainActor in self?.onFix?(location) }
+        }
+        locations.onDiagnostic = { [weak self] event, details in
+            Task { @MainActor in self?.onDiagnostic?(event, details) }
         }
     }
 
@@ -96,6 +143,8 @@ final class WatchWorkout: NSObject, ObservableObject {
     /// The launch gate waits for Core Location to settle before it asks for
     /// Health access. Returning the status lets the gate keep the main app
     /// hidden when location access was declined.
+    var locationAuthorizationName: String { locations.authorizationName }
+
     func requestLocationAuthorization() async -> CLAuthorizationStatus {
         await locations.requestAuthorization()
     }
@@ -177,6 +226,7 @@ final class WatchWorkout: NSObject, ObservableObject {
         self.builder = builder
         self.isFinishing = false
         self.failure = nil
+        self.routeFixes = []
 
         let started = Date()
         session.startActivity(with: started)
@@ -192,6 +242,12 @@ final class WatchWorkout: NSObject, ObservableObject {
         // workout finishes the route with it — there is no window in which a
         // saved workout is missing its map.
         routeBuilder = builder.seriesBuilder(for: HKSeriesType.workoutRoute()) as? HKWorkoutRouteBuilder
+        onDiagnostic?("route.builder", [
+            "created": String(routeBuilder != nil),
+            "workoutAuth": String(describing: store.authorizationStatus(for: HKObjectType.workoutType()).rawValue),
+            "routeAuth": routeAuthorizationName,
+            "mirrorsToPhone": String(mirrorsToPhone)
+        ])
         beginLocationsWhenRunning(session)
 
         phase = .active
@@ -211,7 +267,13 @@ final class WatchWorkout: NSObject, ObservableObject {
         }
         // `.paused` also means the session has finished its initial
         // transition and is past the same gate `.running` clears.
-        if session.state == .running || session.state == .paused {
+        let ready = session.state == .running || session.state == .paused
+        onDiagnostic?("route.locationsRequested", [
+            "sessionState": String(describing: session.state),
+            "startedNow": String(ready),
+            "routeBuilderPresent": String(routeBuilder != nil)
+        ])
+        if ready {
             beginLocations()
         } else {
             pendingLocationStart = beginLocations
@@ -247,6 +309,7 @@ final class WatchWorkout: NSObject, ObservableObject {
         guard !isFinishing, let session, let builder else { return }
         isFinishing = true
         phase = .ending
+        onDiagnostic?("workout.ending", ["routeFixes": String(routeFixes.count), "routeBuilderPresent": String(routeBuilder != nil)])
         let ended = Date()
         session.end()
         pendingLocationStart = nil
@@ -260,9 +323,12 @@ final class WatchWorkout: NSObject, ObservableObject {
             try await builder.endCollection(at: ended)
             averageHeartRate = averageHeartRate ?? statisticAverage(.heartRate)
             let workout = try await builder.finishWorkout()
+            if let workout { await ensureRoute(for: workout) }
             phase = .ended
+            onDiagnostic?("workout.saved", ["workoutID": workout?.uuid.uuidString ?? "none"])
             report(.saved, workoutID: workout?.uuid.uuidString)
         } catch {
+            onDiagnostic?("workout.saveFailed", ["error": error.localizedDescription])
             phase = .ended
             failure = error.localizedDescription
             // The phone takes the Health record back when this happens, so
@@ -287,6 +353,9 @@ final class WatchWorkout: NSObject, ObservableObject {
         builder?.delegate = self
         recovered.delegate = self
         routeBuilder = builder?.seriesBuilder(for: HKSeriesType.workoutRoute()) as? HKWorkoutRouteBuilder
+        onDiagnostic?("workout.recovered", [
+            "state": String(describing: recovered.state), "routeBuilderPresent": String(routeBuilder != nil)
+        ])
         phase = recovered.state == .paused ? .paused : .active
         beginLocationsWhenRunning(recovered)
         startTicking()
@@ -308,7 +377,52 @@ final class WatchWorkout: NSObject, ObservableObject {
 
     private func appendRoute(_ batch: [CLLocation]) async {
         guard let routeBuilder, !batch.isEmpty else { return }
-        try? await routeBuilder.insertRouteData(batch)
+        routeFixes += batch
+        do {
+            try await routeBuilder.insertRouteData(batch)
+            onDiagnostic?("route.inserted", ["batch": String(batch.count), "total": String(routeFixes.count)])
+        } catch {
+            onDiagnostic?("route.insertFailed", [
+                "batch": String(batch.count), "total": String(routeFixes.count),
+                "error": error.localizedDescription, "routeAuth": routeAuthorizationName
+            ])
+        }
+    }
+
+    /// After the workout is saved, confirms Health holds a route for it. If
+    /// not — the builder's series died, or never attached — the route is
+    /// rebuilt from every fix kept and attached explicitly.
+    private func ensureRoute(for workout: HKWorkout) async {
+        let fixes = routeFixes
+        let attached = await hasRoute(for: workout)
+        onDiagnostic?("route.check", [
+            "fixes": String(fixes.count), "attachedByWorkout": String(attached), "routeAuth": routeAuthorizationName
+        ])
+        guard !attached, !fixes.isEmpty else { return }
+        let rebuilt = HKWorkoutRouteBuilder(healthStore: store, device: nil)
+        do {
+            try await rebuilt.insertRouteData(fixes)
+            _ = try await rebuilt.finishRoute(with: workout, metadata: nil)
+            onDiagnostic?("route.rebuilt", ["fixes": String(fixes.count)])
+        } catch {
+            onDiagnostic?("route.rebuildFailed", [
+                "fixes": String(fixes.count), "error": error.localizedDescription, "routeAuth": routeAuthorizationName
+            ])
+        }
+    }
+
+    private func hasRoute(for workout: HKWorkout) async -> Bool {
+        await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: HKSeriesType.workoutRoute(),
+                predicate: HKQuery.predicateForObjects(from: workout),
+                limit: 1,
+                sortDescriptors: nil
+            ) { _, samples, _ in
+                continuation.resume(returning: !(samples ?? []).isEmpty)
+            }
+            store.execute(query)
+        }
     }
 
     private func report(_ state: WatchWorkoutStatusPayload.State, workoutID: String? = nil, message: String? = nil) {
@@ -352,6 +466,10 @@ extension WatchWorkout: HKWorkoutSessionDelegate {
         date: Date
     ) {
         Task { @MainActor in
+            onDiagnostic?("workout.state", [
+                "from": String(describing: fromState), "to": String(describing: toState),
+                "locationStartDeferred": String(pendingLocationStart != nil)
+            ])
             if toState == .running || toState == .paused, let pending = pendingLocationStart {
                 pendingLocationStart = nil
                 pending()
@@ -372,6 +490,7 @@ extension WatchWorkout: HKWorkoutSessionDelegate {
             // Workout app, which takes the session away from us. Nothing has
             // been saved, so the phone is told to own the record.
             failure = error.localizedDescription
+            onDiagnostic?("workout.sessionFailed", ["error": error.localizedDescription])
             phase = .ended
             pendingLocationStart = nil
             locations.stop()
@@ -386,7 +505,10 @@ extension WatchWorkout: HKWorkoutSessionDelegate {
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didDisconnectFromRemoteDeviceWithError error: Error?) {
         // The phone has gone; the workout on this wrist carries on recording
         // and saving. Nothing to do here but let the UI notice.
-        Task { @MainActor in objectWillChange.send() }
+        Task { @MainActor in
+            onDiagnostic?("workout.mirrorDisconnected", ["error": error?.localizedDescription ?? "none"])
+            objectWillChange.send()
+        }
     }
 
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didReceiveDataFromRemoteWorkoutSession data: [Data]) {

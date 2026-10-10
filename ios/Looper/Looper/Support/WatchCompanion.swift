@@ -342,6 +342,8 @@ final class WatchCompanion: NSObject, ObservableObject {
             onWorkoutStatus?(status)
         case .diagnostic(let diagnostic):
             onDiagnostic?(diagnostic)
+        case .diagnosticBatch(let diagnostics):
+            diagnostics.forEach { onDiagnostic?($0) }
         case .walkRecord(let record):
             onWalkRecord?(record)
         case .routeTransferStatus(let status):

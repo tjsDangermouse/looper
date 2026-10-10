@@ -88,11 +88,30 @@ final class HealthKitService: WorkoutSaving, @unchecked Sendable {
         return currentAvailability()
     }
 
+    /// Written to the navigation diagnostics, so a loop that reached Health
+    /// without a map — or not at all — can be explained afterwards.
+    private func note(_ event: String, _ details: [String: String] = [:]) async {
+        await MainActor.run { NavigationLogger.shared.log("health.\(event)", details: details) }
+    }
+
     func save(_ record: LoopSessionRecord) async throws -> String {
-        guard HKHealthStore.isHealthDataAvailable() else { throw HealthSaveError.unavailable }
-        guard currentAvailability() == .authorized else { throw HealthSaveError.notAuthorized }
+        guard HKHealthStore.isHealthDataAvailable() else {
+            await note("save.unavailable", ["sessionID": record.id])
+            throw HealthSaveError.unavailable
+        }
+        guard currentAvailability() == .authorized else {
+            await note("save.notAuthorized", ["sessionID": record.id])
+            throw HealthSaveError.notAuthorized
+        }
 
         let summary = makeLoopSummary(record)
+        await note("save.begin", [
+            "sessionID": record.id,
+            "trackPoints": String(record.track.count),
+            "plausiblePoints": String(plausibleTrack(record.track).count),
+            "hasReliableTrack": String(summary.hasReliableTrack),
+            "distanceM": String(format: "%.0f", summary.distanceMeters)
+        ])
         let start = record.startedAt
         // A zero-length workout is rejected by HealthKit; give a lightning-fast
         // outing a floor of one second.
@@ -127,7 +146,11 @@ final class HealthKitService: WorkoutSaving, @unchecked Sendable {
         try await builder.addMetadata(metadata)
 
         try await builder.endCollection(at: end)
-        guard let workout = try await builder.finishWorkout() else { throw HealthSaveError.noWorkoutProduced }
+        guard let workout = try await builder.finishWorkout() else {
+            await note("save.noWorkoutProduced", ["sessionID": record.id])
+            throw HealthSaveError.noWorkoutProduced
+        }
+        await note("save.workoutSaved", ["sessionID": record.id, "workoutID": workout.uuid.uuidString])
 
         // The workout itself is already saved at this point. An incomplete or
         // rejected track shouldn't undo that, so route failures are swallowed
@@ -135,6 +158,8 @@ final class HealthKitService: WorkoutSaving, @unchecked Sendable {
         // stand for the outing is left off entirely.
         if summary.hasReliableTrack {
             await attachRoute(record.track, to: workout)
+        } else {
+            await note("route.skipped", ["reason": "track not reliable", "trackPoints": String(record.track.count)])
         }
         return workout.uuid.uuidString
     }
@@ -155,7 +180,10 @@ final class HealthKitService: WorkoutSaving, @unchecked Sendable {
                 )
             }
         // Two points is the least that can draw a line worth showing.
-        guard locations.count >= 2 else { return }
+        guard locations.count >= 2 else {
+            await note("route.skipped", ["reason": "fewer than two usable points", "usable": String(locations.count)])
+            return
+        }
 
         let routeBuilder = HKWorkoutRouteBuilder(healthStore: store, device: .local())
         do {
@@ -166,8 +194,10 @@ final class HealthKitService: WorkoutSaving, @unchecked Sendable {
                 try await routeBuilder.insertRouteData(slice)
             }
             _ = try await routeBuilder.finishRoute(with: workout, metadata: nil)
+            await note("route.attached", ["points": String(locations.count)])
         } catch {
             // Leaves a workout with no map in Fitness — still a real workout.
+            await note("route.failed", ["points": String(locations.count), "error": error.localizedDescription])
         }
     }
 }

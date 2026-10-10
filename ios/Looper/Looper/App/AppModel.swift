@@ -948,6 +948,11 @@ final class AppModel: ObservableObject {
         // workout; the phone records the same walk for its own summary and
         // writes nothing. The workout's UUID arrives separately, if the Watch
         // manages to send it.
+        navigationLogger.log("health.saveRequested", details: [
+            "sessionID": record.id, "owner": String(describing: record.workoutOwner),
+            "trackPoints": String(record.track.count), "healthEnabled": String(health.isEnabled),
+            "state": String(describing: record.health)
+        ])
         if record.workoutOwner == .watch {
             if case .savedOnWatch = record.health {} else { setHealthState(.savedOnWatch(workoutID: nil)) }
             return
@@ -972,6 +977,7 @@ final class AppModel: ObservableObject {
             let workoutID = try await health.saver.save(current)
             setHealthState(.saved(workoutID: workoutID))
         } catch {
+            navigationLogger.log("health.saveFailed", details: ["sessionID": current.id, "error": error.localizedDescription])
             let message = (error as? LocalizedError)?.errorDescription ?? "The workout couldn’t be saved."
             setHealthState(.failed(message: message))
         }

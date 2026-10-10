@@ -538,6 +538,9 @@ public enum WatchMessage: Codable, Equatable, Sendable {
     case command(WatchCommandPayload)
     case workoutStatus(WatchWorkoutStatusPayload)
     case diagnostic(WatchDiagnosticPayload)
+    /// Events the Watch logged while the phone could not hear them, handed
+    /// over when the two next meet so a standalone walk is still diagnosable.
+    case diagnosticBatch([WatchDiagnosticPayload])
     case savedRoutes(SavedRoutesPayload)
     case routeTransferStatus(WatchRouteTransferStatusPayload)
     case walkRecord(WatchWalkRecordPayload)
