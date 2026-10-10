@@ -83,21 +83,13 @@ struct StartLoopView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                SavedRoutesList(model: model)
-
-                // For testing: act as if the phone were out of range.
-                Toggle(isOn: $model.standaloneForced) {
-                    Label("Standalone", systemImage: "iphone.slash")
-                        .font(.caption2)
-                }
-                .tint(Color.looperAccent)
-                .padding(.top, 8)
-                if model.standaloneForced {
-                    Text("Ignoring the iPhone. Routes already on this Watch still work.")
-                        .font(.caption2)
+                if !model.savedRoutes.isEmpty {
+                    Text("Offline routes")
+                        .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 8)
                 }
+                SavedRoutesList(model: model)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -194,49 +186,61 @@ struct SavedRoutesList: View {
 
     var body: some View {
         if !model.savedRoutes.isEmpty {
-            Text("Offline routes")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.top, 8)
-
-            ForEach(model.savedRoutes, id: \.routeID) { route in
-                Button { model.choose(route) } label: {
-                    HStack(spacing: 6) {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(route.routeName)
-                                .font(.footnote.weight(.semibold))
-                                .lineLimit(2)
-                                .minimumScaleFactor(0.8)
-                            Text(formatDistance(route.plannedDistanceMeters, unit: route.displayUnit))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Text(transferLabel(route))
-                                .font(.caption2)
-                                .foregroundStyle(transferTint(route))
-                        }
-                        Spacer(minLength: 0)
-                        if maps.isReady(route) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.footnote)
-                                .foregroundStyle(Color.looperAccent)
-                        } else if maps.routeTransferStates[route.routeID] == .failed {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.footnote)
-                                .foregroundStyle(.orange)
-                        } else {
-                            ZStack {
-                                Circle().stroke(Color.white.opacity(0.18), lineWidth: 2.5)
-                                Circle()
-                                    .trim(from: 0, to: maps.savedFractions[route.routeID] ?? 0)
-                                    .stroke(Color.looperAccent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                                    .rotationEffect(.degrees(-90))
-                            }
-                            .frame(width: 14, height: 14)
-                        }
-                    }
+            VStack(spacing: 6) {
+                ForEach(model.savedRoutes, id: \.routeID) { route in
+                    Button { model.choose(route) } label: { card(route) }
+                        .buttonStyle(RouteCardStyle())
+                        .accessibilityLabel("\(route.routeName), \(formatDistance(route.plannedDistanceMeters, unit: route.displayUnit)), \(transferLabel(route))")
                 }
-                .accessibilityLabel("\(route.routeName), \(formatDistance(route.plannedDistanceMeters, unit: route.displayUnit)), \(transferLabel(route))")
             }
+        }
+    }
+
+    private func card(_ route: LoopPlanPayload) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(route.routeName)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 4) {
+                    Image(systemName: route.activity == .running ? "figure.run" : "figure.walk")
+                    Text(formatDistance(route.plannedDistanceMeters, unit: route.displayUnit))
+                }
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+                Text(transferLabel(route))
+                    .font(.caption2)
+                    .foregroundStyle(transferTint(route))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            Spacer(minLength: 0)
+            status(route)
+        }
+    }
+
+    @ViewBuilder
+    private func status(_ route: LoopPlanPayload) -> some View {
+        if maps.isReady(route) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title3)
+                .foregroundStyle(Color.looperAccent)
+        } else if maps.routeTransferStates[route.routeID] == .failed {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.title3)
+                .foregroundStyle(.orange)
+        } else {
+            ZStack {
+                Circle().stroke(Color.white.opacity(0.18), lineWidth: 3)
+                Circle()
+                    .trim(from: 0, to: maps.savedFractions[route.routeID] ?? 0)
+                    .stroke(Color.looperAccent, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+            .frame(width: 20, height: 20)
         }
     }
 
@@ -245,7 +249,7 @@ struct SavedRoutesList: View {
         switch maps.routeTransferStates[route.routeID] ?? .queued {
         case .queued: return "Waiting for iPhone"
         case .receiving: return "Receiving… \(percent)%"
-        case .ready: return "Downloaded"
+        case .ready: return "Ready offline"
         case .failed: return "Download incomplete"
         }
     }
@@ -256,5 +260,25 @@ struct SavedRoutesList: View {
         case .failed: return .orange
         case .queued, .receiving, .none: return .secondary
         }
+    }
+}
+
+/// A full-width rounded card, not the capsule watchOS gives a bare Button, so
+/// two lines of name and a status line sit inside it without clipping.
+private struct RouteCardStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(configuration.isPressed ? Color.looperRaised.opacity(0.7) : Color.looperRaised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

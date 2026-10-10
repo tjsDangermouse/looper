@@ -35,43 +35,54 @@ struct WorkoutPages: View {
     }
 }
 
-/// Pause, resume, voice, end. Route choices belong to the phone and the
-/// saved-routes list on the start screen.
+/// Pause/resume and end side by side at the top, every setting toggle below.
+/// Route choices belong to the phone and the saved-routes list on the start
+/// screen.
 private struct ControlsPage: View {
     @ObservedObject var model: WatchModel
 
     var body: some View {
-        VStack(spacing: 12) {
-            if model.isPaused {
-                Button(action: model.resume) {
-                    Label("Resume", systemImage: "play.fill")
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                if model.isPaused {
+                    controlButton("Resume", systemImage: "play.fill", action: model.resume)
+                        .tint(Color.looperAccent)
+                        .foregroundStyle(Color.looperOnAccent)
+                } else {
+                    controlButton("Pause", systemImage: "pause.fill", action: model.pause)
+                        .tint(Color.looperRaised)
                 }
-                .frame(maxWidth: .infinity)
-                .buttonStyle(.borderedProminent)
-                .tint(Color.looperAccent)
-                .foregroundStyle(Color.looperOnAccent)
-            } else {
-                Button(action: model.pause) {
-                    Label("Pause", systemImage: "pause.fill")
-                }
-                .frame(maxWidth: .infinity)
-                .buttonStyle(.borderedProminent)
-                .tint(Color.looperRaised)
+                controlButton("End", systemImage: "stop.fill", role: .destructive, action: model.end)
             }
 
             Toggle(isOn: $model.voiceOn) {
                 Label("Voice", systemImage: model.voiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                    .font(.footnote)
             }
             .tint(Color.looperAccent)
 
-            Button(role: .destructive, action: model.end) {
-                Label("End", systemImage: "stop.fill")
+            Toggle(isOn: $model.standaloneForced) {
+                Label("Standalone", systemImage: "iphone.slash")
+                    .font(.footnote)
             }
-            .frame(maxWidth: .infinity)
-            .buttonStyle(.borderedProminent)
+            .tint(Color.looperAccent)
+
+            Spacer(minLength: 0)
         }
-        .font(.headline)
         .padding(.horizontal, 4)
+    }
+
+    private func controlButton(_ title: String, systemImage: String, role: ButtonRole? = nil, action: @escaping () -> Void) -> some View {
+        Button(role: role, action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: systemImage)
+                    .font(.title3)
+                Text(title)
+                    .font(.footnote.weight(.semibold))
+            }
+            .frame(maxWidth: .infinity, minHeight: 52)
+        }
+        .buttonStyle(.borderedProminent)
     }
 }
 

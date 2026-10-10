@@ -71,40 +71,40 @@ private struct PermissionBlockedView: View {
 }
 
 /// Nothing has been prepared. Said in one plain sentence rather than with an
-/// empty dashboard — with the saved routes underneath, if there are any.
+/// Nothing has been prepared. Either the saved routes to choose from, or one
+/// plain sentence saying where routes come from.
 private struct WaitingView: View {
     @ObservedObject var model: WatchModel
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 10) {
-                Image("LooperIcon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 46, height: 46)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                Text(model.savedRoutes.isEmpty ? "Pick a loop on your iPhone" : "Choose a route")
+        if model.savedRoutes.isEmpty {
+            VStack(spacing: 6) {
+                Image(systemName: "iphone.and.arrow.forward")
+                    .font(.title2)
+                    .foregroundStyle(Color.looperAccent)
+                Text("Pick a loop on your iPhone")
                     .font(.headline)
                     .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.85)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                if model.savedRoutes.isEmpty {
-                    Text("Routes you save on your iPhone appear here, ready to walk without it.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    SavedRoutesList(model: model)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                Text(WatchAppVersion.displayString)
+                Text("Routes you save there appear here, ready to walk without it.")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 8)
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Choose a route")
+                        .font(.headline)
+                        .padding(.horizontal, 4)
+                    SavedRoutesList(model: model)
+                    Text(WatchAppVersion.displayString)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
         }
     }
 }
